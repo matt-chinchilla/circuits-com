@@ -491,6 +491,12 @@ async def card_update_session(
     return url
 
 
+async def get_checkout_session(client: httpx.AsyncClient, session_id: str) -> dict:
+    """One Checkout Session as Stripe holds it now (``status`` open / complete
+    / expired, ``payment_status`` paid / unpaid / no_payment_required)."""
+    return await _call(client, "GET", f"/v1/checkout/sessions/{checked_id('cs', session_id)}")
+
+
 async def expire_checkout_session(client: httpx.AsyncClient, session_id: str) -> None:
     """Expire an open Checkout Session (the buyer's own "back" path and the
     staff Release). A session that is already expired or complete is not an

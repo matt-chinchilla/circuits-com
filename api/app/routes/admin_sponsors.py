@@ -30,6 +30,7 @@ from app.schemas.sponsor import (
     AdminSponsorCreate,
     AdminSponsorResponse,
     AdminSponsorUpdate,
+    canonical_sponsor_status,
 )
 from app.services import category_cache
 from app.services.auth_service import get_current_user, require_staff
@@ -116,6 +117,24 @@ def _validate_tier_placement(db: Session, tier: str | None, category_id: uuid.UU
         raise HTTPException(422, "Subcategory placement requires the Gold or Silver tier.")
 
 
+def _canonical_status(value: str | None) -> str | None:
+    """Every admin write stores exactly Active / Paused / Expired (or NULL,
+    legacy Active); anything else is a 422 with a printable string detail."""
+    try:
+        return canonical_sponsor_status(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+def _stored_status(value: str | None) -> str | None:
+    """A STORED status read tolerantly (rows written before F3 may carry any
+    casing); an unrecognised value is returned as-is."""
+    try:
+        return canonical_sponsor_status(value)
+    except ValueError:
+        return value
+
+
 def _parse_sponsor_id(sponsor_id: str) -> uuid.UUID:
     """Path-param id → UUID. Bad id is treated as not-found (404).
 
@@ -189,6 +208,7 @@ def create_sponsor(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    status_value = _canonical_status(body.status)
     _validate_xor(body.category_id, body.keyword)
     _validate_tier_placement(db, body.tier, body.category_id)
 
@@ -217,7 +237,7 @@ def create_sponsor(
         start_date=body.start_date,
         end_date=body.end_date,
         amount=body.amount,
-        status=body.status,
+        status=status_value,
         brand_primary=body.brand_primary,
         brand_secondary=body.brand_secondary,
         sold_by=body.sold_by,
@@ -250,11 +270,14 @@ def update_sponsor(
         raise HTTPException(status_code=404, detail="Sponsor not found")
 
     update_data = body.model_dump(exclude_unset=True)
+    if "status" in update_data:
+        update_data["status"] = _canonical_status(update_data["status"])
 
     # R15: typing "Expired" would hide a board the customer keeps paying for.
     # Billing → Cancel is the way to end a billed sponsorship (it expires the
-    # row itself); Paused ("hide the board, keep billing") stays allowed.
-    if update_data.get("status") == "Expired" and sponsor.status != "Expired":
+    # row itself); Paused ("hide the board, keep billing") stays allowed. Both
+    # sides are CANONICAL here, so no casing or whitespace dodges the guard.
+    if update_data.get("status") == "Expired" and _stored_status(sponsor.status) != "Expired":
         refuse_if_billing_active(db, sponsor_id=sponsor.id)
 
     # Resolve post-update tier + placement so all guards see the same

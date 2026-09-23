@@ -12,27 +12,12 @@ from decimal import Decimal
 import pytest
 
 from app.config import settings
-from app.models import Category, Sponsor, User
+from app.models import Category, Sponsor
 from app.models.sales import BillingAudit, CheckoutIntent, SponsorBilling
 from app.services import stripe_quotes
-from app.services.auth_service import create_token
 from tests.fake_stripe import FakeStripe
 
 URL = "/api/admin/checkout-intents"
-
-
-def _viewer_header(db) -> dict[str, str]:
-    viewer = User(
-        id=uuid.uuid4(),
-        username="viewer@test.example",
-        email="viewer@test.example",
-        password_hash="x",
-        role="viewer",
-        email_verified_at=datetime.now(UTC),
-    )
-    db.add(viewer)
-    db.commit()
-    return {"Authorization": f"Bearer {create_token(str(viewer.id), 'viewer')}"}
 
 
 @pytest.fixture
@@ -218,6 +203,7 @@ def test_resolve_retries_the_cancel_and_refund(client, db, child, fake, auth_hea
     fake.add_session("cs_test_attention0002", status="complete")
     fake.sessions["cs_test_attention0002"]["subscription"] = "sub_loser000009"
     fake.add_paid_invoice("in_loser000009", sub="sub_loser000009", pi="pi_l9", amount=210000)
+    fake.add_paid_invoice("in_loser000010", sub="sub_loser000009", pi="pi_l10", amount=210000)
 
     resp = client.post(f"{URL}/{intent.id}/resolve", headers=auth_header())
     assert resp.status_code == 200, resp.text
@@ -225,6 +211,17 @@ def test_resolve_retries_the_cancel_and_refund(client, db, child, fake, auth_hea
     db.refresh(intent)
     assert intent.resolved_at is not None
     assert fake.subscriptions["sub_loser000009"]["status"] == "canceled"
+    # Every paid invoice is refunded in full, each under its own
+    # conflict-refund key — not just "a" refund happened.
+    refunds = fake.calls("POST", "/v1/refunds")
+    assert sorted(r.form["payment_intent"] for r in refunds) == ["pi_l10", "pi_l9"]
+    assert all("amount" not in r.form for r in refunds)
+    assert {r.headers["Idempotency-Key"] for r in refunds} == {
+        f"conflict-refund:{intent.id}:in_loser000009",
+        f"conflict-refund:{intent.id}:in_loser000010",
+    }
+    assert fake.payment_intents["pi_l9"]["amount_refunded"] == 210000
+    assert fake.payment_intents["pi_l10"]["amount_refunded"] == 210000
     audit = db.query(BillingAudit).filter_by(action="conflict_resolved").one()
     assert audit.actor == "admin"
 
@@ -267,6 +264,75 @@ def test_release_expires_the_session_and_frees_the_hold(client, db, child, fake,
     assert (audit.actor, audit.intent_id) == ("admin", hold.id)
 
 
+@pytest.mark.parametrize(
+    ("status", "payment_status"),
+    [("complete", "paid"), ("complete", "unpaid"), ("open", "paid")],
+)
+def test_release_refuses_a_hold_whose_buyer_already_paid(
+    client, db, child, fake, auth_header, status, payment_status
+):
+    """F1: the webhook may not have landed yet — releasing now would free the
+    slot under a paying customer (and the activation would then refund them
+    as a conflict). The session is READ before anything is expired."""
+    sid = "cs_test_attention0014"
+    fake.add_session(sid, status=status)
+    fake.sessions[sid]["payment_status"] = payment_status
+    hold = _intent(db, child, stripe_session_id=sid)
+
+    resp = client.post(f"{URL}/{hold.id}/release", headers=auth_header())
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == "already_paid"
+    db.refresh(hold)
+    assert hold.status == "open"
+    assert fake.sessions[sid]["status"] == status
+    assert fake.calls("POST", f"/v1/checkout/sessions/{sid}/expire") == []
+    assert db.query(BillingAudit).filter_by(action="hold_released").count() == 0
+
+
+def test_release_reads_an_open_session_before_expiring_it(client, db, child, fake, auth_header):
+    sid = "cs_test_attention0015"
+    fake.add_session(sid, status="open")
+    fake.sessions[sid]["payment_status"] = "unpaid"
+    hold = _intent(db, child, stripe_session_id=sid)
+
+    assert client.post(f"{URL}/{hold.id}/release", headers=auth_header()).json() == {
+        "released": True
+    }
+    paths = [(r.method, r.path) for r in fake.tape]
+    assert paths.index(("GET", f"/v1/checkout/sessions/{sid}")) < paths.index(
+        ("POST", f"/v1/checkout/sessions/{sid}/expire")
+    )
+    assert fake.sessions[sid]["status"] == "expired"
+    db.refresh(hold)
+    assert hold.status == "released"
+
+
+def test_release_of_an_already_expired_session_frees_the_hold(client, db, child, fake, auth_header):
+    sid = "cs_test_attention0016"
+    fake.add_session(sid, status="expired")
+    fake.sessions[sid]["payment_status"] = "unpaid"
+    hold = _intent(db, child, stripe_session_id=sid)
+
+    assert client.post(f"{URL}/{hold.id}/release", headers=auth_header()).json() == {
+        "released": True
+    }
+    assert fake.calls("POST", f"/v1/checkout/sessions/{sid}/expire") == []
+    db.refresh(hold)
+    assert hold.status == "released"
+
+
+def test_release_reports_stripe_being_unreachable_and_keeps_the_hold(
+    client, db, child, fake, auth_header
+):
+    # The session is unknown to Stripe (404): nothing is known about payment,
+    # so the hold is NOT freed.
+    hold = _intent(db, child, stripe_session_id="cs_test_attention0017")
+    resp = client.post(f"{URL}/{hold.id}/release", headers=auth_header())
+    assert resp.status_code == 502
+    db.refresh(hold)
+    assert hold.status == "open"
+
+
 def test_release_of_a_hold_without_a_session_still_frees_it(client, db, child, fake, auth_header):
     hold = _intent(db, child)
     assert client.post(f"{URL}/{hold.id}/release", headers=auth_header()).json() == {
@@ -282,8 +348,8 @@ def test_release_of_something_not_held_is_a_no(client, db, child, fake, auth_hea
     }
 
 
-def test_a_viewer_cannot_act(client, db, child, fake):
-    viewer = _viewer_header(db)
+def test_a_viewer_cannot_act(client, db, child, fake, viewer_header):
+    viewer = viewer_header()
     hold = _intent(db, child)
     resp = client.post(f"{URL}/{hold.id}/release", headers=viewer)
     assert resp.status_code == 403
@@ -300,9 +366,9 @@ def test_a_customer_is_refused(client, db, child, fake, seeded_db, auth_header):
     assert client.post(f"{URL}/{hold.id}/release", headers=customer).status_code == 403
 
 
-def test_a_viewer_cannot_read_the_attention_list(client, db, fake):
+def test_a_viewer_cannot_read_the_attention_list(client, db, fake, viewer_header):
     """R6: the list names paying customers and their failing charges — a view-only
     outsider is refused it like every other billing read."""
-    resp = client.get(f"{URL}/attention", headers=_viewer_header(db))
+    resp = client.get(f"{URL}/attention", headers=viewer_header())
     assert resp.status_code == 403
     assert resp.json()["detail"] == "no_billing_access"

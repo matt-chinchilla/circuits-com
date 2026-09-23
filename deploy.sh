@@ -196,27 +196,53 @@ confirm_reseed() {
     # month. Counted on the live box, typed back like the parts count below,
     # and asked FIRST — the parts prompt returns early when no parts are at
     # risk, and a paying customer is at risk either way.
-    local has_billing billed typed_billed
-    echo "Counting Stripe-billed sponsors..."
-    has_billing=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc \"SELECT to_regclass('public.sponsor_billing') IS NOT NULL;\"" < /dev/null 2>/dev/null | tr -d '[:space:]')
-    case "$has_billing" in
-        t)
-            billed=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc \"SELECT count(*) FROM sponsor_billing b JOIN sponsors s ON s.id=b.sponsor_id WHERE s.status IS NULL OR s.status <> 'Expired';\"" < /dev/null 2>/dev/null | tr -d '[:space:]')
-            ;;
-        f)
-            # A box still before migration 057: its backfill builds
-            # sponsor_billing from exactly this column, so count that.
-            billed=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc \"SELECT count(*) FROM sponsors s WHERE s.stripe_subscription_id IS NOT NULL AND (s.status IS NULL OR s.status <> 'Expired');\"" < /dev/null 2>/dev/null | tr -d '[:space:]')
-            ;;
-        *)
-            billed=""
-            ;;
-    esac
+    #
+    # Two counts (F11), from app.jobs.billing_census inside the api container:
+    # "<db> <stripe>" — the database's non-Expired sponsors with a stored
+    # subscription (sponsor row OR billing row), and Stripe's own count of
+    # non-canceled managed_by=circuits-com subscriptions, which also sees a
+    # rep-quoted subscription whose sponsor never got a billing row. The reseed
+    # goes ahead unprompted only when BOTH are 0; otherwise the operator types
+    # the LARGER number. "unavailable" (no key, Stripe down) is never read as 0.
+    local census census_db census_stripe has_billing billed typed_billed
+    echo "Counting Stripe-billed sponsors (database + Stripe)..."
+    census=$(run_remote "cd $APP_DIR && $COMPOSE_CMD exec -T api python -m app.jobs.billing_census < /dev/null" < /dev/null 2>/dev/null | tail -n 1 | tr -d '\r' || true)
+    census_db=""
+    census_stripe=""
+    read -r census_db census_stripe _ <<< "$census" || true
+    if ! [[ "$census_db" =~ ^[0-9]+$ ]]; then
+        # The box's api image predates the census job (its first deploy), or
+        # the job failed: count the database directly, Stripe stays unknown.
+        yellow "The census job did not answer — counting the database directly."
+        census_stripe="unavailable"
+        has_billing=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc \"SELECT to_regclass('public.sponsor_billing') IS NOT NULL;\"" < /dev/null 2>/dev/null | tr -d '[:space:]' || true)
+        case "$has_billing" in
+            t)
+                census_db=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc \"SELECT count(DISTINCT s.id) FROM sponsors s LEFT JOIN sponsor_billing b ON s.id=b.sponsor_id WHERE (s.status IS NULL OR s.status <> 'Expired') AND (b.stripe_subscription_id IS NOT NULL OR s.stripe_subscription_id IS NOT NULL);\"" < /dev/null 2>/dev/null | tr -d '[:space:]' || true)
+                ;;
+            f)
+                # A box still before migration 057: its backfill builds
+                # sponsor_billing from exactly this column, so count that.
+                census_db=$(run_remote "sudo docker exec circuits-com-db-1 psql -U circuits -d circuits -tAc \"SELECT count(*) FROM sponsors s WHERE s.stripe_subscription_id IS NOT NULL AND (s.status IS NULL OR s.status <> 'Expired');\"" < /dev/null 2>/dev/null | tr -d '[:space:]' || true)
+                ;;
+            *)
+                census_db=""
+                ;;
+        esac
+    fi
+    billed="$census_db"
     if ! [[ "$billed" =~ ^[0-9]+$ ]]; then
         red "Could not count Stripe-billed sponsors on prod — refusing to reseed blind."
         exit 1
     fi
-    if (( billed > 0 )); then
+    if [[ "$census_stripe" =~ ^[0-9]+$ ]]; then
+        (( census_stripe > billed )) && billed="$census_stripe"
+        echo "  database: $census_db   Stripe (managed, not canceled): $census_stripe"
+    else
+        yellow "  Stripe could not be counted (no key, or Stripe did not answer) — database: $census_db."
+        yellow "  Nothing proves the Stripe side is empty, so the count must be typed back."
+    fi
+    if (( billed > 0 )) || ! [[ "$census_stripe" =~ ^[0-9]+$ ]]; then
         echo ""
         red "  Stripe-billed sponsors that will lose their board but keep being charged: $billed"
         echo "  The reseed never touches Stripe. Cancel (or plan to re-create) those"

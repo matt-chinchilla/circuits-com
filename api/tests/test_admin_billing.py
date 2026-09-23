@@ -619,10 +619,8 @@ def test_retry_decline_is_a_string_422(client, billed, fake, auth_header):
 # ── walls ───────────────────────────────────────────────────────────────────
 
 
-def test_a_viewer_cannot_act(client, db, billed, fake):
-    from tests.test_billing_reader_wall import _header_for
-
-    viewer = {**_header_for(db, "viewer"), **KEY}
+def test_a_viewer_cannot_act(client, db, billed, fake, viewer_header):
+    viewer = {**viewer_header(), **KEY}
     for action, body in (
         ("cancel", {"when": "now"}),
         ("refund", {"invoice_id": "in_000000000001"}),

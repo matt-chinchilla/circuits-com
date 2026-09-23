@@ -7,6 +7,28 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.utils.color import validate_optional_hex_color
 from app.utils.image_url import validate_optional_image_url
 
+# The three lifecycle states every reader understands (NULL = legacy Active).
+# An admin write is canonicalised to exactly one of these (F3): R15's guard
+# compares canonical values, so "expired" / " Expired " / "EXPIRED" can no
+# longer slip past it and hide a board the customer keeps paying for, and a
+# stray "Inactive" never lands in a column the boards filter on.
+SPONSOR_STATUSES = ("Active", "Paused", "Expired")
+SPONSOR_STATUS_RULE = "Status must be Active, Paused or Expired."
+_STATUS_BY_FOLDED = {s.casefold(): s for s in SPONSOR_STATUSES}
+
+
+def canonical_sponsor_status(value: str | None) -> str | None:
+    """``value`` stripped + casefolded onto ``Active`` | ``Paused`` |
+    ``Expired``; ``None`` stays ``None`` (legacy Active). Anything else raises
+    ``ValueError(SPONSOR_STATUS_RULE)`` — the route turns it into a 422 with
+    that sentence as a STRING detail, which the admin form can print."""
+    if value is None:
+        return None
+    canonical = _STATUS_BY_FOLDED.get(value.strip().casefold())
+    if canonical is None:
+        raise ValueError(SPONSOR_STATUS_RULE)
+    return canonical
+
 
 class SponsorResponse(BaseModel):
     id: UUID

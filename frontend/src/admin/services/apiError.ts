@@ -27,6 +27,8 @@ const CODE_MESSAGES: Record<string, string> = {
     'This sponsorship is still billed in Stripe — cancel it under Billing first, then expire or delete it.',
   // Retry/refund was asked of a hold that is not an unresolved conflict.
   not_a_conflict: 'That checkout is not waiting on a refund — refresh the list.',
+  // Staff Release on a hold whose Stripe session is already paid (F1).
+  already_paid: 'This buyer has already paid — the sale is activating; refresh in a minute.',
   // The subscription sits on retired price objects; the rule cannot re-price it.
   legacy_price:
     'This subscription is on an older price, so its discount cannot be changed here — ask the owner.',
