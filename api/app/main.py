@@ -14,6 +14,7 @@ from app.routes import (
     account_expenses,
     account_inbox,
     admin_checkout_intents,
+    admin_billing,
     admin_expenses,
     admin_leads,
     admin_manufacturers,
@@ -21,10 +22,12 @@ from app.routes import (
     admin_messages,
     admin_presence,
     admin_quotes,
+    admin_sales_codes,
     admin_sponsors,
     admin_users,
     analytics,
     auth,
+    billing_card,
     bom,
     calendar,
     categories,
@@ -104,6 +107,9 @@ app.include_router(sitemap.router)
 app.include_router(stripe_webhooks.router)
 app.include_router(admin_quotes.router)
 app.include_router(admin_checkout_intents.router)
+app.include_router(admin_sales_codes.router)
+app.include_router(admin_billing.router)
+app.include_router(billing_card.router)
 app.include_router(feed_credentials.router)
 app.include_router(checkout.router)
 app.include_router(bom.router)

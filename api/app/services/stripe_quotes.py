@@ -1,7 +1,9 @@
 """Sales quotes for sponsorship placements, built server-side over Stripe.
 
-The rep never leaves /admin and never touches the Dashboard: they pick an
-ALL-IN monthly price from a fixed ladder, we build the quote, and acceptance
+The rep never leaves /admin and never touches the Dashboard: they pick code
+points (0–15), the server prices them by the ONE rule (``sales_pricing``: the
+Founder's Deal less the points, never below 70% of list), we build the quote
+at that ALL-IN monthly price, and acceptance
 creates the subscription with ``sponsor_id`` already stamped in its metadata —
 the webhook's linkage is automatic instead of a thing a human must remember.
 
@@ -9,8 +11,9 @@ Money model (the part that must never drift):
 
 * Every price is ``tax_behavior: inclusive`` — the sticker IS what the
   customer pays; Stripe backs NY tax out of the platform line internally.
-* The ladder lists FINAL monthly totals in whole dollars. A discounted step
-  becomes an ``amount_off`` coupon (list − target), which on inclusive prices
+* Prices are FINAL monthly totals in whole dollars. Every quote is below list
+  (the Founder's Deal at 0 points), so it carries one ``amount_off`` coupon
+  (list − target), which on inclusive prices
   lands the total on the target EXACTLY — the explicit requirement is that a
   quote saying $1,250 never collects $1,328.54. Percent coupons are not used
   here for the same reason: arbitrary targets need ugly fractions.
@@ -51,19 +54,23 @@ STRIPE_FILES = "https://files.stripe.com"
 # ``items.data[]``, ``discounts=`` to clear) are this version's shapes.
 STRIPE_API_VERSION = "2026-07-29.dahlia"
 
-# All-in monthly targets, in DOLLARS. First entry is the list price (quoted
-# with no coupon); the floors are the sanctioned standard discounts. ONE home —
-# the route validates against this and the UI renders it; add a step here and
-# both sides learn it.
+# List prices, in whole DOLLARS — the ONE home of what each tier costs before
+# any discount. Since R12 (2026-09-23) this table holds ONLY the list price:
+# every charged price, a rep quote's included, comes from
+# ``sales_pricing.price_usd`` (the Founder's Deal less any code points, never
+# below 70% of list), which reads ``[0]`` here. The old ladder of discounted
+# steps is gone. It stays a one-element list because ``[0]`` IS the list price
+# to every reader (checkout, the webhook's legacy Silver gate,
+# ``ensure_price_coupon``, ``sales_pricing.list_usd``).
 # Repriced 2026-08-22 (owner): 100/600/2400 -> 250/2500/10000. The Stripe
 # prices behind the lookup keys were REPLACED to match (unit_amount is
 # immutable, so new price objects took the keys and the old ones were
 # archived) — this table and Stripe must move together or the webhook's
 # amount gate rejects every real payment.
 QUOTE_LADDER: dict[str, list[int]] = {
-    "silver": [250, 225, 200, 175, 150, 125],
-    "gold": [2500, 2250, 2000, 1750, 1500, 1250],
-    "platinum": [10000, 9000, 8000, 7000, 6000, 5000],
+    "silver": [250],
+    "gold": [2500],
+    "platinum": [10000],
 }
 
 
@@ -343,19 +350,25 @@ async def create_sponsor_quote(
     supplier_name: str,
     email: str,
     address: dict[str, str],
-    monthly_total_usd: int,
+    code_points: int,
 ) -> dict:
-    """Build + finalize a quote whose total IS ``monthly_total_usd``, exactly.
+    """Build + finalize a quote priced by the ONE rule (R12): the total IS
+    ``sales_pricing.price_usd(tier, code_points)``, exactly — the same number
+    /join and the billing console would charge for those points.
 
-    Returns quote id/number/total/customer. Raises StripeApiError on any
+    Returns quote id/number/total/customer/price. Raises StripeApiError on any
     failure, including the self-check: a finalized total that differs from
     the target cancels the quote and errors — it must never reach a customer.
+    An unknown tier or points outside 0–15 are refused 422 before any call.
     """
+    # Local import: sales_pricing reads QUOTE_LADDER from this module.
+    from app.services import sales_pricing
+
     tier_key = (tier or "").strip().lower()
-    if tier_key not in QUOTE_LADDER:
-        raise StripeApiError(f"tier {tier!r} has no quote ladder", status=422)
-    if monthly_total_usd not in QUOTE_LADDER[tier_key]:
-        raise StripeApiError(f"${monthly_total_usd}/mo is not on the {tier_key} ladder", status=422)
+    try:
+        monthly_total_usd = sales_pricing.price_usd(tier_key, code_points)
+    except ValueError as exc:
+        raise StripeApiError(f"cannot price this quote: {exc}", status=422) from None
 
     prices = await resolve_tier_prices(client, tier_key)
     price_ids = [p["id"] for p in prices]
@@ -375,7 +388,11 @@ async def create_sponsor_quote(
     }
     if monthly_total_usd < QUOTE_LADDER[tier_key][0]:
         coupon_id = await ensure_price_coupon(
-            client, tier_key, monthly_total_usd, [p["product"] for p in prices]
+            client,
+            tier_key,
+            monthly_total_usd,
+            [p["product"] for p in prices],
+            name=sales_pricing.coupon_name(tier_key, monthly_total_usd),
         )
         quote_body["discounts"] = [{"coupon": coupon_id}]
 
@@ -415,6 +432,7 @@ async def create_sponsor_quote(
         "amount_total": finalized["amount_total"],
         "customer_id": customer_id,
         "status": finalized.get("status"),
+        "price_usd": monthly_total_usd,
     }
 
 

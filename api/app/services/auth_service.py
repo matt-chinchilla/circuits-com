@@ -450,6 +450,30 @@ def require_staff_reader(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+# Customer money is not shown to the read-only `viewer` (R6, 2026-09-23): card
+# details, invoice links, quote PDFs and live discount codes are customers'
+# billing documents and bearer discounts, and a viewer is by definition someone
+# outside the company being shown the console. Same shape as the leads wall.
+NO_BILLING_ACCESS_DETAIL = "no_billing_access"
+
+
+def require_billing_reader(user: User = Depends(require_staff)) -> User:
+    """ACTING staff, on READS as well as writes, for billing and sales codes.
+
+    Composes :func:`require_staff` (which composes ``get_current_user``), so
+    an unauthenticated caller still gets 401, a flagged user
+    ``password_change_required``, a customer 403 ``staff_only`` and a viewer
+    writing 403 ``read_only`` — and a viewer READING gets 403
+    ``no_billing_access``, which the console renders as its quiet blocked
+    state."""
+    if is_viewer(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=NO_BILLING_ACCESS_DETAIL,
+        )
+    return user
+
+
 def require_account_user(user: User = Depends(get_current_user)) -> User:
     """An ACTIVATED customer. Activation (D17) is the whole authorization
     boundary in this project, so it lives here and nowhere else."""
