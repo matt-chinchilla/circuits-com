@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import ListSelect from '@admin/components/ListSelect/ListSelect';
+import PriceRow from '@admin/components/ListSelect/PriceRow';
+import { priceRowText, priceRows } from '@admin/components/ListSelect/priceRows';
 import {
   adminApi,
   type QuoteLadderResponse,
@@ -14,7 +17,7 @@ import styles from './SponsorFormPage.module.scss';
 // sponsorship.
 //
 // R12 (2026-09-23): a quote is priced by the SAME rule as /join — the rep
-// picks code points (0 = the Founder's Deal, each point 1% of list off,
+// picks the discount (0 = the Founder's Deal, then 1–15% more of list off,
 // floored at 70% of list) and the server prices it. The select shows the
 // server's own price for every step; nothing here computes one. Every price
 // is a FINAL monthly total, tax included.
@@ -195,7 +198,7 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
           <>
             <p className={styles.fieldHint}>
               Quotes are priced like /join: the Founder&rsquo;s Deal is {usd(rung.founder)}/mo
-              (list {usd(rung.list)}), and code points take up to 30% off list &mdash; never
+              (list {usd(rung.list)}), and an extra discount of up to 15% of list comes off it &mdash; never
               below {usd(rung.floor)}. Tax is included, so the number the customer sees is
               exactly what they pay.
             </p>
@@ -289,20 +292,20 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
                   <label className={styles.fieldLabel} htmlFor="quote-price">
                     Monthly price (tax included)
                   </label>
-                  <select
-                    id="quote-price"
-                    className={styles.select}
-                    value={points}
-                    onChange={(e) => setPoints(Number(e.target.value))}
-                  >
-                    {options.map((o) => (
-                      <option key={o.code_points} value={o.code_points}>
-                        {o.code_points === 0
-                          ? `Founder’s Deal — ${usd(o.price_usd)}`
-                          : `+${o.code_points} pts — ${usd(o.price_usd)}`}
-                      </option>
-                    ))}
-                  </select>
+                  {rung && (
+                    <ListSelect
+                      id="quote-price"
+                      variant="price"
+                      value={points}
+                      options={priceRows(rung).map((row) => ({
+                        value: row.value,
+                        label: priceRowText(row),
+                        content: <PriceRow row={row} />,
+                        keys: [String(row.value)],
+                      }))}
+                      onChange={setPoints}
+                    />
+                  )}
                   <p className={styles.fieldHint}>
                     The customer pays exactly this amount, every month. Stripe accounts for NY
                     sales tax inside it.

@@ -3,6 +3,7 @@
 // link; this file only words them. No price is computed here.
 
 import { cancelsOn } from '@admin/pages/sponsors/form/billingFormat';
+import { dualPriceRows, priceRows, type PriceRowModel } from '@admin/components/ListSelect/priceRows';
 import type {
   AttentionPayload,
   QuoteLadderTier,
@@ -42,7 +43,7 @@ export function usesLabel(code: Pick<SalesCode, 'uses' | 'max_uses'>): string {
 }
 
 export function pointsLabel(points: number): string {
-  return `${points} ${points === 1 ? 'pt' : 'pts'} off list`;
+  return `${points}% off list`;
 }
 
 /** The code's locks, most general first. Nothing locked = works on any slot. */
@@ -93,7 +94,7 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function codeFormErrors(f: CodeFormState): CodeFormErrors {
   const errors: CodeFormErrors = {};
   if (!Number.isInteger(f.points) || f.points < 1 || f.points > MAX_CODE_POINTS) {
-    errors.points = `Between 1 and ${MAX_CODE_POINTS} points.`;
+    errors.points = `Between 1% and ${MAX_CODE_POINTS}%.`;
   }
   const email = f.emailLock.trim();
   if (f.supplierId && !email) errors.emailLock = BOUND_NEEDS_EMAIL;
@@ -120,25 +121,21 @@ export function codeCreateBody(f: CodeFormState): SalesCodeCreate {
   return body;
 }
 
-function usd(whole: number): string {
-  return `$${whole.toLocaleString('en-US')}`;
-}
-
-/** A points step, priced by the SERVER's ladder for the tiers it can buy. */
-export function pointsOptionLabel(
-  points: number,
+/** The discount rows for a new code, priced by the SERVER's ladder: one price
+ *  for a tier-locked code, Gold and Platinum side by side for either tier.
+ *  A code is always 1–15% — the 0% row (the Founder's Deal alone) is left out. */
+export function codePriceRows(
   tiers: Record<string, QuoteLadderTier> | null | undefined,
   tier: 'any' | SalesTier,
-): string {
-  const priceOf = (t: SalesTier) => tiers?.[t]?.options.find((o) => o.code_points === points)?.price_usd;
+  points: number[],
+): PriceRowModel[] {
   if (tier !== 'any') {
-    const p = priceOf(tier);
-    return p != null ? `${points} ${points === 1 ? 'pt' : 'pts'} — ${usd(p)}/mo` : pointsLabel(points);
+    const ladder = tiers?.[tier];
+    return ladder
+      ? priceRows(ladder, { includeFounder: false }).filter((r) => points.includes(r.value))
+      : dualPriceRows({}, points);
   }
-  const gold = priceOf('gold');
-  const plat = priceOf('platinum');
-  if (gold == null || plat == null) return pointsLabel(points);
-  return `${points} ${points === 1 ? 'pt' : 'pts'} — Gold ${usd(gold)} · Platinum ${usd(plat)}`;
+  return dualPriceRows({ gold: tiers?.gold, platinum: tiers?.platinum }, points);
 }
 
 // ── Needs attention ─────────────────────────────────────────────────────────

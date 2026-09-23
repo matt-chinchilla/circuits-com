@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import styles from './SalesCodes.module.scss';
 
-// A sales code drawn as a ticket stub: points off on the stub, the code on
+// A sales code drawn as a ticket stub: the percent off on the stub, the code on
 // the body. `large` is the one-time reveal after creating a code; `dim` is a
 // code that can no longer be used (expired / used up / switched off).
 
@@ -23,11 +23,11 @@ export default function CodeTicket({ display, points, large = false, dim = false
       <span className={styles.ticketStub}>
         {large ? (
           <>
-            {`−${points}`}
-            <small>points</small>
+            {`−${points}%`}
+            <small>off list</small>
           </>
         ) : (
-          `−${points}`
+          `−${points}%`
         )}
       </span>
       <span className={styles.ticketCode}>

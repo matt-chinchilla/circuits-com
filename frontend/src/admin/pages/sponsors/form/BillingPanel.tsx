@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+import ListSelect from '@admin/components/ListSelect/ListSelect';
+import PriceRow from '@admin/components/ListSelect/PriceRow';
+import { priceRowText, priceRows } from '@admin/components/ListSelect/priceRows';
 import { adminApi } from '@admin/services/adminApi';
 import { apiErrorCode, isNoBillingAccess } from '@admin/services/apiError';
 import { useAuth } from '@admin/contexts/AuthContext';
@@ -394,23 +397,23 @@ export default function BillingPanel({ sponsorId, tier, companyName, onSponsorEx
         onClose={() => setDialog(null)}
       >
         {ladder ? (
-          <label className={formStyles.field}>
-            <span className={formStyles.fieldLabel}>Monthly price (tax included)</span>
-            <select
-              className={formStyles.select}
+          <div className={formStyles.field}>
+            <label className={formStyles.fieldLabel} htmlFor="billing-discount">
+              Monthly price (tax included)
+            </label>
+            <ListSelect
+              id="billing-discount"
+              variant="price"
               value={points}
-              onChange={(e) => setPoints(Number(e.target.value))}
-            >
-              {options.map((o) => (
-                <option key={o.code_points} value={o.code_points}>
-                  {o.code_points === 0
-                    ? `Founder’s Deal — ${usd(o.price_usd)}`
-                    : `+${o.code_points} pts — ${usd(o.price_usd)}`}
-                  {o.code_points === (b.code_points ?? 0) ? ' (current)' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
+              options={priceRows(ladder, { current: b.code_points ?? 0 }).map((row) => ({
+                value: row.value,
+                label: priceRowText(row),
+                content: <PriceRow row={row} />,
+                keys: [String(row.value)],
+              }))}
+              onChange={setPoints}
+            />
+          </div>
         ) : (
           <p className={formStyles.fieldHint}>Loading prices&hellip;</p>
         )}
@@ -470,7 +473,7 @@ export default function BillingPanel({ sponsorId, tier, companyName, onSponsorEx
             </dl>
             <p className={styles.ledgerNote}>
               {[
-                b.code_points ? `+${b.code_points} pts` : "Founder's Deal",
+                b.code_points ? `extra ${b.code_points}% off` : "Founder's Deal",
                 b.code ? `code ${b.code}` : null,
                 b.sold_by ? `sold by ${b.sold_by}` : null,
                 'tax included',

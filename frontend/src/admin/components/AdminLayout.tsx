@@ -476,7 +476,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     : styles.sideScrim;
 
   return (
-    <div className={styles.admin}>
+    // data-admin-root: where ListSelect portals its menus, so they escape
+    // overflow-clipped panels yet keep the --a-* tokens .admin defines.
+    <div className={styles.admin} data-admin-root>
       <aside
         id="admin-sidebar"
         className={sideClass}

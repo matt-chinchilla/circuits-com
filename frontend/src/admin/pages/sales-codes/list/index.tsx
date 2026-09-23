@@ -117,7 +117,7 @@ function StaffSalesCodesPage() {
         <div className={styles.pageHeadLeft}>
           <h1 className={styles.title}>Sales codes</h1>
           <p className={styles.subtitle}>
-            Discount codes for Gold and Platinum on /join. Each point takes 1% of list off the
+            Discount codes for Gold and Platinum on /join. Each code takes an extra 1&ndash;15% of list off the
             Founder&rsquo;s Deal, never below 70% of list. Send the customer the code&rsquo;s link
             &mdash; it opens /join with the code and slot filled in.
           </p>

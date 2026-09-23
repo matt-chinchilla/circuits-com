@@ -1,0 +1,393 @@
+@use '@shared/styles/variables' as *;
+@use '../../pages/glass' as *;
+
+// ListSelect — the admin dropdown. The trigger is a recessed well, exactly
+// like the form's other inputs; the open menu is porcelain glass (the house
+// law for menus, --a-glass-sheet) in the macOS 27 menu anatomy: a check
+// column, a brand-green highlight row, quiet group headers. The one bold move
+// is the highlight — the PCB green, full-bleed, white text — everything else
+// stays on the admin's existing tokens so light and dark follow for free.
+
+// ─── Trigger ────────────────────────────────────────────────────────────────
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--a-fg1);
+  text-align: left;
+  @include a-glass-well;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: box-shadow 150ms ease;
+
+  &:focus-visible,
+  &[data-open] {
+    outline: none;
+    @include a-well-focus;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  &[data-variant='price'] {
+    min-height: 46px;
+    padding: 9px 12px;
+  }
+}
+
+.value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeholder {
+  color: var(--a-fg3);
+}
+
+.chevron {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  color: var(--a-fg2);
+  transition: transform 160ms ease;
+
+  .trigger[data-open] & {
+    transform: rotate(180deg);
+  }
+}
+
+// ─── Menu ───────────────────────────────────────────────────────────────────
+
+.menu {
+  // Highlight row: the brand green. On dark the admin lifts --a-primary for
+  // CTAs, which would drop white 13px text under AA — so the menu keeps a
+  // deeper green of its own there (white on #14603c ≈ 7.6:1).
+  --ls-hi: var(--a-primary);
+  --ls-hi-ink: #ffffff;
+
+  position: fixed;
+  z-index: 300; // above the admin dialogs (200)
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  background: var(--a-glass-sheet);
+  -webkit-backdrop-filter: var(--a-glass-filter);
+  backdrop-filter: var(--a-glass-filter);
+  border: 1px solid var(--a-glass-rim);
+  border-radius: 12px;
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
+  animation: ls-in 140ms ease-out;
+  transform-origin: top center;
+
+  &[data-above] {
+    transform-origin: bottom center;
+    animation-name: ls-in-above;
+  }
+
+  :global(html[data-admin-theme='dark']) & {
+    --ls-hi: #14603c;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes ls-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+}
+
+@keyframes ls-in-above {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
+.searchWrap {
+  flex: 0 0 auto;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--a-glass-rim);
+  margin-bottom: 4px;
+}
+
+.search {
+  width: 100%;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--a-fg1);
+  @include a-glass-well;
+  border-radius: 7px;
+  outline: none;
+
+  &::placeholder {
+    color: var(--a-fg3);
+  }
+
+  &:focus {
+    @include a-well-focus;
+  }
+}
+
+.list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  outline: none;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--a-scroll-thumb) transparent;
+}
+
+.group + .group,
+.option + .group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--a-glass-rim);
+}
+
+.groupHead {
+  padding: 6px 10px 4px 30px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--a-fg3);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 7px;
+  font-size: 14px;
+  color: var(--a-fg1);
+  cursor: pointer;
+  user-select: none;
+
+  &[data-active] {
+    background: var(--ls-hi);
+    color: var(--ls-hi-ink);
+  }
+
+  &[aria-disabled='true'] {
+    cursor: default;
+    opacity: 0.45;
+  }
+}
+
+.checkCol {
+  flex: 0 0 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.check {
+  width: 14px;
+  height: 14px;
+  color: var(--a-primary);
+
+  .option[data-active] & {
+    color: var(--ls-hi-ink);
+  }
+}
+
+.optionBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.empty {
+  padding: 14px 12px;
+  font-size: 13px;
+  color: var(--a-fg2);
+  text-align: center;
+}
+
+// ─── Price rows ─────────────────────────────────────────────────────────────
+// "$8,000 | 5%": dollars lead in tabular figures (every row's digits line up),
+// a hairline, then the discount as a quiet pill. The 0% row is the Founder's
+// Deal in the founder band's gold.
+
+.priceRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.prices {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 5.6em;
+}
+
+.price {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.dollars {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.per {
+  margin-left: -8px;
+  font-size: 12px;
+  color: var(--a-fg3);
+
+  .option[data-active] & {
+    color: inherit;
+    opacity: 0.8;
+  }
+}
+
+.pricePending {
+  color: var(--a-fg3);
+}
+
+// Element symbols, the tier marks /join already uses (Au / Pt).
+.element {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1.3;
+
+  &[data-tier='gold'] {
+    background: color-mix(in srgb, var(--a-grad-gold) 30%, transparent);
+    color: #6b5410;
+  }
+
+  &[data-tier='platinum'] {
+    background: color-mix(in srgb, var(--a-grad-slate) 22%, transparent);
+    color: #3b4454;
+  }
+
+  :global(html[data-admin-theme='dark']) & {
+    color: var(--a-fg1);
+  }
+
+  .option[data-active] & {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--ls-hi-ink);
+  }
+}
+
+.rule {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 3px 0;
+  background: var(--a-glass-rim);
+
+  .option[data-active] & {
+    background: rgba(255, 255, 255, 0.35);
+  }
+}
+
+.pct {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--a-fg2);
+  background: var(--a-glass-well);
+
+  &[data-founder] {
+    color: #6b5410;
+    background: color-mix(in srgb, var(--a-grad-gold) 34%, transparent);
+
+    :global(html[data-admin-theme='dark']) & {
+      color: #f3cf5c;
+      background: color-mix(in srgb, var(--a-grad-gold) 16%, transparent);
+    }
+  }
+
+  .option[data-active] & {
+    color: var(--ls-hi-ink);
+    background: rgba(255, 255, 255, 0.18);
+  }
+}
+
+.tags {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  padding-left: 8px;
+}
+
+.tag {
+  font-size: 11.5px;
+  color: var(--a-fg3);
+  white-space: nowrap;
+
+  &[data-current] {
+    padding: 1px 7px;
+    border: 1px solid var(--a-glass-rim);
+    border-radius: 999px;
+    color: var(--a-fg2);
+  }
+
+  .option[data-active] & {
+    color: var(--ls-hi-ink);
+    border-color: rgba(255, 255, 255, 0.4);
+    opacity: 0.9;
+  }
+}
+
+// ─── Plain rows with a note (rep "you", expiry date) ────────────────────────
+
+.textRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.textMain {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.textNote {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--a-fg3);
+
+  .option[data-active] & {
+    color: inherit;
+    opacity: 0.8;
+  }
+}

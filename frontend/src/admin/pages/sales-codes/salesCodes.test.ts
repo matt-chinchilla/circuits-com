@@ -3,7 +3,7 @@ import {
   absoluteLink,
   codeCreateBody,
   codeFormErrors,
-  pointsOptionLabel,
+  codePriceRows,
   type CodeFormState,
   codeStatusChip,
   expiresLabel,
@@ -12,6 +12,7 @@ import {
   pointsLabel,
   usesLabel,
 } from './salesCodes';
+import { priceRowText } from '@admin/components/ListSelect/priceRows';
 
 describe('codeStatusChip', () => {
   it('maps every server status onto a label and a tone', () => {
@@ -49,9 +50,9 @@ describe('usesLabel / pointsLabel', () => {
     expect(usesLabel({ uses: 3, max_uses: 5 })).toBe('3 of 5 used');
   });
 
-  it('names points off list', () => {
-    expect(pointsLabel(1)).toBe('1 pt off list');
-    expect(pointsLabel(15)).toBe('15 pts off list');
+  it('says the extra discount as a percent of list, never points', () => {
+    expect(pointsLabel(1)).toBe('1% off list');
+    expect(pointsLabel(15)).toBe('15% off list');
   });
 });
 
@@ -153,14 +154,18 @@ describe('new-code form helpers', () => {
     });
   });
 
-  it('labels each points step with the server’s prices', () => {
+  it('prices each discount step from the server’s ladder, dollars first', () => {
     const tiers = {
       gold: { list: 2500, founder: 2100, floor: 1750, options: [{ code_points: 10, price_usd: 1850 }] },
       platinum: { list: 10000, founder: 8500, floor: 7000, options: [{ code_points: 10, price_usd: 7500 }] },
     };
-    expect(pointsOptionLabel(10, tiers, 'any')).toBe('10 pts — Gold $1,850 · Platinum $7,500');
-    expect(pointsOptionLabel(10, tiers, 'gold')).toBe('10 pts — $1,850/mo');
-    expect(pointsOptionLabel(1, null, 'any')).toBe('1 pt off list');
+    expect(codePriceRows(tiers, 'any', [10]).map(priceRowText)).toEqual([
+      'Gold $1,850 · Platinum $7,500 | 10%',
+    ]);
+    expect(codePriceRows(tiers, 'gold', [10]).map(priceRowText)).toEqual(['$1,850 | 10%']);
+    // Before the ladder loads the rows still say the percent — never a made-up price.
+    expect(codePriceRows(null, 'any', [1]).map(priceRowText)).toEqual(['1%']);
+    expect(codePriceRows(undefined, 'platinum', [3]).map(priceRowText)).toEqual(['3%']);
   });
 });
 

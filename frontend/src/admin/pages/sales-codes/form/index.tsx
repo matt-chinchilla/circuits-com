@@ -1,4 +1,4 @@
-// New sales code (spec §9). A rep picks the discount (1–15 points off list,
+// New sales code (spec §9). A rep picks the discount (an extra 1–15% of list off,
 // each step priced by the SERVER's ladder), optionally locks it to a tier, a
 // placement, a company (R7: needs the customer's email) or an email, and
 // gets back an 8-character code plus a ready /join link built from those
@@ -15,13 +15,16 @@ import { useConsolePath } from '@admin/services/consolePath';
 import { copyText } from '@admin/services/clipboard';
 import type { AdminCategory, AdminSupplier, QuoteLadderTier, SalesCode } from '@admin/types/admin';
 import CodeTicket from '../CodeTicket';
+import ListSelect, { type ListOption } from '@admin/components/ListSelect/ListSelect';
+import PriceRow, { TextRow } from '@admin/components/ListSelect/PriceRow';
+import { priceRowText } from '@admin/components/ListSelect/priceRows';
 import {
   MAX_CODE_POINTS,
   absoluteLink,
   codeCreateBody,
   codeFormErrors,
   locksSummary,
-  pointsOptionLabel,
+  codePriceRows,
   type CodeFormErrors,
   type CodeFormState,
 } from '../salesCodes';
@@ -120,11 +123,71 @@ function StaffNewSalesCodePage() {
     [suppliers],
   );
 
+  const pointOptions = useMemo<ListOption<number>[]>(
+    () =>
+      codePriceRows(ladder, form.tier, POINT_CHOICES).map((row) => ({
+        value: row.value,
+        label: priceRowText(row),
+        content: <PriceRow row={row} />,
+        keys: [String(row.value)],
+      })),
+    [ladder, form.tier],
+  );
+
+  const placementChoices = useMemo<ListOption<string>[]>(() => {
+    const noun = form.tier === 'platinum' ? 'category' : form.tier === 'gold' ? 'subcategory' : 'slot';
+    return [
+      { value: '', label: `Any open ${noun}` },
+      ...groupedPlacements.flatMap(([group, list]) =>
+        list.map((o) => ({ value: o.id, label: o.label, group: group || undefined })),
+      ),
+    ];
+  }, [groupedPlacements, form.tier]);
+
+  const supplierChoices = useMemo<ListOption<string>[]>(
+    () => [
+      {
+        value: '',
+        label: 'A new company',
+        content: <TextRow main="A new company" note="created at checkout" />,
+      },
+      ...sortedSuppliers.map((s) => ({ value: s.id, label: s.name })),
+    ],
+    [sortedSuppliers],
+  );
+
+  const expiryChoices = useMemo<ListOption<number>[]>(
+    () =>
+      EXPIRY_CHOICES.map((d) => {
+        const until = new Date(Date.now() + d * 86_400_000).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        });
+        return {
+          value: d,
+          label: `${d} days`,
+          content: <TextRow main={`${d} days`} note={`until ${until}`} />,
+          keys: [String(d)],
+        };
+      }),
+    [],
+  );
+
   const repChoices = useMemo(() => {
     const set = new Set(reps);
     if (me) set.add(me);
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [reps, me]);
+
+  const repOptions = useMemo<ListOption<string>[]>(
+    () =>
+      repChoices.map((r) => ({
+        value: r,
+        label: r,
+        content: <TextRow main={r} note={r === me ? 'you' : undefined} />,
+      })),
+    [repChoices, me],
+  );
 
   const chooseTier = (tier: CodeFormState['tier']) => {
     setForm((f) => ({ ...f, tier, categoryId: '' }));
@@ -262,7 +325,7 @@ function StaffNewSalesCodePage() {
           {back}
           <h1 className={styles.title}>New sales code</h1>
           <p className={styles.subtitle}>
-            The customer pays the Founder&rsquo;s Deal less the code&rsquo;s points, never below
+            The customer pays the Founder&rsquo;s Deal less the code&rsquo;s extra discount, never below
             70% of list. One code, one discount &mdash; codes never stack.
           </p>
         </div>
@@ -296,23 +359,18 @@ function StaffNewSalesCodePage() {
 
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="points">
-                Points off list <span className={styles.fieldReq}>*</span>
+                Extra discount <span className={styles.fieldReq}>*</span>
               </label>
-              <select
+              <ListSelect
                 id="points"
-                className={styles.select}
+                variant="price"
                 value={form.points}
-                onChange={(e) => update('points', Number(e.target.value))}
-              >
-                {POINT_CHOICES.map((p) => (
-                  <option key={p} value={p}>
-                    {pointsOptionLabel(p, ladder, form.tier)}
-                  </option>
-                ))}
-              </select>
+                options={pointOptions}
+                onChange={(v) => update('points', v)}
+              />
               <p className={styles.fieldHint}>
-                Each point is 1% of list. The prices shown are what the customer will pay per
-                month, tax included &mdash; the server sets them.
+                Taken off the list price on top of the Founder&rsquo;s Deal, never below 70% of
+                list. Each price is what the customer pays per month, tax included.
               </p>
               {errors.points && <div className={styles.fieldError}>{errors.points}</div>}
             </div>
@@ -328,32 +386,15 @@ function StaffNewSalesCodePage() {
               <label className={styles.fieldLabel} htmlFor="placement">
                 Placement
               </label>
-              <select
+              <ListSelect
                 id="placement"
-                className={styles.select}
                 value={form.categoryId}
+                options={placementChoices}
                 disabled={form.tier === 'any'}
-                onChange={(e) => update('categoryId', e.target.value)}
-              >
-                <option value="">Any open {form.tier === 'platinum' ? 'category' : form.tier === 'gold' ? 'subcategory' : 'slot'}</option>
-                {groupedPlacements.map(([group, list]) =>
-                  group ? (
-                    <optgroup key={group} label={group}>
-                      {list.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ) : (
-                    list.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.label}
-                      </option>
-                    ))
-                  ),
-                )}
-              </select>
+                searchable={form.tier === 'gold'}
+                searchPlaceholder="Filter subcategories"
+                onChange={(v) => update('categoryId', v)}
+              />
               <p className={styles.fieldHint}>
                 {form.tier === 'any'
                   ? 'Pick Gold or Platinum above to lock the code to one slot.'
@@ -367,19 +408,14 @@ function StaffNewSalesCodePage() {
                 <label className={styles.fieldLabel} htmlFor="supplier">
                   Existing company
                 </label>
-                <select
+                <ListSelect
                   id="supplier"
-                  className={styles.select}
                   value={form.supplierId}
-                  onChange={(e) => chooseSupplier(e.target.value)}
-                >
-                  <option value="">A new company (created at checkout)</option>
-                  {sortedSuppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                  options={supplierChoices}
+                  searchable
+                  searchPlaceholder="Filter companies"
+                  onChange={(v) => chooseSupplier(v)}
+                />
                 <p className={styles.fieldHint}>
                   Bind the sale to a company we already list, so its board and billing stay on
                   one record.
@@ -431,18 +467,12 @@ function StaffNewSalesCodePage() {
                 <label className={styles.fieldLabel} htmlFor="expires">
                   Works for
                 </label>
-                <select
+                <ListSelect
                   id="expires"
-                  className={styles.select}
                   value={form.expiresInDays}
-                  onChange={(e) => update('expiresInDays', Number(e.target.value))}
-                >
-                  {EXPIRY_CHOICES.map((d) => (
-                    <option key={d} value={d}>
-                      {d} days
-                    </option>
-                  ))}
-                </select>
+                  options={expiryChoices}
+                  onChange={(v) => update('expiresInDays', v)}
+                />
               </div>
             </div>
           </div>
@@ -458,19 +488,12 @@ function StaffNewSalesCodePage() {
                 <label className={styles.fieldLabel} htmlFor="rep">
                   Rep
                 </label>
-                <select
+                <ListSelect
                   id="rep"
-                  className={styles.select}
                   value={form.rep}
-                  onChange={(e) => update('rep', e.target.value)}
-                >
-                  {repChoices.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                      {r === me ? ' (you)' : ''}
-                    </option>
-                  ))}
-                </select>
+                  options={repOptions}
+                  onChange={(v) => update('rep', v)}
+                />
                 <p className={styles.fieldHint}>A sale with this code is credited to this rep.</p>
               </div>
               <div className={styles.field}>
