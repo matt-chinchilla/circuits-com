@@ -1,0 +1,726 @@
+@use '@shared/styles/variables' as *;
+@use '../glass' as *;
+
+// Sales codes — list, new-code form, Needs-attention strip. Chrome follows
+// the Expenses/Sponsors vocabulary (page head, glass panel, chips, inline
+// search, table, form wells) so the finance pages read as one system.
+//
+// The ONE memorable element is the code itself, drawn as a ticket stub: a
+// rep hands a customer a ticket to a discount, and the page's nav glyph is a
+// ticket. Notches are a STATIC mask (no motion, no filter), a dashed
+// perforation separates the stub (points off) from the code. Everything
+// around it stays quiet.
+
+.page {
+  max-width: 1400px;
+}
+
+.pageNarrow {
+  max-width: 920px;
+}
+
+// ─── Page head ──────────────────────────────────────────────────────────────
+
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--a-fg3);
+  text-decoration: none;
+  margin-bottom: 8px;
+
+  &:hover {
+    color: var(--a-primary);
+  }
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--a-fg3);
+  margin: 0;
+  max-width: 70ch;
+  line-height: 1.5;
+}
+
+// ─── Buttons ────────────────────────────────────────────────────────────────
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 150ms ease;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+  }
+}
+
+.btnSmall {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.btnPrimary {
+  background: var(--a-primary);
+  color: #ffffff;
+
+  &:hover:not(:disabled) {
+    background: var(--a-primary-hover);
+  }
+}
+
+.btnGhost {
+  @include a-glass-ctl;
+}
+
+.btnDanger {
+  @include a-ghost-danger;
+}
+
+// ─── Panels ─────────────────────────────────────────────────────────────────
+
+.panel {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  overflow: hidden;
+}
+
+.panelHead {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panelTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  margin: 0;
+}
+
+.panelBody {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.quiet {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--a-fg2);
+  max-width: 62ch;
+}
+
+// ─── Needs attention ────────────────────────────────────────────────────────
+// One pane, up to three groups. Each group has a coloured left rule (danger
+// for money that must go back, amber for time-boxed things) — the rule, not
+// the text, carries the hue so every line stays fg1/fg2 at AA.
+
+.attention {
+  @include a-glass-pane;
+  border-radius: var(--a-radius);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.attentionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 20px 10px;
+}
+
+.attentionTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--a-fg1);
+}
+
+.attentionCount {
+  font-family: $font-mono;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--a-danger);
+}
+
+.attentionGroup {
+  --rule: var(--a-warn);
+  margin: 0 20px 14px;
+  padding-left: 14px;
+  border-left: 3px solid var(--rule);
+
+  &[data-kind='conflict'] {
+    --rule: var(--a-danger);
+  }
+}
+
+.attentionLabel {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--a-fg1);
+}
+
+.attentionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.attentionRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--a-border-soft);
+
+  &:first-child {
+    border-top: none;
+  }
+
+  @media (max-width: $bp-admin-mobile) {
+    flex-wrap: wrap;
+  }
+}
+
+.attentionText {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--a-fg1);
+
+  small {
+    display: block;
+    font-size: 12px;
+    color: var(--a-fg3);
+  }
+}
+
+.attentionAction {
+  flex-shrink: 0;
+}
+
+// ─── Toolbar ────────────────────────────────────────────────────────────────
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--a-border-soft);
+  flex-wrap: wrap;
+}
+
+.toolbarSpacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-fg2);
+  background: transparent;
+  border: 1px solid var(--a-border);
+  border-radius: 20px;
+  cursor: pointer;
+
+  &:hover:not(.filterChipActive) {
+    border-color: var(--a-primary);
+    color: var(--a-primary);
+  }
+}
+
+.filterChipActive {
+  @include a-glass-ctl($states: false);
+  border-color: var(--a-primary);
+  font-weight: 600;
+}
+
+.chipCount {
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--a-bg);
+  color: var(--a-fg3);
+  line-height: 1.4;
+}
+
+.inlineSearch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  @include a-glass-well;
+  border-radius: 6px;
+  min-width: 240px;
+
+  &:focus-within {
+    @include a-well-focus;
+  }
+
+  svg {
+    color: var(--a-fg4);
+    flex-shrink: 0;
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--a-fg1);
+    min-width: 0;
+
+    &::placeholder {
+      color: var(--a-fg4);
+    }
+  }
+}
+
+// ─── Table ──────────────────────────────────────────────────────────────────
+
+.tableWrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+
+  thead {
+    background: var(--a-bg);
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--a-fg3);
+    border-bottom: 1px solid var(--a-border);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--a-fg1);
+    border-bottom: 1px solid var(--a-border-soft);
+    vertical-align: top;
+  }
+
+  tbody tr:hover td {
+    background: var(--a-hover);
+  }
+
+  @media (max-width: $bp-admin-mobile) {
+    min-width: 900px;
+  }
+}
+
+.muted {
+  color: var(--a-fg3);
+  font-size: 13px;
+}
+
+.locks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 280px;
+}
+
+.lock {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--a-border);
+  color: var(--a-fg2);
+  white-space: nowrap;
+}
+
+.sales {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--a-fg3);
+
+  a {
+    color: var(--a-primary);
+    font-weight: 600;
+  }
+}
+
+.statusChip {
+  --tone: var(--a-fg4);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-fg2);
+  white-space: nowrap;
+
+  &::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tone);
+  }
+
+  &[data-tone='ok'] {
+    --tone: var(--a-ok);
+    color: var(--a-fg1);
+  }
+
+  &[data-tone='info'] {
+    --tone: var(--a-blue);
+  }
+}
+
+.rowActions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.emptyRow {
+  padding: 32px 20px !important;
+  text-align: center;
+  color: var(--a-fg3);
+  font-size: 13px;
+}
+
+// ─── The ticket stub ────────────────────────────────────────────────────────
+// Two notches cut by a static radial mask; a dashed perforation between the
+// stub (points) and the code. `--notch` scales with the size variant.
+
+.ticket {
+  --notch: 5px;
+  --paper: color-mix(in srgb, var(--a-grad-gold) 16%, var(--a-card));
+  --ink: var(--a-fg1);
+  display: inline-flex;
+  align-items: stretch;
+  background: var(--paper);
+  border-radius: 4px;
+  color: var(--ink);
+  -webkit-mask:
+    radial-gradient(circle var(--notch) at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle var(--notch) at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
+
+  &[data-dim='true'] {
+    --paper: var(--a-bg);
+    --ink: var(--a-fg3);
+  }
+}
+
+.ticketStub {
+  display: flex;
+  align-items: center;
+  padding: 5px 8px 5px 12px;
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border-right: 1.5px dashed color-mix(in srgb, var(--ink) 35%, transparent);
+  white-space: nowrap;
+}
+
+.ticketCode {
+  display: flex;
+  align-items: center;
+  padding: 5px 12px 5px 9px;
+  font-family: $font-mono;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+// The hero ticket shown once a code is created.
+.ticketLarge {
+  --notch: 11px;
+
+  .ticketStub {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 18px 20px 18px 26px;
+    font-size: 22px;
+
+    small {
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      color: color-mix(in srgb, var(--ink) 70%, transparent);
+    }
+  }
+
+  .ticketCode {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    padding: 18px 28px 18px 22px;
+    font-size: clamp(22px, 5vw, 34px);
+    letter-spacing: 0.12em;
+
+    small {
+      font-family: $font-heading;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0;
+      color: color-mix(in srgb, var(--ink) 75%, transparent);
+    }
+  }
+}
+
+.created {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.linkLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.linkText {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  @include a-glass-well;
+  border-radius: 6px;
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--a-fg1);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+// ─── Form ───────────────────────────────────────────────────────────────────
+
+.formGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-fg2);
+  letter-spacing: 0.02em;
+}
+
+.fieldReq {
+  color: var(--a-danger);
+  margin-left: 4px;
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: var(--a-fg3);
+  margin: 2px 0 0;
+  line-height: 1.5;
+}
+
+.fieldError {
+  font-size: 12px;
+  color: var(--a-danger);
+  font-weight: 500;
+}
+
+.formRow2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.textInput,
+.textArea,
+.select {
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--a-fg1);
+  @include a-glass-well;
+  border-radius: 6px;
+  padding: 9px 12px;
+  outline: none;
+  width: 100%;
+  line-height: 1.4;
+
+  &:focus {
+    @include a-well-focus;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.textArea {
+  resize: vertical;
+  min-height: 64px;
+  line-height: 1.5;
+}
+
+.select {
+  cursor: pointer;
+}
+
+// Tier: three-way segmented control on real radios (keyboard arrows work).
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  flex-wrap: wrap;
+  padding: 3px;
+  gap: 3px;
+  @include a-glass-well;
+  border-radius: 8px;
+  border: none;
+  margin: 0;
+
+  label {
+    position: relative;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--a-fg2);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  label:has(input:checked) {
+    @include a-glass-ctl($states: false);
+    color: var(--a-fg1);
+  }
+
+  label:has(input:focus-visible) {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 1px;
+  }
+}
+
+.formActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.formActionsSpacer {
+  flex: 1;
+}
+
+.formError {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-danger);
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 20px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-fg1);
+}
+
+.afterPanel {
+  margin-top: 16px;
+}

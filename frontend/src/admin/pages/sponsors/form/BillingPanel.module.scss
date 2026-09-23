@@ -1,0 +1,405 @@
+@use '@shared/styles/variables' as *;
+@use '../../glass' as *;
+
+// Billing panel (BillingPanel.tsx). The panel chrome, buttons and inputs are
+// the sponsor form's own (SponsorFormPage.module.scss); this file adds only
+// what a billing console needs: a one-line status strip, the price ledger
+// (list → Founder's Deal → what we charge), plain facts, and the invoice
+// table. Quiet on purpose — money screens earn trust by being legible, so no
+// motion here beyond what a person's own click causes.
+
+.channel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-fg3);
+}
+
+// ── Status strip ────────────────────────────────────────────────────────────
+// A dot + one sentence. The tone colours the dot and a thin left rule only;
+// the sentence stays fg1 so it reads at AA on either theme.
+
+.statusStrip {
+  --tone: var(--a-ok);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border-left: 3px solid var(--tone);
+  background: color-mix(in srgb, var(--tone) 8%, transparent);
+
+  &[data-tone='warn'] {
+    --tone: var(--a-warn);
+  }
+
+  &[data-tone='danger'] {
+    --tone: var(--a-danger);
+  }
+
+  &[data-tone='muted'] {
+    --tone: var(--a-fg4);
+  }
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+  flex-shrink: 0;
+}
+
+.statusText {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg1);
+}
+
+.statusAside {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+// ── Price ledger ────────────────────────────────────────────────────────────
+// Three cells read left to right as the deal's arithmetic. The charged cell is
+// the only large number on the panel.
+
+.ledger {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  @include a-glass-well;
+  border-radius: 8px;
+  overflow: hidden;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ledgerCell {
+  padding: 12px 16px;
+  min-width: 0;
+
+  & + & {
+    border-left: 1px solid var(--a-border-soft);
+
+    @media (max-width: 520px) {
+      border-left: none;
+      border-top: 1px solid var(--a-border-soft);
+    }
+  }
+
+  dt {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--a-fg3);
+    margin: 0 0 4px;
+  }
+
+  dd {
+    margin: 0;
+    font-family: $font-mono;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--a-fg2);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.ledgerCharge dd {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--a-fg1);
+  letter-spacing: -0.01em;
+}
+
+.perMonth {
+  margin-left: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-fg3);
+}
+
+.struck {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  color: var(--a-fg3) !important;
+}
+
+.ledgerNote {
+  margin: -8px 0 0;
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+// ── Facts ───────────────────────────────────────────────────────────────────
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+
+  dt {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--a-fg3);
+    margin: 0 0 2px;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 14px;
+    color: var(--a-fg1);
+    font-variant-numeric: tabular-nums;
+  }
+
+  a {
+    color: var(--a-primary);
+  }
+}
+
+// ── Actions ─────────────────────────────────────────────────────────────────
+// Everyday actions left, the two endings right; the ending that cannot be
+// undone is text-red (the filled red lives only inside its confirm).
+
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actionsSpacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--a-primary);
+}
+
+.alert {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--a-fg1);
+  border-left: 3px solid var(--a-warn);
+  background: color-mix(in srgb, var(--a-warn) 10%, transparent);
+}
+
+.inlineError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--a-fg2);
+}
+
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--a-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+// ── Card link ───────────────────────────────────────────────────────────────
+
+.linkBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px dashed var(--a-border);
+}
+
+.linkText {
+  font-family: $font-mono;
+  font-size: 12px;
+  color: var(--a-fg1);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.linkActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// ── Refund dialog inputs ────────────────────────────────────────────────────
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choiceRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--a-fg1);
+  cursor: pointer;
+
+  input {
+    accent-color: var(--a-primary);
+  }
+}
+
+.amountField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-left: 24px;
+  font-family: $font-mono;
+  color: var(--a-fg2);
+
+  input {
+    max-width: 140px;
+    font-family: $font-mono;
+  }
+}
+
+.fieldWarn {
+  flex-basis: 100%;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--a-danger);
+}
+
+// ── Invoices ────────────────────────────────────────────────────────────────
+
+.invoiceWrap {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--a-border-soft);
+  border-radius: 8px;
+}
+
+.invoices {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--a-fg3);
+    background: var(--a-bg);
+    border-bottom: 1px solid var(--a-border);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 9px 12px;
+    color: var(--a-fg1);
+    border-bottom: 1px solid var(--a-border-soft);
+    white-space: nowrap;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  @media (max-width: $bp-admin-mobile) {
+    min-width: 620px;
+  }
+}
+
+.num {
+  text-align: right;
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
+}
+
+// `.invoices th` outranks a bare `.num`; the header must align with its column.
+.invoices th.num {
+  text-align: right;
+  font-family: inherit;
+}
+
+.mono {
+  font-family: $font-mono;
+  font-size: 12px;
+}
+
+// Status = a coloured dot + fg text. The dot carries the hue because amber
+// (--a-warn) as 12px text on a light pane is ~3.2:1 — under AA.
+.invStatus {
+  --dot: var(--a-fg4);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-fg2);
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--dot);
+  }
+
+  &[data-status='paid'] {
+    --dot: var(--a-ok);
+    color: var(--a-fg1);
+  }
+
+  &[data-status='open'],
+  &[data-status='partly-refunded'] {
+    --dot: var(--a-warn);
+  }
+
+  &[data-status='uncollectible'] {
+    --dot: var(--a-danger);
+  }
+}
+
+.rowActions {
+  text-align: right;
+  width: 1%;
+
+  a,
+  button {
+    margin-left: 12px;
+  }
+
+  a,
+  .linkButton {
+    font-weight: 600;
+    color: var(--a-primary);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+  }
+}

@@ -4,17 +4,23 @@ import {
   type QuoteLadderResponse,
   type SponsorQuote,
 } from '@admin/services/adminApi';
-import { apiErrorDetail } from '@admin/services/apiError';
+import { apiErrorDetail, isNoBillingAccess } from '@admin/services/apiError';
+import { useAuth } from '@admin/contexts/AuthContext';
 import styles from './SponsorFormPage.module.scss';
 
-// The Stripe billing panel on an EXISTING sponsorship: list the supplier's
-// quotes, build a new one from the fixed all-in ladder, download the PDF,
-// mark it accepted once the customer says yes. Rendered OUTSIDE the <form> —
-// its buttons must never submit the sponsorship.
+// Sales-led quotes on an EXISTING sponsorship: list the supplier's quotes,
+// build a new one, download the PDF, mark it accepted once the customer says
+// yes. Rendered OUTSIDE the <form> — its buttons must never submit the
+// sponsorship.
 //
-// Every price here is a FINAL monthly total (tax included): the number the
-// rep picks is the number the customer pays, enforced server-side. The panel
-// hides itself entirely when billing is unconfigured (the routes 404).
+// R12 (2026-09-23): a quote is priced by the SAME rule as /join — the rep
+// picks code points (0 = the Founder's Deal, each point 1% of list off,
+// floored at 70% of list) and the server prices it. The select shows the
+// server's own price for every step; nothing here computes one. Every price
+// is a FINAL monthly total, tax included.
+//
+// Hidden entirely when billing is unconfigured (the routes 404). A view-only
+// account sees the refusal as a quiet line, and never a write button.
 
 interface Props {
   sponsorId: string;
@@ -29,15 +35,21 @@ function dollars(cents: number): string {
   })}`;
 }
 
+function usd(whole: number): string {
+  return `$${whole.toLocaleString('en-US')}`;
+}
+
 export default function QuotePanel({ sponsorId, tier }: Props) {
   const tierKey = tier.trim().toLowerCase();
+  const { isReadOnly } = useAuth();
 
   const [ladder, setLadder] = useState<QuoteLadderResponse | null>(null);
   const [unconfigured, setUnconfigured] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [quotes, setQuotes] = useState<SponsorQuote[]>([]);
   const [showModal, setShowModal] = useState(false);
 
-  const [target, setTarget] = useState<number | null>(null);
+  const [points, setPoints] = useState(0);
   const [address, setAddress] = useState(EMPTY_ADDRESS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +64,9 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
       .then((rows) => {
         if (!cancelled) setQuotes(rows);
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (!cancelled && isNoBillingAccess(err)) setBlocked(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -65,11 +79,13 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
       .then((data) => {
         if (!cancelled) setLadder(data);
       })
-      .catch(() => {
-        // 404 = STRIPE_SECRET_KEY unset server-side: billing does not exist in
-        // this environment. Transient failures land here too — hiding a panel
-        // the rep can re-enter beats rendering a broken billing surface.
-        if (!cancelled) setUnconfigured(true);
+      .catch((err) => {
+        if (cancelled) return;
+        // A view-only account is refused (R6): say so quietly. Anything else
+        // — 404 = STRIPE_SECRET_KEY unset, or a transient failure — hides the
+        // panel: a panel the rep can re-enter beats a broken billing surface.
+        if (isNoBillingAccess(err)) setBlocked(true);
+        else setUnconfigured(true);
       });
     return () => {
       cancelled = true;
@@ -79,10 +95,26 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
   useEffect(refreshQuotes, [refreshQuotes]);
 
   if (unconfigured) return null;
-  const steps = ladder?.tiers[tierKey]?.steps;
+
+  if (blocked) {
+    return (
+      <section className={`${styles.panel} ${styles.panelStacked}`}>
+        <header className={styles.panelHead}>
+          <h2 className={styles.panelTitle}>Quotes</h2>
+        </header>
+        <div className={styles.panelBody}>
+          <p className={styles.fieldHint}>Quotes are hidden from view-only accounts.</p>
+        </div>
+      </section>
+    );
+  }
+
+  const rung = ladder?.tiers[tierKey];
+  const options = rung?.options ?? [];
+  const chosen = options.find((o) => o.code_points === points) ?? null;
 
   const openModal = () => {
-    setTarget(steps ? steps[0] : null);
+    setPoints(0);
     setAddress(EMPTY_ADDRESS);
     setError(null);
     setCreated(null);
@@ -124,12 +156,12 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
   };
 
   const submit = async () => {
-    if (target == null) return;
+    if (!chosen) return;
     setBusy(true);
     setError(null);
     try {
       const result = await adminApi.createSponsorQuote(sponsorId, {
-        monthly_total: target,
+        code_points: chosen.code_points,
         address: {
           line1: address.line1,
           line2: address.line2 || undefined,
@@ -154,27 +186,33 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
     address.postal_code.trim().length >= 5;
 
   return (
-    <section className={styles.panel}>
+    <section className={`${styles.panel} ${styles.panelStacked}`}>
       <header className={styles.panelHead}>
-        <h2 className={styles.panelTitle}>Stripe billing</h2>
+        <h2 className={styles.panelTitle}>Quotes</h2>
       </header>
       <div className={styles.panelBody}>
-        {steps ? (
+        {rung && options.length > 0 ? (
           <>
             <p className={styles.fieldHint}>
-              Quotes use fixed all-in monthly prices — tax is included, so the number the
-              customer sees is exactly what they pay.
+              Quotes are priced like /join: the Founder&rsquo;s Deal is {usd(rung.founder)}/mo
+              (list {usd(rung.list)}), and code points take up to 30% off list &mdash; never
+              below {usd(rung.floor)}. Tax is included, so the number the customer sees is
+              exactly what they pay.
             </p>
-            <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={openModal}>
-              New quote
-            </button>
+            {!isReadOnly && (
+              <div>
+                <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={openModal}>
+                  New quote
+                </button>
+              </div>
+            )}
           </>
-        ) : (
+        ) : ladder ? (
           <p className={styles.fieldHint}>
-            No quote ladder exists for the “{tier}” tier — quotes cover Platinum, Gold and
-            Silver placements.
+            No price rule exists for the &ldquo;{tier}&rdquo; tier &mdash; quotes cover Platinum,
+            Gold and Silver placements.
           </p>
-        )}
+        ) : null}
 
         {quotes.length > 0 && (
           <ul className={styles.quoteList}>
@@ -194,7 +232,7 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
                   >
                     PDF
                   </button>
-                  {q.status === 'open' && (
+                  {q.status === 'open' && !isReadOnly && (
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.btnPrimary}`}
@@ -212,15 +250,17 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
         {rowNotice && <p className={styles.fieldHint}>{rowNotice}</p>}
       </div>
 
-      {showModal && steps && (
-        <div className={styles.modalBackdrop} role="dialog" aria-modal="true">
+      {showModal && rung && !isReadOnly && (
+        <div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby="quote-modal-title">
           <div className={styles.modal}>
             {created ? (
               <>
-                <h3 className={styles.modalTitle}>Quote {created.number ?? created.quote_id} is ready</h3>
+                <h3 id="quote-modal-title" className={styles.modalTitle}>
+                  Quote {created.number ?? created.quote_id} is ready
+                </h3>
                 <p className={styles.modalBody}>
                   Download the PDF and send it to the customer. When they say yes, use
-                  “Customer accepted” on the quote below — Stripe then creates the
+                  &ldquo;Customer accepted&rdquo; on the quote below &mdash; Stripe then creates the
                   subscription and emails the first invoice.
                 </p>
                 <div className={styles.modalActions}>
@@ -242,7 +282,9 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
               </>
             ) : (
               <>
-                <h3 className={styles.modalTitle}>New quote — {tier}</h3>
+                <h3 id="quote-modal-title" className={styles.modalTitle}>
+                  New quote &mdash; {tier}
+                </h3>
                 <div className={styles.field}>
                   <label className={styles.fieldLabel} htmlFor="quote-price">
                     Monthly price (tax included)
@@ -250,20 +292,20 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
                   <select
                     id="quote-price"
                     className={styles.select}
-                    value={target ?? ''}
-                    onChange={(e) => setTarget(Number(e.target.value))}
+                    value={points}
+                    onChange={(e) => setPoints(Number(e.target.value))}
                   >
-                    {steps.map((step, i) => (
-                      <option key={step} value={step}>
-                        {i === 0
-                          ? `$${step.toLocaleString()} / mo — list price`
-                          : `$${step.toLocaleString()} / mo — save $${(steps[0] - step).toLocaleString()}`}
+                    {options.map((o) => (
+                      <option key={o.code_points} value={o.code_points}>
+                        {o.code_points === 0
+                          ? `Founder’s Deal — ${usd(o.price_usd)}`
+                          : `+${o.code_points} pts — ${usd(o.price_usd)}`}
                       </option>
                     ))}
                   </select>
                   <p className={styles.fieldHint}>
-                    The customer pays exactly this amount. Stripe accounts for NY sales tax
-                    inside it.
+                    The customer pays exactly this amount, every month. Stripe accounts for NY
+                    sales tax inside it.
                   </p>
                 </div>
                 <div className={styles.field}>
@@ -311,11 +353,11 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
                     />
                   </div>
                   <p className={styles.fieldHint}>
-                    Needed so Stripe can place the sale for tax — the total never changes.
+                    Needed so Stripe can place the sale for tax &mdash; the total never changes.
                   </p>
                 </div>
                 <p className={styles.fieldHint}>
-                  The quote bills to the supplier’s email on file — change it on the
+                  The quote bills to the supplier&rsquo;s email on file &mdash; change it on the
                   supplier record if the billing contact differs.
                 </p>
                 {error && <p className={styles.fieldError}>{error}</p>}
@@ -331,7 +373,7 @@ export default function QuotePanel({ sponsorId, tier }: Props) {
                   <button
                     type="button"
                     className={`${styles.btn} ${styles.btnPrimary}`}
-                    disabled={busy || target == null || !addressComplete}
+                    disabled={busy || !chosen || !addressComplete}
                     onClick={submit}
                   >
                     {busy ? 'Building…' : 'Create quote'}

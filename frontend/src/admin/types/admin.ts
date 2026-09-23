@@ -652,3 +652,146 @@ export type {
   PlatformEngagementPoint,
   PlatformEngagementSeries,
 } from '@admin/types/engagement';
+
+// ── Gold/Platinum sales + the billing console (spec §9, plan T7) ────────────
+// Wire shapes of routes/admin_sales_codes.py, routes/admin_billing.py and
+// routes/admin_checkout_intents.py. Every price is a SERVER number: the
+// client never computes one (sales_pricing.py is the single home). Money is
+// whole DOLLARS where the key ends `_usd` and integer CENTS where it ends
+// `_cents` — never a NUMERIC string.
+
+export type SalesCodeStatus = 'live' | 'expired' | 'used_up' | 'off';
+export type SalesTier = 'gold' | 'platinum';
+
+/** One sale a code produced. */
+export interface SalesCodeSale {
+  sponsor_id: string;
+  company: string;
+  tier: string;
+  price_usd: number;
+  sold_at: string;
+}
+
+/** GET /api/admin/sales-codes → `{ codes: SalesCode[] }`; POST/PATCH answer one. */
+export interface SalesCode {
+  id: string;
+  /** Normalised, no dash (`AB1CD2EF`). */
+  code: string;
+  /** For people (`AB1C-D2EF`). */
+  display: string;
+  code_points: number;
+  tier: SalesTier | null;
+  category_id: string | null;
+  category_name: string | null;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  email_lock: string | null;
+  max_uses: number;
+  uses: number;
+  expires_at: string;
+  rep: string;
+  created_by: string;
+  note: string | null;
+  active: boolean;
+  status: SalesCodeStatus;
+  /** A ready `/join?code=…&tier=…&slot=…` path built from the code's own locks. */
+  link: string;
+  sales: SalesCodeSale[];
+}
+
+/** POST /api/admin/sales-codes body. */
+export interface SalesCodeCreate {
+  code_points: number;
+  tier?: SalesTier | null;
+  category_id?: string | null;
+  supplier_id?: string | null;
+  email_lock?: string | null;
+  max_uses?: number;
+  expires_in_days?: number;
+  rep?: string | null;
+  note?: string | null;
+}
+
+/** PATCH /api/admin/sales-codes/{id} body. */
+export interface SalesCodeUpdate {
+  active?: boolean;
+  expires_in_days?: number;
+  note?: string | null;
+}
+
+/** GET /api/admin/checkout-intents/attention — rows are left loose on the
+ *  wire (built in parallel by Track B); `normalizeAttention` in
+ *  pages/sales-codes/salesCodes.ts reads them tolerantly. */
+export interface AttentionPayload {
+  conflicts?: unknown[];
+  holds?: unknown[];
+  failing?: unknown[];
+}
+
+export interface BillingCard {
+  brand: string;
+  last4: string;
+  exp_month: number;
+  exp_year: number;
+}
+
+export interface BillingInvoice {
+  id: string;
+  number: string | null;
+  /** ISO string or Stripe unix seconds — formatDay reads both. */
+  created: string | number | null;
+  amount_due_cents: number;
+  amount_paid_cents: number;
+  amount_refunded_cents: number;
+  status: string;
+  hosted_url: string | null;
+  pdf_url: string | null;
+  due_date: string | number | null;
+}
+
+/** GET /api/admin/sponsors/{id}/billing (404 = Stripe unconfigured or no billing). */
+export interface SponsorBillingView {
+  configured: boolean;
+  subscription_id: string | null;
+  status: string | null;
+  collection_method: string | null;
+  cancel_scheduled: boolean;
+  cancel_at: string | null;
+  period_end: string | null;
+  next_charge: { amount_cents: number; date: string | number | null } | null;
+  card: BillingCard | null;
+  list_usd: number | null;
+  founder_usd: number | null;
+  price_usd: number | null;
+  code_points: number | null;
+  channel: string | null;
+  sold_by: string | null;
+  code: string | null;
+  failing_since: string | null;
+  cancels_on: string | null;
+  legacy_price: boolean;
+  invoices: BillingInvoice[];
+  needs_resolution: null | 'ambiguous_subscription' | 'no_subscription';
+}
+
+export type BillingCancelWhen = 'period_end' | 'now' | 'resume';
+
+/** POST …/billing/card-link */
+export interface CardLinkResult {
+  url: string;
+  expires_at: string;
+  email: string | null;
+}
+
+/** GET /api/admin/quote-ladder (R12): prices per code-point step, server-made. */
+export interface QuoteLadderOption {
+  code_points: number;
+  price_usd: number;
+}
+
+export interface QuoteLadderTier {
+  list: number;
+  founder: number;
+  floor: number;
+  options: QuoteLadderOption[];
+}

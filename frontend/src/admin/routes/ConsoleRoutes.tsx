@@ -40,6 +40,11 @@ const SponsorsPage = lazy(() => import("@admin/pages/sponsors/list"));
 const SponsorFormPage = lazy(() => import("@admin/pages/sponsors/form"));
 const ExpensesPage = lazy(() => import("@admin/pages/expenses/list"));
 const ExpenseFormPage = lazy(() => import("@admin/pages/expenses/form"));
+// Rep discount codes + the Needs-attention strip (Gold/Platinum sales, spec
+// §12). Staff-only: reachable under /account too, where the pages render a
+// notice and the server refuses (require_staff).
+const SalesCodesPage = lazy(() => import("@admin/pages/sales-codes/list"));
+const NewSalesCodePage = lazy(() => import("@admin/pages/sales-codes/form"));
 const SettingsPage = lazy(() => import("@admin/pages/settings"));
 const MessagesListPage = lazy(() => import("@admin/pages/messages/list"));
 const MessageDetailPage = lazy(() => import("@admin/pages/messages/detail"));
@@ -102,6 +107,8 @@ export default function ConsoleRoutes() {
         path="expenses/:id/edit"
         element={<ExpenseFormPage />}
       />
+      <Route path="sales-codes" element={<SalesCodesPage />} />
+      <Route path="sales-codes/new" element={<NewSalesCodePage />} />
       <Route path="messages" element={<MessagesListPage />} />
       <Route
         path="messages/:id"

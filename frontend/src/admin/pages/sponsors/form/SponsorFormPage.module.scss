@@ -560,7 +560,12 @@
   justify-content: flex-end;
 }
 
-/* ── Stripe billing panel (QuotePanel.tsx) ─────────────────────────────── */
+/* ── Quotes + Billing panels (QuotePanel.tsx, BillingPanel.tsx) ─────────── */
+
+// Both panels render AFTER the <form>, outside its flex gap.
+.panelStacked {
+  margin-top: 20px;
+}
 
 .quoteList {
   list-style: none;
