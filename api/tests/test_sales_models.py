@@ -209,3 +209,33 @@ def test_057_creates_every_model_table():
         assert f'"{model.__tablename__}"' in src
         for column in model.__table__.c:
             assert f'"{column.name}"' in src, f"{model.__tablename__}.{column.name} missing in 057"
+
+
+# ── R16: what occupies an exclusive slot ─────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "status,occupies",
+    [("Paused", True), (None, True), ("Active", True), ("Expired", False)],
+)
+def test_paused_and_null_occupy_expired_does_not(db, seeded_db, status, occupies):
+    """A paused sponsor is still paying — its slot is taken (LU-F7)."""
+    from app.models import Category, Supplier
+    from app.models.sponsor import Sponsor, exclusive_occupant_clause
+
+    # The seeded child already holds a NULL-status Gold; use a fresh child.
+    child = Category(
+        id=uuid.uuid4(),
+        name="Oscillators",
+        slug="oscillators-r16",
+        parent_id=seeded_db["parent"].id,
+        sort_order=9,
+    )
+    supplier = Supplier(id=uuid.uuid4(), name="R16 Co")
+    db.add_all([child, supplier])
+    db.flush()
+    row = Sponsor(supplier_id=supplier.id, category_id=child.id, tier="Gold", status=status)
+    db.add(row)
+    db.flush()
+    hit = db.query(Sponsor).filter(Sponsor.id == row.id, exclusive_occupant_clause()).first()
+    assert (hit is not None) is occupies

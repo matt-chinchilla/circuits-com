@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    or_,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -91,3 +92,16 @@ def is_single_slot(tier: str | None, is_top_level: bool) -> bool:
     TitleCase, legacy seed/DB rows lowercase — CLAUDE.md tier-casing gotcha)."""
     t = (tier or "").strip().lower()
     return (t == "platinum" and is_top_level) or (t == "gold" and not is_top_level)
+
+
+def exclusive_occupant_clause():
+    """R16 (spec §3): an exclusive slot (Gold on a child, Platinum on a top-level
+    category) is TAKEN by any same-category, same-tier row that is not Expired.
+    Paused still pays — "hide the board, keep billing" — so it occupies, and a
+    legacy NULL status is Active. Callers add the category + tier filters (tier
+    lower-cased, the casing gotcha); this is only the status half, the single
+    home for self-serve slot availability. Deliberately WIDER than migration
+    016's Active|NULL index and `_reject_if_slot_taken`, which govern what may
+    be SHOWN; this governs what may be SOLD. Compared case-sensitively against
+    the TitleCase literal, like every other status predicate."""
+    return or_(Sponsor.status.is_(None), Sponsor.status != "Expired")
