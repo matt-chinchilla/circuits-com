@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureText } from '../fixtures';
-import { PART_FAMILIES, partFamily } from './partFamily';
+import { PART_FAMILIES, partFamily, passiveKind } from './partFamily';
 import { readBoardModel } from './readBoardModel';
 
 describe('partFamily — Glasgow revC3, every footprint', () => {
@@ -70,5 +70,37 @@ describe('partFamily — the rules themselves', () => {
   });
   it('lists the families the legend shows, other last', () => {
     expect(PART_FAMILIES).toEqual(['ic', 'passive', 'connector', 'led', 'other']);
+  });
+});
+
+describe('passiveKind', () => {
+  it('reads the library first: capacitor, resistor, inductor', () => {
+    expect(passiveKind('Capacitor_SMD:C_0402_1005Metric', 'C3')).toBe('cap');
+    expect(passiveKind('Capacitor_SMD:CP_Elec_6.3x5.9', 'C9')).toBe('cap');
+    expect(passiveKind('Resistor_SMD:R_0402_1005Metric', 'R1')).toBe('res');
+    expect(passiveKind('Glasgow:R_Array_Convex_4x0402', 'RN2')).toBe('res');
+    expect(passiveKind('Glasgow:R_0603_1608Metric_DNP', 'R40')).toBe('res');
+    expect(passiveKind('Inductor_SMD:L_0402_1005Metric', 'L1')).toBe('ind');
+    expect(passiveKind('Inductor_SMD:Ferrite_Bead_0603', 'FB1')).toBe('ind');
+  });
+  it('falls back to the designator, and says null rather than guess', () => {
+    expect(passiveKind('MyLib:Chip', 'C12')).toBe('cap');
+    expect(passiveKind('MyLib:Chip', 'R7')).toBe('res');
+    expect(passiveKind('MyLib:Chip', 'FB2')).toBe('ind');
+    expect(passiveKind('MyLib:Chip', 'L3')).toBe('ind');
+    expect(passiveKind('Fuse:Fuse_0603', 'F1')).toBeNull();
+    expect(passiveKind('', '')).toBeNull();
+  });
+  it('every Glasgow passive with a C, R or L designator gets the kind its name says', () => {
+    const model = readBoardModel(fixtureText('glasgow-revC3/glasgow.kicad_pcb'), 0.05);
+    const passives = model.footprints.filter((fp) => partFamily(fp.lib, fp.ref) === 'passive');
+    let checked = 0;
+    for (const fp of passives) {
+      const want = /^C\d/.test(fp.ref) ? 'cap' : /^R/.test(fp.ref) ? 'res' : /^L\d/.test(fp.ref) ? 'ind' : null;
+      if (want == null) continue;
+      expect(passiveKind(fp.lib, fp.ref), `${fp.ref} ${fp.lib}`).toBe(want);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(150);
   });
 });

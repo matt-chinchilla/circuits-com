@@ -56,3 +56,39 @@ export function partFamily(lib: string, ref = ''): PartFamily {
   }
   return 'other';
 }
+
+/** Which passive a passive is, for the tint its chip takes: a capacitor's tan
+ *  ceramic, a resistor's black film, an inductor's grey ferrite. */
+export type PassiveKind = 'cap' | 'res' | 'ind';
+
+/** Token-anchored like LIB_RULES, tried in this order on the library id. */
+const PASSIVE_LIB_RULES: readonly [PassiveKind, RegExp][] = [
+  ['cap', /(^|[:_])(Capacitor|C|CP|C_Elec|C_Disc|C_Array)(?=[_:-]|\d|$)/i],
+  ['res', /(^|[:_])(Resistor|R|R_Array|Potentiometer|Trimmer|Thermistor|Varistor)(?=[_:-]|\d|$)/i],
+  ['ind', /(^|[:_])(Inductor|L|Ferrite|FB|Bead|Choke)(?=[_:-]|\d|$)/i],
+];
+
+const PASSIVE_REF_RULES: readonly [PassiveKind, RegExp][] = [
+  ['cap', /^C\d/i],
+  ['res', /^(R|RN|RV|RT|TH)\d/i],
+  ['ind', /^(L|FB)\d/i],
+];
+
+/**
+ * The kind of a PASSIVE footprint named `lib` with reference `ref` — the
+ * library first (`Capacitor_SMD:C_0402…` → cap), the designator only when the
+ * library says nothing. Null when neither does: a fuse, a potentiometer the
+ * names do not settle, stay the plain passive tint rather than a guessed one.
+ * Meaningful only for a footprint `partFamily` calls `passive`.
+ */
+export function passiveKind(lib: string, ref = ''): PassiveKind | null {
+  const name = lib.trim();
+  if (name !== '') {
+    for (const [kind, rule] of PASSIVE_LIB_RULES) if (rule.test(name)) return kind;
+  }
+  const designator = ref.trim();
+  if (designator !== '') {
+    for (const [kind, rule] of PASSIVE_REF_RULES) if (rule.test(designator)) return kind;
+  }
+  return null;
+}
