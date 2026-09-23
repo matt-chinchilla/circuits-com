@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EDGE_CORNER_DEG, MeshBuilder, triangulate } from './tessellate';
+import { EDGE_CORNER_DEG, MeshBuilder, triangulate, UV_MM } from './tessellate';
 
 const sq = (s: number, cx = 0, cy = 0) => ({ pts: [{ x: cx - s, y: cy - s }, { x: cx + s, y: cy - s }, { x: cx + s, y: cy + s }, { x: cx - s, y: cy + s }] });
 
@@ -93,5 +93,111 @@ describe('addPrismEdges', () => {
     const d = new MeshBuilder(false);
     expect(d.addPrismEdges({ pts: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 0, y: 1 }] }, 0, 1)).toBe(5 + 4);
     expect(EDGE_CORNER_DEG).toBe(25);
+  });
+});
+
+/** The outward-facing check every closed solid below must pass: each
+ *  triangle's geometric normal agrees with its stored normals, and points away
+ *  from the solid's centroid. */
+function assertOutward(g: { positions: Float32Array; normals: Float32Array; indices: Uint32Array }): void {
+  const P = g.positions, N = g.normals;
+  let cx = 0, cy = 0, cz = 0;
+  const n = P.length / 3;
+  for (let i = 0; i < n; i++) { cx += P[3 * i]; cy += P[3 * i + 1]; cz += P[3 * i + 2]; }
+  cx /= n; cy /= n; cz /= n;
+  for (let t = 0; t < g.indices.length; t += 3) {
+    const [a, b, c] = [g.indices[t], g.indices[t + 1], g.indices[t + 2]];
+    const ux = P[3 * b] - P[3 * a], uy = P[3 * b + 1] - P[3 * a + 1], uz = P[3 * b + 2] - P[3 * a + 2];
+    const vx = P[3 * c] - P[3 * a], vy = P[3 * c + 1] - P[3 * a + 1], vz = P[3 * c + 2] - P[3 * a + 2];
+    const gx = uy * vz - uz * vy, gy = uz * vx - ux * vz, gz = ux * vy - uy * vx;
+    expect(gx * N[3 * a] + gy * N[3 * a + 1] + gz * N[3 * a + 2], `triangle ${t / 3} winding`).toBeGreaterThan(0);
+    const mx = (P[3 * a] + P[3 * b] + P[3 * c]) / 3 - cx, my = (P[3 * a + 1] + P[3 * b + 1] + P[3 * c + 1]) / 3 - cy, mz = (P[3 * a + 2] + P[3 * b + 2] + P[3 * c + 2]) / 3 - cz;
+    expect(gx * mx + gy * my + gz * mz, `triangle ${t / 3} faces out`).toBeGreaterThan(0);
+  }
+}
+
+describe('MeshBuilder — texture coordinates', () => {
+  it('a builder asked for uvs writes two per vertex: xy / 2 mm on a cap, (along the ring, z) / 2 mm on a wall', () => {
+    const b = new MeshBuilder(false, { x: 0, y: 0 }, true);
+    b.addPrism({ outer: { pts: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 0, y: 2 }] }, holes: [] }, 0, 1);
+    const g = b.build('body', null);
+    expect(g.uvs).toBeInstanceOf(Float32Array);
+    expect(g.uvs!.length).toBe((g.positions.length / 3) * 2);
+    expect(UV_MM).toBe(2);
+    for (let v = 0; v < g.positions.length / 3; v++) {
+      const [x, y, z] = [g.positions[3 * v], g.positions[3 * v + 1], g.positions[3 * v + 2]];
+      const [u, w] = [g.uvs![2 * v], g.uvs![2 * v + 1]];
+      if (Math.abs(g.normals[3 * v + 2]) > 0.5) {
+        expect([u, w]).toEqual([x / 2, y / 2]);
+      } else {
+        expect(w).toBeCloseTo(z / 2, 6);
+      }
+    }
+    // Along the walls u runs continuously round the ring: 0 → 12 mm → 6 uv.
+    const wallU: number[] = [];
+    for (let v = 0; v < g.positions.length / 3; v++) if (Math.abs(g.normals[3 * v + 2]) < 0.5) wallU.push(g.uvs![2 * v]);
+    expect(Math.min(...wallU)).toBe(0);
+    expect(Math.max(...wallU)).toBeCloseTo(6, 6);
+  });
+  it('a builder not asked for uvs carries none', () => {
+    const b = new MeshBuilder(false);
+    b.addPrism({ outer: sq(1), holes: [] }, 0, 1);
+    const g = b.build('substrate', null);
+    expect(g.uvs).toBeUndefined();
+    expect('uvs' in g).toBe(false);
+  });
+});
+
+describe('MeshBuilder — hexahedron and dimple', () => {
+  it('a sloped slab is 12 outward triangles with uvs, under the mirror too', () => {
+    for (const flip of [false, true]) {
+      const b = new MeshBuilder(flip, { x: 0, y: 0 }, true);
+      // A shoulder: 1 mm long in x, rising from z 0..0.1 at x=0 to 0.3..0.4 at x=1.
+      const c = [
+        { x: 0, y: 0, z: 0 }, { x: 0, y: 0.5, z: 0 }, { x: 1, y: 0.5, z: 0.3 }, { x: 1, y: 0, z: 0.3 },
+        { x: 0, y: 0, z: 0.1 }, { x: 0, y: 0.5, z: 0.1 }, { x: 1, y: 0.5, z: 0.4 }, { x: 1, y: 0, z: 0.4 },
+      ];
+      expect(b.addHexahedron(c)).toBe(12);
+      const g = b.build('lead', null);
+      expect(g.indices.length).toBe(36);
+      expect(g.uvs!.length).toBe((g.positions.length / 3) * 2);
+      assertOutward(g);
+      for (let v = 0; v < g.normals.length / 3; v++) expect(Math.hypot(g.normals[3 * v], g.normals[3 * v + 1], g.normals[3 * v + 2])).toBeCloseTo(1, 6);
+    }
+  });
+  it('the same corners in the other order still face out', () => {
+    const b = new MeshBuilder(false);
+    const c = [
+      { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 1, y: 1, z: 0 }, { x: 0, y: 1, z: 0 },
+      { x: 0, y: 0, z: 1 }, { x: 1, y: 0, z: 1 }, { x: 1, y: 1, z: 1 }, { x: 0, y: 1, z: 1 },
+    ];
+    b.addHexahedron([...c.slice(0, 4)].reverse().concat([...c.slice(4)].reverse()));
+    assertOutward(b.build('lead', null));
+  });
+  it('a dimple is a fan of facets on the face, each shaded as a pit wall: inward-leaning normals under the cap-tint threshold', () => {
+    const b = new MeshBuilder(true, { x: 0, y: 0 }, true);
+    expect(b.addDimple({ x: 3, y: 4 }, 0.3, 1.5, true)).toBe(8);
+    const g = b.build('body', null);
+    expect(g.indices.length).toBe(24);
+    expect(g.uvs!.length).toBe((g.positions.length / 3) * 2);
+    for (let v = 0; v < g.positions.length / 3; v++) {
+      expect(g.positions[3 * v + 2]).toBe(1.5);
+      const nz = g.normals[3 * v + 2];
+      expect(nz).toBeGreaterThan(0);
+      expect(nz).toBeLessThan(0.5);
+      expect(Math.hypot(g.positions[3 * v] - 3, g.positions[3 * v + 1] + 4)).toBeLessThanOrEqual(0.3 + 1e-6);
+    }
+    // Every facet faces the viewer from its side of the board (+z here) …
+    const facing = (h: { positions: Float32Array; indices: Uint32Array }, t: number) => {
+      const [a, b2, c] = [h.indices[t], h.indices[t + 1], h.indices[t + 2]].map((i) => [h.positions[3 * i], h.positions[3 * i + 1]]);
+      return (b2[0] - a[0]) * (c[1] - a[1]) - (b2[1] - a[1]) * (c[0] - a[0]);
+    };
+    for (let t = 0; t < g.indices.length; t += 3) expect(facing(g, t)).toBeGreaterThan(0);
+    // … and on the back side, faces −z.
+    const d = new MeshBuilder(true);
+    d.addDimple({ x: 0, y: 0 }, 0.3, -1, false);
+    const h = d.build('body', null);
+    for (let v = 0; v < h.normals.length / 3; v++) expect(h.normals[3 * v + 2]).toBeLessThan(0);
+    for (let t = 0; t < h.indices.length; t += 3) expect(facing(h, t)).toBeLessThan(0);
   });
 });
