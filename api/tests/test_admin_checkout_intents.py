@@ -1,0 +1,243 @@
+"""Needs attention — /api/admin/checkout-intents (spec §9, LU-F14a/b).
+
+The staff list of what billing needs a human for (unresolved conflicts, live
+holds, failing payments) and the two actions that keep reps out of the Stripe
+dashboard: retry a conflict's cancel + refund, and release a live hold.
+"""
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
+import pytest
+
+from app.config import settings
+from app.models import Category, Sponsor, User
+from app.models.sales import BillingAudit, CheckoutIntent, SponsorBilling
+from app.services import stripe_quotes
+from app.services.auth_service import create_token
+from tests.fake_stripe import FakeStripe
+
+URL = "/api/admin/checkout-intents"
+
+
+def _viewer_header(db) -> dict[str, str]:
+    viewer = User(
+        id=uuid.uuid4(),
+        username="viewer@test.example",
+        email="viewer@test.example",
+        password_hash="x",
+        role="viewer",
+        email_verified_at=datetime.now(UTC),
+    )
+    db.add(viewer)
+    db.commit()
+    return {"Authorization": f"Bearer {create_token(str(viewer.id), 'viewer')}"}
+
+
+@pytest.fixture
+def fake(monkeypatch):
+    stripe = FakeStripe()
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_attention")
+    monkeypatch.setattr(stripe_quotes, "make_client", stripe.make_client)
+    return stripe
+
+
+def _intent(db, category, **overrides) -> CheckoutIntent:
+    fields = {
+        "tier": "gold",
+        "category_id": category.id,
+        "list_usd": 2500,
+        "founder_usd": 2100,
+        "price_usd": 2100,
+        "channel": "self_serve",
+        "sold_by": "Daniel",
+        "company_name": "Needs Co",
+        "email": "ap@needs.example",
+        "status": "open",
+        "expires_at": datetime.now(UTC) + timedelta(minutes=30),
+    }
+    fields.update(overrides)
+    row = CheckoutIntent(**fields)
+    db.add(row)
+    db.commit()
+    return row
+
+
+@pytest.fixture
+def child(seeded_db):
+    return seeded_db["child"]
+
+
+def test_attention_lists_conflicts_holds_and_failing(
+    client, db, seeded_db, child, fake, auth_header
+):
+    other = Category(
+        id=uuid.uuid4(),
+        name="Crystals",
+        slug="crystals-attn",
+        icon="diamond",
+        parent_id=seeded_db["parent"].id,
+    )
+    db.add(other)
+    db.commit()
+    hold = _intent(db, child)
+    conflict = _intent(
+        db,
+        other,
+        status="conflict",
+        conflict_reason="slot_taken",
+        stripe_session_id="cs_test_attention0001",
+    )
+    _intent(
+        db,
+        other,
+        status="conflict",
+        conflict_reason="amount_mismatch",
+        resolved_at=datetime.now(UTC),
+    )
+    _intent(db, other, status="expired")  # neither a hold nor a conflict
+    failing = Sponsor(
+        supplier_id=seeded_db["supplier1"].id,
+        keyword="failing-attn",
+        tier="Gold",
+        status="Active",
+        amount=Decimal("2100"),
+    )
+    db.add(failing)
+    db.flush()
+    since = datetime.now(UTC) - timedelta(days=3)
+    db.add(
+        SponsorBilling(
+            sponsor_id=failing.id,
+            stripe_subscription_id="sub_failing0001",
+            channel="rep_code",
+            list_usd=2500,
+            price_usd=2100,
+            failing_since=since,
+        )
+    )
+    db.commit()
+
+    resp = client.get(f"{URL}/attention", headers=auth_header())
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    assert [c["id"] for c in body["conflicts"]] == [str(conflict.id)]
+    row = body["conflicts"][0]
+    assert row["conflict_reason"] == "slot_taken"
+    assert row["category_name"] == "Crystals"
+    assert (row["company_name"], row["email"], row["price_usd"]) == (
+        "Needs Co",
+        "ap@needs.example",
+        2100,
+    )
+
+    assert [h["id"] for h in body["holds"]] == [str(hold.id)]
+    assert body["holds"][0]["category_name"] == child.name
+    assert body["holds"][0]["expires_at"]
+
+    assert [f["sponsor_id"] for f in body["failing"]] == [str(failing.id)]
+    f = body["failing"][0]
+    assert f["supplier_name"] == seeded_db["supplier1"].name
+    cancels = datetime.fromisoformat(f["cancels_on"])
+    assert cancels.date() == (since + timedelta(days=settings.BILLING_GRACE_DAYS)).date()
+
+
+def test_attention_404s_without_stripe(client, seeded_db, auth_header, monkeypatch):
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", None)
+    assert client.get(f"{URL}/attention", headers=auth_header()).status_code == 404
+
+
+def test_resolve_retries_the_cancel_and_refund(client, db, child, fake, auth_header):
+    intent = _intent(
+        db,
+        child,
+        status="conflict",
+        conflict_reason="slot_taken",
+        stripe_session_id="cs_test_attention0002",
+    )
+    fake.add_subscription("sub_loser000009", customer="cus_loser000009")
+    fake.add_session("cs_test_attention0002", status="complete")
+    fake.sessions["cs_test_attention0002"]["subscription"] = "sub_loser000009"
+    fake.add_paid_invoice("in_loser000009", sub="sub_loser000009", pi="pi_l9", amount=210000)
+
+    resp = client.post(f"{URL}/{intent.id}/resolve", headers=auth_header())
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"resolved": True}
+    db.refresh(intent)
+    assert intent.resolved_at is not None
+    assert fake.subscriptions["sub_loser000009"]["status"] == "canceled"
+    audit = db.query(BillingAudit).filter_by(action="conflict_resolved").one()
+    assert audit.actor == "admin"
+
+
+def test_resolve_reports_a_failure_without_raising(client, db, child, fake, auth_header):
+    intent = _intent(
+        db,
+        child,
+        status="conflict",
+        conflict_reason="slot_taken",
+        stripe_session_id="cs_test_attention0003",
+    )
+    # The session is unknown to Stripe (404) → not resolved, still listed.
+    resp = client.post(f"{URL}/{intent.id}/resolve", headers=auth_header())
+    assert resp.status_code == 200
+    assert resp.json() == {"resolved": False}
+
+
+def test_resolve_refuses_what_is_not_a_conflict(client, db, child, fake, auth_header):
+    hold = _intent(db, child)
+    assert client.post(f"{URL}/{hold.id}/resolve", headers=auth_header()).status_code == 409
+    assert (
+        client.post(f"{URL}/{hold.id}/resolve", headers=auth_header()).json()["detail"]
+        == "not_a_conflict"
+    )
+    assert client.post(f"{URL}/{uuid.uuid4()}/resolve", headers=auth_header()).status_code == 404
+    assert client.post(f"{URL}/not-a-uuid/resolve", headers=auth_header()).status_code == 404
+
+
+def test_release_expires_the_session_and_frees_the_hold(client, db, child, fake, auth_header):
+    fake.add_session("cs_test_attention0004", status="open")
+    hold = _intent(db, child, stripe_session_id="cs_test_attention0004")
+    resp = client.post(f"{URL}/{hold.id}/release", headers=auth_header())
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"released": True}
+    assert fake.sessions["cs_test_attention0004"]["status"] == "expired"
+    db.refresh(hold)
+    assert hold.status == "released"
+    audit = db.query(BillingAudit).filter_by(action="hold_released").one()
+    assert (audit.actor, audit.intent_id) == ("admin", hold.id)
+
+
+def test_release_of_a_hold_without_a_session_still_frees_it(client, db, child, fake, auth_header):
+    hold = _intent(db, child)
+    assert client.post(f"{URL}/{hold.id}/release", headers=auth_header()).json() == {
+        "released": True
+    }
+    assert fake.tape == []
+
+
+def test_release_of_something_not_held_is_a_no(client, db, child, fake, auth_header):
+    done = _intent(db, child, status="completed")
+    assert client.post(f"{URL}/{done.id}/release", headers=auth_header()).json() == {
+        "released": False
+    }
+
+
+def test_a_viewer_cannot_act(client, db, child, fake):
+    viewer = _viewer_header(db)
+    hold = _intent(db, child)
+    resp = client.post(f"{URL}/{hold.id}/release", headers=viewer)
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "read_only"
+    assert client.post(f"{URL}/{hold.id}/resolve", headers=viewer).status_code == 403
+
+
+def test_a_customer_is_refused(client, db, child, fake, seeded_db, auth_header):
+    customer = auth_header(email="kennedy_user@test.example")
+    resp = client.get(f"{URL}/attention", headers=customer)
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "staff_only"
+    hold = _intent(db, child)
+    assert client.post(f"{URL}/{hold.id}/release", headers=customer).status_code == 403
