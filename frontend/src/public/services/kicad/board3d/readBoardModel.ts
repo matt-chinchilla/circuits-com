@@ -21,6 +21,10 @@ import type {
 const PAD_KINDS: readonly PadModel['kind'][] = ['smd', 'thru_hole', 'np_thru_hole', 'connect'];
 const PAD_SHAPES: readonly PadShape[] = ['circle', 'oval', 'rect', 'roundrect', 'trapezoid', 'custom'];
 const FP_GRAPHICS = ['fp_line', 'fp_arc', 'fp_circle', 'fp_rect', 'fp_poly'];
+/** The package drawing's layer on each side. KiCad 6–9 write the canonical
+ *  `F.Fab`; the long `F.Fabrication` is the name the board setup shows and a
+ *  third-party writer may emit, so both are read as the same layer. */
+const FAB_NAMES: Record<Side, readonly string[]> = { F: ['F.Fab', 'F.Fabrication'], B: ['B.Fab', 'B.Fabrication'] };
 const TOP_HEADS = new Set(['version', 'layers', 'net', 'footprint', 'via', 'segment', 'arc', 'zone']);
 
 // ── atoms ───────────────────────────────────────────────────────────────────
@@ -196,7 +200,8 @@ function readFootprint(node: SExpr[], copperNames: string[], edgeOut: Shape[], n
   const side: Side = str(child(node, 'layer')) === 'B.Cu' ? 'B' : 'F';
   const place: Placement = { at: pt(at), rotDeg: num(at, 3), side };
   const ref = footprintField(node, 'reference') ?? '';
-  const courtyard: Shape[] = [], silk: Shape[] = [];
+  const courtyard: Shape[] = [], silk: Shape[] = [], fab: Shape[] = [];
+  const fabNames = FAB_NAMES[side];
   for (const item of node) {
     if (!Array.isArray(item) || !FP_GRAPHICS.includes(head(item) ?? '')) continue;
     const layer = str(child(item, 'layer'));
@@ -205,11 +210,13 @@ function readFootprint(node: SExpr[], copperNames: string[], edgeOut: Shape[], n
       if (edge != null) edgeOut.push(placeShape(edge, place));
       continue;
     }
-    const bucket = layer === `${side}.CrtYd` ? courtyard : layer === `${side}.SilkS` ? silk : null;
+    const bucket = layer === `${side}.CrtYd` ? courtyard
+      : layer === `${side}.SilkS` ? silk
+        : layer != null && fabNames.includes(layer) ? fab : null;
     const shape = bucket == null ? null : shapeOf(item);
     if (shape != null) bucket?.push(shape);
   }
-  return { ref, lib: atom(node, 1) ?? '', place, pads: children(node, 'pad').map((p) => readPad(p, ref, copperNames, nets)), courtyard, silk };
+  return { ref, lib: atom(node, 1) ?? '', place, pads: children(node, 'pad').map((p) => readPad(p, ref, copperNames, nets)), courtyard, silk, fab };
 }
 
 // ── the rest of the board ───────────────────────────────────────────────────

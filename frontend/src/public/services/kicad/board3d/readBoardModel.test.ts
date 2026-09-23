@@ -36,6 +36,19 @@ describe('readBoardModel — Glasgow revC3 (KiCad 6)', () => {
     expect(f.pads[0]).toMatchObject({ number: '1', kind: 'smd', shape: 'roundrect', rratio: 0.25, size: { x: 0.59, y: 0.64 } });
     expect(f.courtyard.length).toBeGreaterThanOrEqual(4);
   });
+  it('reads the package drawing on the footprint\'s own Fab layer, footprint-local', () => {
+    const f = m.footprints.find((x) => x.place.at.x === 127 && x.place.at.y === 107.6)!;
+    // A C_0402's Fab body is the 1.0 × 0.5 mm chip, drawn around the origin
+    // BEFORE placement (the footprint sits at (127, 107.6)).
+    expect(f.fab.length).toBeGreaterThanOrEqual(4);
+    for (const sh of f.fab) if (sh.kind === 'line') expect(Math.abs(sh.a.x) + Math.abs(sh.a.y)).toBeLessThan(2);
+    // Back-side parts read B.Fab: 80 of Glasgow's 94 draw there. The 31 on
+    // the board that draw nothing on Fab are test points, mounting holes,
+    // logos and the kikit tabs — none of them a package.
+    const back = m.footprints.filter((x) => x.place.side === 'B');
+    expect(back.filter((x) => x.fab.length > 0)).toHaveLength(80);
+    expect(m.footprints.filter((x) => x.fab.length > 0)).toHaveLength(241);
+  });
   it('pad wildcards expand to the board layers', () => {
     const tht = m.footprints.flatMap((f) => f.pads).find((p) => p.kind === 'thru_hole')!;
     // The first through-hole pad in the file states `(layers "*.Cu")` alone.
@@ -68,6 +81,23 @@ describe('readBoardModel — StickHub (KiCad 9 dialect)', () => {
   it('references come from (property "Reference")', () => {
     expect(m.footprints.some((f) => f.ref === 'D4')).toBe(true);
     expect(m.footprints.some((f) => f.ref === 'J7')).toBe(true);
+  });
+  it('reads Fab drawings in the KiCad 9 dialect on both sides', () => {
+    expect(m.footprints.filter((f) => f.fab.length > 0).length).toBeGreaterThan(70);
+    expect(m.footprints.some((f) => f.place.side === 'B' && f.fab.length > 0)).toBe(true);
+  });
+  it('the long Fabrication layer name is the same layer', () => {
+    const board = [
+      '(kicad_pcb (version 20240108) (generator pcbnew)',
+      '(layers (0 "F.Cu" signal) (31 "B.Cu" signal) (49 "F.Fab" user "F.Fabrication"))',
+      '(footprint "x" (layer "F.Cu") (at 5 5) (property "Reference" "R1")',
+      '  (fp_rect (start -1 -0.5) (end 1 0.5) (layer "F.Fabrication") (width 0.1))',
+      '  (fp_line (start -1 -0.5) (end 1 -0.5) (layer "F.Fab") (width 0.1))',
+      '  (fp_line (start -1 -0.5) (end 1 -0.5) (layer "B.Fab") (width 0.1)))',
+      ')',
+    ].join('\n');
+    const fp = readBoardModel(board, 0.01).footprints[0];
+    expect(fp.fab.map((sh) => sh.kind)).toEqual(['rect', 'line']);
   });
   it('180 arc tracks are flattened, none degenerate', () => {
     expect(m.tracks.filter((t) => t.pts.length > 2)).toHaveLength(180);

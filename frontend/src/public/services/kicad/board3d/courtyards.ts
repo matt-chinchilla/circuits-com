@@ -1,11 +1,17 @@
-// A footprint's courtyard → the translucent body the scene stands in its place
-// (spec 2026-09-21 §4). The courtyard is the only outline a KiCad board states
-// for a part that is true to the real component's FOOTPRINT; its height is an
-// estimate and the viewer captions it as one. `(model …)` — the path to the
-// author's own 3D file — is never read, here or anywhere in this pipeline.
+// A footprint's outline → the body the scene stands in its place (spec
+// 2026-09-21 §4, 2026-09-22 3D parts §1). Two outlines a KiCad board states
+// for a part are candidates: the Fab drawing, which by the library convention
+// IS the physical package (the chip, the moulding, the housing), and the
+// courtyard, which is the package plus its assembly clearance. The Fab outline
+// wins when it closes — a body drawn from the courtyard is too big and buries
+// the part's own pads — and the courtyard stands in when it does not. The
+// height is an estimate either way and the viewer captions it as one.
+// `(model …)` — the path to the author's own 3D file — is never read, here or
+// anywhere in this pipeline.
 import { place, signedArea } from './geom';
 import { chainLoops, orient, shapePolylines } from './outline';
-import type { BoardModel, FootprintModel, Ring, Side } from './types';
+import { partFamily } from './partFamily';
+import type { BoardModel, FootprintModel, Ring, Shape, Side } from './types';
 
 export interface Courtyard {
   ref: string;
@@ -15,6 +21,8 @@ export interface Courtyard {
   heightMm: number;
   side: Side;
   areaMm2: number;
+  /** Which outline the ring is: the package drawing, or the courtyard. */
+  source: 'fab' | 'courtyard';
 }
 
 /** Body height from courtyard area, and nothing else. An 0402 (1.7 mm²) and a
@@ -35,16 +43,42 @@ export function estimateHeightMm(areaMm2: number): number {
 const COURTYARD_SNAP_MM = 0.02;
 
 /**
- * The footprint's courtyard graphics, placed on the board and chained into one
- * closed ring. Returns null when the footprint draws no courtyard at all AND
- * when what it draws never closes — both are "this part has no body", which the
- * caller counts and reports once rather than guessing an outline per part.
- *
- * The largest loop wins: a courtyard drawn as an outer boundary plus an inner
- * keep-clear (a connector's mating area) is one body, not two.
+ * A Fab loop smaller than this share of the courtyard's area is not the
+ * package: it is a mark drawn inside it (a pin-1 circle, a polarity bar that
+ * happens to close). The smallest real ratio on the fixtures is a chip
+ * passive's body against its courtyard, ~18 % for an 0201 and ~29 % for an
+ * 0402; a pin-1 circle on an IC is under 1 %.
  */
-export function courtyardOf(fp: FootprintModel, tolMm: number): Courtyard | null {
-  const { polylines } = shapePolylines(fp.courtyard, tolMm);
+const FAB_MIN_SHARE = 0.1;
+
+/**
+ * EIA nominal chip thickness by imperial size code — the typical height a
+ * datasheet lists for a ceramic chip of that size. Still an estimate (a real
+ * 0603 capacitor runs 0.45–0.9 mm with its value), but a far closer one than
+ * the area rule, which floors every chip at 0.6 mm.
+ */
+const CHIP_THICKNESS_MM: Record<string, number> = { '0201': 0.3, '0402': 0.35, '0603': 0.45, '0805': 0.6, '1206': 0.7 };
+
+/**
+ * The nominal thickness of a CHIP passive named `lib`, from the imperial size
+ * code its name carries as a token (`C_0402_1005Metric`, `R_0603_…`) — the
+ * first such token wins, so an 0201 is not read as the 0603 its metric name
+ * spells. Null for anything else: an array (`4x0402`) is not a chip, and a
+ * non-passive (an `LED_0603`) keeps the area rule.
+ */
+export function chipThicknessMm(lib: string, ref = ''): number | null {
+  if (partFamily(lib, ref) !== 'passive') return null;
+  const match = /(?:^|[:_])(0201|0402|0603|0805|1206)(?=[_A-Za-z]|$)/.exec(lib);
+  return match == null ? null : CHIP_THICKNESS_MM[match[1]];
+}
+
+/** The largest closed loop of `shapes`, placed; null when none closes. The
+ *  largest wins: a courtyard drawn as an outer boundary plus an inner
+ *  keep-clear (a connector's mating area) is one body, not two, and a Fab
+ *  drawing's pin outlines and marks are smaller than the package they sit on. */
+function largestLoop(shapes: Shape[], fp: FootprintModel, tolMm: number): { ring: Ring; area: number } | null {
+  if (shapes.length === 0) return null;
+  const { polylines } = shapePolylines(shapes, tolMm);
   if (polylines.length === 0) return null;
   // Placed AFTER flattening: place() is a rigid motion (turn, translate),
   // so flattening first and placing the points gives the same curve for less work.
@@ -56,9 +90,31 @@ export function courtyardOf(fp: FootprintModel, tolMm: number): Courtyard | null
     const area = Math.abs(signedArea(loop.pts));
     if (area > bestArea) { best = loop; bestArea = area; }
   }
-  if (best == null || bestArea <= 0) return null;
+  return best == null || bestArea <= 0 ? null : { ring: best, area: bestArea };
+}
+
+/**
+ * The footprint's body: its Fab outline when that closes (and is not a mark
+ * too small to be the package — `FAB_MIN_SHARE`), else its courtyard, placed
+ * on the board as one closed ring. Returns null when neither closes — "this
+ * part has no body", which the caller counts and reports once rather than
+ * guessing an outline per part.
+ *
+ * The height is the area rule on the COURTYARD when there is one — the same
+ * number the courtyard-only bodies had, so a part changes shape here and not
+ * height — and on the Fab outline when there is not. A chip passive takes its
+ * size code's nominal thickness instead (`chipThicknessMm`).
+ */
+export function courtyardOf(fp: FootprintModel, tolMm: number): Courtyard | null {
+  const court = largestLoop(fp.courtyard, fp, tolMm);
+  const fab = largestLoop(fp.fab, fp, tolMm);
+  const useFab = fab != null && (court == null || fab.area >= FAB_MIN_SHARE * court.area);
+  const chosen = useFab ? fab : court;
+  if (chosen == null) return null;
+  const heightMm = chipThicknessMm(fp.lib, fp.ref) ?? estimateHeightMm((court ?? chosen).area);
   return {
-    ref: fp.ref, lib: fp.lib, ring: { pts: orient(best.pts, 'outer') }, heightMm: estimateHeightMm(bestArea), side: fp.place.side, areaMm2: bestArea,
+    ref: fp.ref, lib: fp.lib, ring: { pts: orient(chosen.ring.pts, 'outer') }, heightMm, side: fp.place.side,
+    areaMm2: chosen.area, source: useFab ? 'fab' : 'courtyard',
   };
 }
 

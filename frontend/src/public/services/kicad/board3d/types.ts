@@ -2,7 +2,7 @@
 // under board3d/ speaks these types and nothing else: no DOM, no three.js, no
 // KiCanvas. Coordinates are KiCad millimetres, y-DOWN, exactly as the file states
 // them; buildScene flips y once at the very end.
-import type { PartFamily } from './partFamily';
+import type { PartFamily, PassiveKind } from './partFamily';
 
 export interface Vec2 { x: number; y: number }
 export interface Ring { pts: Vec2[] }                       // closed; last point NOT repeated
@@ -32,6 +32,10 @@ export interface FootprintModel {
   ref: string; lib: string; place: Placement; pads: PadModel[];
   courtyard: Shape[];                 // fp_* graphics on <side>.CrtYd, FOOTPRINT-LOCAL coords (unplaced)
   silk: Shape[];                      // fp_* graphics on <side>.SilkS, footprint-local
+  /** fp_* graphics on <side>.Fab, footprint-local: by KiCad's library
+   *  convention the drawing of the physical PACKAGE, which is what a body is
+   *  drawn from when it closes (courtyards.ts). */
+  fab: Shape[];
 }
 export interface ViaModel { at: Vec2; size: number; drill: number; layers: [string, string]; net: number }
 export interface TrackModel { layer: string; width: number; pts: Vec2[]; net: number }   // arcs pre-flattened
@@ -53,7 +57,7 @@ export interface BoardModel {
   /** The net table, ascending by number, net 0 excluded. */
   nets: NetInfo[];
 }
-export type Material = 'substrate' | 'copper' | 'mask' | 'silk' | 'body' | 'hole-wall';
+export type Material = 'substrate' | 'copper' | 'mask' | 'silk' | 'body' | 'hole-wall' | 'lead';
 /** The slice of a group's `indices` that belongs to one footprint: `start` is an
  *  offset INTO `indices` (not a triangle number), `count` is how many indices —
  *  always a multiple of 3. Ranges are contiguous and ascending by construction. */
@@ -61,9 +65,13 @@ export interface PartRange {
   ref: string;
   start: number;
   count: number;
-  /** Body groups only: what kind of part the body stands for, read from the
-   *  footprint's name (`partFamily.ts`). The renderer tints the body by it. */
+  /** Body and lead groups only: what kind of part the body stands for, read
+   *  from the footprint's name (`partFamily.ts`). The renderer tints the body,
+   *  and the part's pins, by it. */
   family?: PartFamily;
+  /** Body and lead groups, passives only: which passive (`passiveKind`), so a
+   *  capacitor and a resistor of one package size do not read alike. */
+  passive?: PassiveKind;
 }
 /** The slice of a COPPER group's `indices` one class of copper draws. Same units
  *  as `PartRange` — `start` an offset into `indices`, `count` a multiple of 3 —
@@ -91,10 +99,21 @@ export interface MeshGroup {
    *  same model space as `positions`. Drawn as one line object over the
    *  bodies, so a box reads as an object; absent when no body was drawn. */
   edges?: Float32Array;
+  /** Body and lead groups only: a texture coordinate per vertex, two floats
+   *  each (so `uvs.length` is two thirds of `positions.length`), in units of
+   *  2 mm — planar `xy / 2` on a flat face, `(distance along the ring, z) / 2`
+   *  on a wall — so a procedural surface grain has the same scale on every
+   *  part. */
+  uvs?: Float32Array;
 }
 export interface BoardScene {
   bounds: { min: Vec2; max: Vec2 }; thicknessMm: number | null; groups: MeshGroup[]; warnings: BoardWarning[];
-  stats: { footprints: number; pads: number; vias: number; tracks: number; triangles: number; buildMs: number };
+  stats: {
+    footprints: number; pads: number; vias: number; tracks: number; triangles: number; buildMs: number;
+    /** How many bodies were drawn from the footprint's Fab outline (the
+     *  package) rather than its courtyard; 0 when bodies were not drawn. */
+    bodiesFromFab: number;
+  };
   /** The board's net table (`BoardModel.nets`), so a view that has only the
    *  scene can name the nets its `NetRange`s number. Optional only so a scene
    *  built by hand (a test's fake) need not carry one. */
