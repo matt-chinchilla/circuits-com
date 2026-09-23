@@ -195,11 +195,11 @@ def test_quote_uses_resolved_products_not_hardcoded_live_ids(fake):
             supplier_name="Kennedy",
             email="info@kennedy.com",
             address={"line1": "1 Main", "city": "X", "state": "NY", "postal_code": "11779"},
-            monthly_total_usd=1250,
+            code_points=10,
         ),
         fake,
     )
-    assert result["amount_total"] == 125000
+    assert result["amount_total"] == 185000
     form = fake.last("POST", "/v1/coupons").form
     assert form["applies_to[products][0]"] == "prod_SANDBOXadv"
     assert form["applies_to[products][1]"] == "prod_SANDBOXplat"

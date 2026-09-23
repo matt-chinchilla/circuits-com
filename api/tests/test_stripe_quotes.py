@@ -8,7 +8,7 @@ the function claims. ``asyncio.run`` keeps them independent of pytest-asyncio
 configuration.
 
 The money invariant under test everywhere: the quote's finalized total equals
-the ladder step EXACTLY — "$1,250 all-in" must never become $1,328.54.
+the rule's price EXACTLY — "$1,850 all-in" must never become $1,928.54.
 """
 
 import asyncio
@@ -19,7 +19,7 @@ import httpx
 import pytest
 
 from app.config import settings
-from app.services import stripe_quotes
+from app.services import sales_pricing, stripe_quotes
 from app.services.stripe_quotes import (
     QUOTE_LADDER,
     StripeApiError,
@@ -145,8 +145,11 @@ def _run(fake: FakeStripe, coro_factory):
     return asyncio.run(go())
 
 
-def _quote(fake: FakeStripe, *, tier="Gold", total=1250):
-    fake.right_total = total * 100
+def _quote(fake: FakeStripe, *, tier="Gold", pts=10):
+    """A quote at ``pts`` code points; the fake finalizes at the rule's price."""
+    tier_key = tier.strip().lower()
+    if tier_key in sales_pricing.TIERS and 0 <= pts <= sales_pricing.MAX_CODE_POINTS:
+        fake.right_total = sales_pricing.price_usd(tier_key, pts) * 100
     return _run(
         fake,
         lambda client: create_sponsor_quote(
@@ -157,7 +160,7 @@ def _quote(fake: FakeStripe, *, tier="Gold", total=1250):
             supplier_name="Kennedy Electronics",
             email="info@kennedy.com",
             address=ADDRESS,
-            monthly_total_usd=total,
+            code_points=pts,
         ),
     )
 
@@ -175,33 +178,45 @@ def _sent(fake: FakeStripe, method: str, path: str) -> dict:
 
 
 def test_discounted_quote_builds_the_exact_all_in_total():
+    """R12: 10 code points on Gold = the Founder's $2,100 less 10% of list =
+    $1,850 — the same number /join charges for the same points."""
     fake = FakeStripe()
-    result = _quote(fake, tier="Gold", total=1250)
-    assert result["amount_total"] == 125000
+    result = _quote(fake, tier="Gold", pts=10)
+    assert result["amount_total"] == 185000
+    assert result["price_usd"] == 1850
     assert result["quote_id"] == "qt_testquote0001"
 
     quote = _sent(fake, "POST", "/v1/quotes")
     assert quote["subscription_data[metadata][sponsor_id]"] == "sponsor-1"
     assert quote["automatic_tax[enabled]"] == "true"
     assert quote["collection_method"] == "send_invoice"
-    assert quote["discounts[0][coupon]"] == "GOLD-AT-1250"
+    assert quote["discounts[0][coupon]"] == "GOLD-AT-1850"
     assert quote["line_items[0][price]"] == "price_gold_advertising_monthly"
     assert quote["line_items[1][price]"] == "price_gold_platform_monthly"
 
     coupon = _sent(fake, "POST", "/v1/coupons")
-    assert coupon["amount_off"] == "125000"  # (2500 − 1250) × 100
+    assert coupon["amount_off"] == "65000"  # (2500 − 1850) × 100
     assert coupon["duration"] == "forever"
+    assert coupon["name"] == "Gold Founder's Deal — $1,850/mo"
     # Fenced to the products Stripe resolved for the tier, not hard-coded ids.
     assert coupon["applies_to[products][0]"] == "prod_gold_advertising_monthly"
     assert coupon["applies_to[products][1]"] == "prod_gold_platform_monthly"
 
 
-def test_list_price_quote_sends_no_discount():
+def test_zero_points_quotes_the_founders_deal_never_list():
+    """No quote is priced at list any more (R12 / D5): 0 points IS the
+    Founder's Deal, charged forever through one amount_off coupon."""
     fake = FakeStripe()
-    _quote(fake, tier="Gold", total=2500)
-    quote = _sent(fake, "POST", "/v1/quotes")
-    assert not any(k.startswith("discounts") for k in quote)
-    assert not any(p == "/v1/coupons" for _, p, _ in fake.tape)
+    result = _quote(fake, tier="Gold", pts=0)
+    assert result["amount_total"] == 210000
+    assert _sent(fake, "POST", "/v1/quotes")["discounts[0][coupon]"] == "GOLD-AT-2100"
+
+
+def test_fifteen_points_stop_at_the_seventy_percent_floor():
+    fake = FakeStripe()
+    result = _quote(fake, tier="Platinum", pts=15)
+    assert result["amount_total"] == 700000
+    assert _sent(fake, "POST", "/v1/quotes")["discounts[0][coupon]"] == "PLATINUM-AT-7000"
 
 
 def test_existing_customer_is_reused_and_address_refreshed():
@@ -249,7 +264,7 @@ def test_plus_addressed_email_is_percent_encoded_in_the_lookup():
             "metadata": {"supplier_id": "supplier-1"},
         }
     ]
-    fake.right_total = 125000
+    fake.right_total = 185000
     result = _run(
         fake,
         lambda client: create_sponsor_quote(
@@ -260,7 +275,7 @@ def test_plus_addressed_email_is_percent_encoded_in_the_lookup():
             supplier_name="Kennedy Electronics",
             email="billing+ap@kennedy.com",
             address=ADDRESS,
-            monthly_total_usd=1250,
+            code_points=10,
         ),
     )
     # The fake filters on the DECODED email — a reused (not duplicate)
@@ -277,7 +292,7 @@ def test_total_mismatch_cancels_the_quote_and_raises():
     fake = FakeStripe()
     fake.finalized_total = 132854  # the $1,328.54 the requirement forbids
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Platinum", total=5000)
+        _quote(fake, tier="Platinum", pts=10)
     assert "canceled" in str(err.value)
     assert any(p.endswith("/cancel") for _, p, _ in fake.tape)
 
@@ -290,16 +305,19 @@ def test_failed_cancel_still_reports_the_mismatch_with_the_quote_id():
     fake.finalized_total = 132854
     fake.cancel_fails = True
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Platinum", total=5000)
+        _quote(fake, tier="Platinum", pts=10)
     message = str(err.value)
     assert "qt_testquote0001" in message
     assert "still OPEN" in message
 
 
-def test_off_ladder_target_is_refused_before_any_stripe_call():
+@pytest.mark.parametrize("pts", [-1, 16, 100])
+def test_points_outside_the_rule_are_refused_before_any_stripe_call(pts):
+    """Nothing prices a quote but the rule, and the rule stops at 15 points —
+    a 16-point quote would break the 30% cap (D2)."""
     fake = FakeStripe()
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Gold", total=299)
+        _quote(fake, tier="Gold", pts=pts)
     assert err.value.status == 422
     assert fake.tape == []
 
@@ -307,16 +325,17 @@ def test_off_ladder_target_is_refused_before_any_stripe_call():
 def test_unknown_tier_is_refused():
     fake = FakeStripe()
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Featured", total=300)
+        _quote(fake, tier="Featured", pts=0)
     assert err.value.status == 422
+    assert fake.tape == []
 
 
 def test_coupon_conflict_with_matching_amount_is_reused():
     fake = FakeStripe()
     fake.coupon_exists = True
-    fake.existing_coupon_amount = 125000
-    _quote(fake, tier="Gold", total=1250)
-    assert _sent(fake, "POST", "/v1/quotes")["discounts[0][coupon]"] == "GOLD-AT-1250"
+    fake.existing_coupon_amount = 65000
+    _quote(fake, tier="Gold", pts=10)
+    assert _sent(fake, "POST", "/v1/quotes")["discounts[0][coupon]"] == "GOLD-AT-1850"
 
 
 def test_coupon_conflict_with_wrong_amount_is_an_error_not_a_discount():
@@ -326,7 +345,7 @@ def test_coupon_conflict_with_wrong_amount_is_an_error_not_a_discount():
     fake.coupon_exists = True
     fake.existing_coupon_amount = 5000
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Gold", total=1250)
+        _quote(fake, tier="Gold", pts=10)
     assert err.value.status == 409
     assert not any(p == "/v1/quotes" for _, p, _ in fake.tape)
 
@@ -337,10 +356,10 @@ def test_coupon_conflict_with_once_duration_is_refused():
     every renewal to list price. Amount alone is not enough to reuse."""
     fake = FakeStripe()
     fake.coupon_exists = True
-    fake.existing_coupon_amount = 125000
+    fake.existing_coupon_amount = 65000
     fake.existing_coupon_duration = "once"
     with pytest.raises(StripeApiError) as err:
-        _quote(fake, tier="Gold", total=1250)
+        _quote(fake, tier="Gold", pts=10)
     assert err.value.status == 409
     assert "duration" in str(err.value)
 
@@ -425,6 +444,12 @@ def test_ladder_first_entry_is_the_list_price():
         assert lookup_keys_for(tier) == [f"{tier}_advertising_monthly", f"{tier}_platform_monthly"]
 
 
+def test_the_ladder_holds_list_prices_only():
+    """R12: the discounted steps are gone — every charged price comes from
+    sales_pricing, so a stale step here could never be offered again."""
+    assert QUOTE_LADDER == {"silver": [250], "gold": [2500], "platinum": [10000]}
+
+
 # ── The routes ──────────────────────────────────────────────────────────────
 
 
@@ -438,7 +463,7 @@ def test_routes_404_without_a_key(client, seeded_db, auth_header):
     assert client.get("/api/admin/quote-ladder", headers=headers).status_code == 404
     resp = client.post(
         f"/api/admin/sponsors/{seeded_db['sponsor'].id}/quote",
-        json={"monthly_total": 300, "address": ADDRESS},
+        json={"code_points": 0, "address": ADDRESS},
         headers=headers,
     )
     assert resp.status_code == 404
@@ -448,10 +473,53 @@ def test_quote_ladder_requires_auth(client, stripe_key):
     assert client.get("/api/admin/quote-ladder").status_code in (401, 403)
 
 
-def test_quote_ladder_renders_the_single_home(client, seeded_db, auth_header, stripe_key):
+def test_quote_ladder_renders_the_rule(client, seeded_db, auth_header, stripe_key):
     body = client.get("/api/admin/quote-ladder", headers=auth_header()).json()
-    assert body["tiers"]["gold"]["list"] == 2500
-    assert body["tiers"]["platinum"]["steps"] == QUOTE_LADDER["platinum"]
+    gold = body["tiers"]["gold"]
+    assert (gold["list"], gold["founder"], gold["floor"]) == (2500, 2100, 1750)
+    assert [o["code_points"] for o in gold["options"]] == list(range(16))
+    assert gold["options"][0] == {"code_points": 0, "price_usd": 2100}
+    assert gold["options"][10] == {"code_points": 10, "price_usd": 1850}
+    assert gold["options"][15] == {"code_points": 15, "price_usd": 1750}
+    for tier, row in body["tiers"].items():
+        assert [o["price_usd"] for o in row["options"]] == [
+            sales_pricing.price_usd(tier, p) for p in range(16)
+        ]
+    assert set(body["tiers"]) == {"silver", "gold", "platinum"}
+    assert "steps" not in gold  # the old discounted ladder is not offered
+
+
+def test_create_quote_refuses_points_above_fifteen(client, seeded_db, auth_header, stripe_key):
+    resp = client.post(
+        f"/api/admin/sponsors/{seeded_db['sponsor'].id}/quote",
+        json={"code_points": 16, "address": ADDRESS},
+        headers=auth_header(),
+    )
+    assert resp.status_code == 422
+
+
+def test_create_quote_end_to_end_prices_by_the_rule_and_audits(
+    client, db, seeded_db, auth_header, stripe_key, monkeypatch
+):
+    """Route → service → FakeStripe with no service monkeypatch: 10 points on
+    the seeded Gold sponsor is a $1,850 quote on GOLD-AT-1850, audited."""
+    from app.models.sales import BillingAudit
+    from tests.fake_stripe import FakeStripe as SharedFakeStripe
+
+    fake = SharedFakeStripe()
+    monkeypatch.setattr(stripe_quotes, "make_client", fake.make_client)
+    resp = client.post(
+        f"/api/admin/sponsors/{seeded_db['sponsor'].id}/quote",
+        json={"code_points": 10, "address": ADDRESS},
+        headers=auth_header(),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["amount_total"] == 185000
+    assert fake.last("POST", "/v1/quotes").form["discounts[0][coupon]"] == "GOLD-AT-1850"
+    row = db.query(BillingAudit).filter(BillingAudit.action == "quote_created").one()
+    assert row.actor == "admin"
+    assert row.amount_cents == 185000
+    assert row.sponsor_id == seeded_db["sponsor"].id
 
 
 def test_create_quote_uses_the_sponsor_row(client, seeded_db, auth_header, stripe_key, monkeypatch):
@@ -471,7 +539,7 @@ def test_create_quote_uses_the_sponsor_row(client, seeded_db, auth_header, strip
     sponsor = seeded_db["sponsor"]
     resp = client.post(
         f"/api/admin/sponsors/{sponsor.id}/quote",
-        json={"monthly_total": 300, "address": ADDRESS},
+        json={"code_points": 0, "address": ADDRESS},
         headers=auth_header(),
     )
     assert resp.status_code == 200, resp.text
@@ -479,6 +547,7 @@ def test_create_quote_uses_the_sponsor_row(client, seeded_db, auth_header, strip
     assert seen["sponsor_id"] == str(sponsor.id)
     assert seen["tier"] == "gold"  # seeded row is lowercase; service normalizes
     assert seen["email"] == "info@kennedy.com"  # supplier's email by default
+    assert seen["code_points"] == 0
 
 
 def test_create_quote_surfaces_stripe_422_as_string_detail(
@@ -490,7 +559,7 @@ def test_create_quote_surfaces_stripe_422_as_string_detail(
     monkeypatch.setattr(stripe_quotes, "create_sponsor_quote", fake_create)
     resp = client.post(
         f"/api/admin/sponsors/{seeded_db['sponsor'].id}/quote",
-        json={"monthly_total": 300, "address": ADDRESS},
+        json={"code_points": 0, "address": ADDRESS},
         headers=auth_header(),
     )
     assert resp.status_code == 422
@@ -500,7 +569,7 @@ def test_create_quote_surfaces_stripe_422_as_string_detail(
 def test_create_quote_unknown_sponsor_is_404(client, seeded_db, auth_header, stripe_key):
     resp = client.post(
         "/api/admin/sponsors/not-a-uuid/quote",
-        json={"monthly_total": 300, "address": ADDRESS},
+        json={"code_points": 0, "address": ADDRESS},
         headers=auth_header(),
     )
     assert resp.status_code == 404
