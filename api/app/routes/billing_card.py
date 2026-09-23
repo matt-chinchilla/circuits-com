@@ -10,7 +10,9 @@ expiring token (``services/card_links``) is the whole credential.
   saves) → ensure the app's card-only portal configuration → mint a portal
   session opened straight on "update your card" → 302 to it.
 * ``GET /card/{token}/done`` — the portal's return: try the oldest open
-  invoice ONCE (keyed per link version, so a reload never pays twice),
+  invoice ONCE per link version and card (the key names the customer's
+  current default card, so a reload never pays twice but a new card after a
+  decline is not refused by Stripe's stored 402),
   audit ``card_updated`` once per version, 302 to ``/join?card=updated``.
 
 A dead link (bad signature, expired, superseded) is 410 with a sentence the
@@ -24,6 +26,7 @@ from __future__ import annotations
 import logging
 import uuid
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -33,7 +36,7 @@ from app.db.session import get_db
 from app.models import Sponsor
 from app.models.sales import BillingAudit, SponsorBilling
 from app.services import billing_mirror, card_links, stripe_billing, stripe_quotes
-from app.services.stripe_quotes import StripeApiError
+from app.services.stripe_quotes import StripeApiError, _call, _object_id
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +117,20 @@ def _audited(db: Session, sponsor_id: uuid.UUID, version: int) -> bool:
     )
 
 
+async def _customer_card_id(client: httpx.AsyncClient, billing: SponsorBilling, sub_id: str) -> str:
+    """The customer's CURRENT default payment method id (what the portal just
+    wrote), or ``"none"`` — read right before paying, so it names the card the
+    attempt is for."""
+    customer = billing.stripe_customer_id
+    if not customer:
+        customer = _object_id(
+            (await stripe_billing.get_subscription(client, sub_id)).get("customer")
+        )
+    row = await _call(client, "GET", f"/v1/customers/{stripe_billing.checked_id('cus', customer)}")
+    pm = _object_id((row.get("invoice_settings") or {}).get("default_payment_method"))
+    return pm if isinstance(pm, str) and pm else "none"
+
+
 @router.get("/card/{token}/done")
 async def card_link_done(token: str, db: Session = Depends(get_db)) -> RedirectResponse:
     key = _secret_key()
@@ -121,8 +138,14 @@ async def card_link_done(token: str, db: Session = Depends(get_db)) -> RedirectR
     version = billing.card_link_version
     async with stripe_quotes.make_client(key) as client:
         try:
+            # Keyed per link version AND card: a reload on the same card is
+            # answered from Stripe's record of the first attempt (never a
+            # second payment), while a customer who comes back with a NEW card
+            # after a decline gets a fresh key — a version-only key would
+            # replay the stored 402 for Stripe's 24 h key lifetime.
+            card = await _customer_card_id(client, billing, sub_id)
             invoice = await stripe_billing.pay_oldest_open_invoice(
-                client, sub_id, f"card-done:{sponsor.id}:{version}"
+                client, sub_id, f"card-done:{sponsor.id}:{version}:{card}"
             )
         except StripeApiError as exc:
             # A decline on the new card (or a replayed decline) is Stripe's to
