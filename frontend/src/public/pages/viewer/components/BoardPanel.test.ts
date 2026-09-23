@@ -305,7 +305,7 @@ describe('Objects', () => {
   it('on the 3D tab names every colour the board is drawn in, the body as the estimate it is', async () => {
     await render({ context: 'board3d' });
     await click(tab('Objects'));
-    const legend = [...container.querySelectorAll('section')].find((s) => s.textContent?.includes('What the colours mean'))!;
+    const legend = [...container.querySelectorAll('section')].find((s) => s.textContent?.includes('What the colors mean'))!;
     expect(legend).not.toBeUndefined();
     const rows = [...legend.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows.slice(0, 6)).toEqual(['Copper', 'Solder mask', 'Silkscreen', 'Holes', 'Body — height estimated', 'Pins and terminals']);
@@ -316,7 +316,7 @@ describe('Objects', () => {
       expect(swatch.style.background).not.toBe('');
     }
     await render({ context: 'board' });
-    expect(container.textContent).not.toContain('What the colours mean');
+    expect(container.textContent).not.toContain('What the colors mean');
   });
 });
 

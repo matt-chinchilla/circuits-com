@@ -302,7 +302,7 @@ function Legend() {
   return (
     <section className={styles.legend} aria-labelledby={id}>
       <h3 id={id} className={styles.legendHead}>
-        What the colours mean
+        What the colors mean
       </h3>
       <ul className={styles.legendList}>
         {LEGEND.map((item) => (
