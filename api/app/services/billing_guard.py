@@ -18,7 +18,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models import Sponsor
@@ -28,11 +28,14 @@ BILLING_ACTIVE = "billing_active"
 
 
 def _billed(db: Session):
+    # Canonical comparison (F3): admin writes are canonicalised now, but a row
+    # written before that may say "expired" / " Expired " and is just as
+    # expired — it must not stay guarded.
     return (
         db.query(Sponsor.id)
         .outerjoin(SponsorBilling, SponsorBilling.sponsor_id == Sponsor.id)
         .filter(
-            or_(Sponsor.status.is_(None), Sponsor.status != "Expired"),
+            or_(Sponsor.status.is_(None), func.lower(func.trim(Sponsor.status)) != "expired"),
             or_(
                 SponsorBilling.stripe_subscription_id.isnot(None),
                 Sponsor.stripe_subscription_id.isnot(None),
