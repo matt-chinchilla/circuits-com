@@ -19,9 +19,15 @@ Money model (the part that must never drift):
   a customer.
 
 Coupons are minted lazily with deterministic ids (``GOLD-AT-450``) and fenced
-to the tier's two products; a pre-existing id is reused only after verifying
-its ``amount_off`` — a hand-made coupon wearing our name but the wrong amount
-is an error, not a convenience.
+to the tier's two products — the product ids come from the prices Stripe
+resolved for the tier's lookup keys, so the same code fences correctly in the
+sandbox and live. A pre-existing id is reused only after verifying every
+field the price depends on — a hand-made coupon wearing our name but the
+wrong amount, duration or fence is an error, not a convenience.
+
+Every request carries ``Stripe-Version: 2026-07-29.dahlia`` (``make_client``),
+the version both accounts default to (Task 0, 2026-09-23): REST shapes can
+never change under the code when the account default is rolled.
 
 Plain ``httpx`` against the REST API (form-encoded, bracket notation). No
 Stripe SDK — the webhook consumer set that precedent, and the four calls here
@@ -40,6 +46,11 @@ logger = logging.getLogger(__name__)
 STRIPE_API = "https://api.stripe.com"
 STRIPE_FILES = "https://files.stripe.com"
 
+# Pinned API version (spec §5). The field paths the billing code reads
+# (``/v1/invoice_payments`` for an invoice's PaymentIntent, period end on
+# ``items.data[]``, ``discounts=`` to clear) are this version's shapes.
+STRIPE_API_VERSION = "2026-07-29.dahlia"
+
 # All-in monthly targets, in DOLLARS. First entry is the list price (quoted
 # with no coupon); the floors are the sanctioned standard discounts. ONE home —
 # the route validates against this and the UI renders it; add a step here and
@@ -55,33 +66,34 @@ QUOTE_LADDER: dict[str, list[int]] = {
     "platinum": [10000, 9000, 8000, 7000, 6000, 5000],
 }
 
-_TIER_PRODUCTS = {
-    "silver": ["prod_V2iufhsxXRZsKu", "prod_V2iuG4nXD5c4Dt"],
-    "gold": ["prod_V3588YvzTwOBa5", "prod_V358Y0EQ7on2Qv"],
-    "platinum": ["prod_V358MQ3Qi9JV26", "prod_V358iY5Odq6k5f"],
-}
-
 
 def lookup_keys_for(tier: str) -> list[str]:
     return [f"{tier}_advertising_monthly", f"{tier}_platform_monthly"]
 
 
 class StripeApiError(Exception):
-    """A Stripe call failed; ``message`` is safe to surface to the admin UI."""
+    """A Stripe call failed; ``message`` is safe to surface to the admin UI.
 
-    def __init__(self, message: str, status: int = 502):
+    ``code`` is Stripe's own ``error.code`` when Stripe answered (e.g.
+    ``charge_already_refunded``, ``resource_already_exists``), or a code this
+    app raised deliberately (``unsupported_payment``); None otherwise."""
+
+    def __init__(self, message: str, status: int = 502, code: str | None = None):
         super().__init__(message)
         self.message = message
         self.status = status
+        self.code = code
 
 
-def make_client(secret_key: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+def make_client(
+    secret_key: str, transport: httpx.AsyncBaseTransport | None = None
+) -> httpx.AsyncClient:
     """One client for both api.stripe.com and files.stripe.com (absolute URLs
     override base_url). ``transport`` exists for tests — MockTransport plays
     Stripe without a network."""
     return httpx.AsyncClient(
         base_url=STRIPE_API,
-        headers={"Authorization": f"Bearer {secret_key}"},
+        headers={"Authorization": f"Bearer {secret_key}", "Stripe-Version": STRIPE_API_VERSION},
         timeout=20.0,
         transport=transport,
     )
@@ -89,7 +101,12 @@ def make_client(secret_key: str, transport: httpx.AsyncBaseTransport | None = No
 
 def _flatten(data: dict[str, Any], prefix: str = "") -> dict[str, str]:
     """Stripe's form encoding: nested dicts/lists become bracket notation
-    (``subscription_data[metadata][sponsor_id]``, ``line_items[0][price]``)."""
+    (``subscription_data[metadata][sponsor_id]``, ``line_items[0][price]``).
+
+    ``None`` is DROPPED (the field is not sent) but an empty string is SENT as
+    an empty string: ``discounts=""`` is how Stripe is told to clear a
+    subscription's discounts, while an empty list sends nothing and leaves
+    them in place."""
     flat: dict[str, str] = {}
     for key, value in data.items():
         name = f"{prefix}[{key}]" if prefix else str(key)
@@ -114,14 +131,24 @@ async def _call(
     url: str,
     data: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
     """``params`` is the ONLY way a query string gets built here — httpx then
     percent-encodes values. An f-string would ship ``+`` verbatim (Stripe
     decodes it as a SPACE, so ``billing+ap@acme.com`` never matches) and would
-    let ``&``/``#`` in a stored value inject or truncate the query."""
+    let ``&``/``#`` in a stored value inject or truncate the query.
+
+    ``idempotency_key`` rides as the ``Idempotency-Key`` header: a retried or
+    double-clicked POST with the same key is answered from Stripe's record of
+    the first one instead of acting twice (Stripe prunes keys after 24 h)."""
+    headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
     try:
         resp = await client.request(
-            method, url, data=_flatten(data) if data else None, params=params
+            method,
+            url,
+            data=_flatten(data) if data else None,
+            params=params,
+            headers=headers,
         )
     except httpx.HTTPError as exc:
         raise StripeApiError(f"could not reach Stripe ({type(exc).__name__})") from exc
@@ -135,20 +162,45 @@ async def _call(
         raise StripeApiError(
             err.get("message") or f"Stripe returned {resp.status_code}",
             status=resp.status_code,
+            code=err.get("code"),
         )
     return body
 
 
-async def _resolve_prices(client: httpx.AsyncClient, tier: str) -> list[str]:
+def _object_id(value: Any) -> Any:
+    """An expandable field is an id string, or the object when expanded."""
+    return value.get("id") if isinstance(value, dict) else value
+
+
+async def resolve_tier_prices(client: httpx.AsyncClient, tier: str) -> list[dict]:
+    """The tier's two ACTIVE prices, in ``lookup_keys_for`` order (advertising
+    first): ``[{"id", "product", "unit_amount", "lookup_key"}]``.
+
+    ``product`` is what fences a coupon to this tier — read from Stripe, never
+    hard-coded, because the sandbox and live accounts hold different product
+    ids behind the same lookup keys."""
     keys = lookup_keys_for(tier)
     listing = await _call(
         client, "GET", "/v1/prices", params={"lookup_keys[]": keys, "active": "true"}
     )
-    by_key = {p.get("lookup_key"): p["id"] for p in listing.get("data", [])}
+    by_key = {p.get("lookup_key"): p for p in listing.get("data", [])}
     missing = [k for k in keys if k not in by_key]
     if missing:
         raise StripeApiError(f"active price not found for {', '.join(missing)}", status=422)
-    return [by_key[k] for k in keys]
+    return [
+        {
+            "id": by_key[k]["id"],
+            "product": _object_id(by_key[k].get("product")),
+            "unit_amount": by_key[k].get("unit_amount"),
+            "lookup_key": k,
+        }
+        for k in keys
+    ]
+
+
+async def _resolve_prices(client: httpx.AsyncClient, tier: str) -> list[str]:
+    """Price ids only (the Silver checkout's consumer until T4 moves it)."""
+    return [p["id"] for p in await resolve_tier_prices(client, tier)]
 
 
 async def _find_supplier_customer(
@@ -192,11 +244,45 @@ async def _find_or_create_customer(
     return created["id"]
 
 
-async def _ensure_ladder_coupon(client: httpx.AsyncClient, tier: str, target_usd: int) -> str:
-    """Deterministic per-step coupon, verified on reuse."""
-    list_usd = QUOTE_LADDER[tier][0]
+async def ensure_price_coupon(
+    client: httpx.AsyncClient,
+    tier: str,
+    target_usd: int,
+    product_ids: list[str],
+    name: str | None = None,
+) -> str:
+    """The ONE coupon that lands ``tier`` on ``target_usd``/month, all-in.
+
+    Deterministic id ``{TIER}-AT-{target}``: ``amount_off`` = list − target,
+    ``duration: forever``, USD, fenced to ``product_ids`` (the tier's two
+    products, from ``resolve_tier_prices``). Never a percent coupon — on
+    inclusive prices only an amount lands the total exactly, and percentages
+    multiply when stacked.
+
+    Refuses a target outside ``(0, list)`` and an empty fence with 422 BEFORE
+    any call. An id that already exists is reused only when EVERY field the
+    price depends on matches — ``amount_off``, ``duration``, ``currency``,
+    ``valid`` and the set of ``applies_to`` products (includable only, so the
+    GET expands it) — else 409. ``name`` is cosmetic: an id that already
+    exists keeps whatever name it was created with."""
+    tier_key = (tier or "").strip().lower()
+    if tier_key not in QUOTE_LADDER:
+        raise StripeApiError(f"tier {tier!r} has no list price", status=422)
+    list_usd = QUOTE_LADDER[tier_key][0]
+    if isinstance(target_usd, bool) or not isinstance(target_usd, int):
+        raise StripeApiError(f"price {target_usd!r} is not whole dollars", status=422)
+    if not 0 < target_usd < list_usd:
+        raise StripeApiError(
+            f"${target_usd}/mo is outside the discountable range for {tier_key} "
+            f"(0 < price < ${list_usd})",
+            status=422,
+        )
+    products = [p for p in product_ids if p]
+    if not products:
+        raise StripeApiError(f"no products to fence the {tier_key} coupon to", status=422)
+
     off_cents = (list_usd - target_usd) * 100
-    coupon_id = f"{tier.upper()}-AT-{target_usd}"
+    coupon_id = f"{tier_key.upper()}-AT-{target_usd}"
     try:
         await _call(
             client,
@@ -207,32 +293,41 @@ async def _ensure_ladder_coupon(client: httpx.AsyncClient, tier: str, target_usd
                 "amount_off": off_cents,
                 "currency": "usd",
                 "duration": "forever",
-                "name": f"{tier.capitalize()} Sponsorship — ${target_usd}/mo all-in",
-                "applies_to": {"products": _TIER_PRODUCTS[tier]},
-                "metadata": {"tier": tier, "managed_by": "circuits-com"},
+                "name": name or f"{tier_key.capitalize()} Sponsorship — ${target_usd}/mo all-in",
+                "applies_to": {"products": products},
+                "metadata": {"tier": tier_key, "managed_by": "circuits-com"},
             },
         )
         return coupon_id
     except StripeApiError as exc:
-        if exc.status != 400 or "already exists" not in exc.message.lower():
+        exists = exc.code == "resource_already_exists" or "already exists" in exc.message.lower()
+        if exc.status != 400 or not exists:
             raise
     # Verify EVERY field the price depends on, not just the amount. The trap
     # is duration: Stripe defaults it to "once", so a hand-made coupon with
     # the right amount_off would discount the FIRST invoice only and silently
-    # revert every renewal to list price.
-    existing = await _call(client, "GET", f"/v1/coupons/{coupon_id}")
+    # revert every renewal to list price. ``valid`` catches an exhausted or
+    # redeem_by-expired coupon Checkout would reject; the fence catches one
+    # that discounts other products (or everything).
+    existing = await _call(
+        client, "GET", f"/v1/coupons/{coupon_id}", params={"expand[]": ["applies_to"]}
+    )
     mismatches = [
         f"{field}={existing.get(field)!r} (expected {want!r})"
         for field, want in (
             ("amount_off", off_cents),
             ("duration", "forever"),
             ("currency", "usd"),
+            ("valid", True),
         )
         if existing.get(field) != want
     ]
+    fenced = (existing.get("applies_to") or {}).get("products")
+    if fenced is None or set(fenced) != set(products):
+        mismatches.append(f"applies_to={fenced!r} (expected {sorted(products)!r})")
     if mismatches:
         raise StripeApiError(
-            f"coupon {coupon_id} exists but does not match the ladder "
+            f"coupon {coupon_id} exists but does not match its price "
             f"({'; '.join(mismatches)}) — resolve it in the Dashboard",
             status=409,
         )
@@ -260,11 +355,10 @@ async def create_sponsor_quote(
     if tier_key not in QUOTE_LADDER:
         raise StripeApiError(f"tier {tier!r} has no quote ladder", status=422)
     if monthly_total_usd not in QUOTE_LADDER[tier_key]:
-        raise StripeApiError(
-            f"${monthly_total_usd}/mo is not on the {tier_key} ladder", status=422
-        )
+        raise StripeApiError(f"${monthly_total_usd}/mo is not on the {tier_key} ladder", status=422)
 
-    price_ids = await _resolve_prices(client, tier_key)
+    prices = await resolve_tier_prices(client, tier_key)
+    price_ids = [p["id"] for p in prices]
     customer_id = await _find_or_create_customer(
         client, name=supplier_name, email=email, address=address, supplier_id=supplier_id
     )
@@ -275,14 +369,14 @@ async def create_sponsor_quote(
         "automatic_tax": {"enabled": True},
         "collection_method": "send_invoice",
         "invoice_settings": {"days_until_due": 30},
-        "subscription_data": {
-            "metadata": {"sponsor_id": sponsor_id, "managed_by": "circuits-com"}
-        },
+        "subscription_data": {"metadata": {"sponsor_id": sponsor_id, "managed_by": "circuits-com"}},
         "header": f"Circuit Center — {tier_key.capitalize()} Sponsorship",
         "metadata": {"sponsor_id": sponsor_id, "managed_by": "circuits-com"},
     }
     if monthly_total_usd < QUOTE_LADDER[tier_key][0]:
-        coupon_id = await _ensure_ladder_coupon(client, tier_key, monthly_total_usd)
+        coupon_id = await ensure_price_coupon(
+            client, tier_key, monthly_total_usd, [p["product"] for p in prices]
+        )
         quote_body["discounts"] = [{"coupon": coupon_id}]
 
     draft = await _call(client, "POST", "/v1/quotes", quote_body)
@@ -382,5 +476,7 @@ async def quote_pdf(client: httpx.AsyncClient, quote_id: str) -> bytes:
     except httpx.HTTPError as exc:
         raise StripeApiError(f"could not reach Stripe ({type(exc).__name__})") from exc
     if resp.status_code >= 400:
-        raise StripeApiError(f"Stripe returned {resp.status_code} for the PDF", status=resp.status_code)
+        raise StripeApiError(
+            f"Stripe returned {resp.status_code} for the PDF", status=resp.status_code
+        )
     return resp.content
