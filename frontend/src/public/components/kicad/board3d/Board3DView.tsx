@@ -119,6 +119,13 @@ const TIP_OFFSET_PX = 14;
 
 const clampTo = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
+/** How many bodies the pipeline drew from a Fab outline; 0 for a scene that
+ *  does not say (one built before the count existed, or a test's fake). */
+function bodiesFromFab(scene: BoardScene): number {
+  const n = (scene.stats as BoardScene['stats'] & { bodiesFromFab?: number }).bodiesFromFab;
+  return typeof n === 'number' && Number.isFinite(n) ? n : 0;
+}
+
 /**
  * The caption, in the fixed order of spec §5 — the estimate disclaimer first,
  * then each warning. Every sentence here is an admission about what the drawing
@@ -128,7 +135,13 @@ const clampTo = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo,
 export function captionOf(scene: BoardScene, quality: Quality = 'full'): string {
   const parts: string[] = [];
   if (scene.groups.some((g) => g.material === 'body')) {
-    parts.push('Component bodies are estimates from courtyards, not part shapes.');
+    // Where the bodies' outlines came from, said plainly: a board whose
+    // footprints carry Fab outlines has bodies shaped like its packages, with
+    // pins read from its pads; a board with none has the older courtyard boxes.
+    // Either way the heights are guesses, and the caption says so.
+    parts.push(bodiesFromFab(scene) > 0
+      ? 'Component bodies are drawn from each footprint\'s outline and pads; their heights are estimates.'
+      : 'Component bodies are estimates from courtyards, not part shapes.');
   } else if (quality === 'reduced') {
     // Nothing was attempted, so nothing is disclaimed — but a reader seeing a
     // bare board needs to know the bodies are missing by design, and that the

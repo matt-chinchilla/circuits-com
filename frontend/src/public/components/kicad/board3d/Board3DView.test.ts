@@ -30,7 +30,7 @@ const scene = (warnings: BoardScene['warnings'], withBody = true): BoardScene =>
 const state = { status: 'ready', scene: scene([]), error: null as string | null, retry: vi.fn() };
 vi.mock('./useBoardScene', () => ({ useBoardScene: () => state }));
 
-import Board3DView from './Board3DView';
+import Board3DView, { captionOf } from './Board3DView';
 
 const project = { name: 'p', files: new Map(), board: 'b.kicad_pcb', sheets: [], root: null } as unknown as KicadProject;
 function fakeRenderer() {
@@ -121,6 +121,21 @@ describe('Board3DView', () => {
     expect(note).toContain('This board has no outline yet');
     expect(note).not.toContain('did not close');
     state.scene = scene([]);
+  });
+  it('says the bodies come from the footprint outlines and pads when any came from a Fab outline, and from courtyards when none did', () => {
+    const fab = 'Component bodies are drawn from each footprint\'s outline and pads; their heights are estimates.';
+    const courtyard = 'Component bodies are estimates from courtyards, not part shapes.';
+    const withFab = (n: number | undefined): BoardScene => {
+      const s = scene([]);
+      return { ...s, stats: n == null ? s.stats : { ...s.stats, bodiesFromFab: n } as BoardScene['stats'] };
+    };
+    expect(captionOf(withFab(212))).toBe(fab);
+    expect(captionOf(withFab(1))).toBe(fab);
+    expect(captionOf(withFab(0))).toBe(courtyard);
+    // A scene from before the count existed says what it always said.
+    expect(captionOf(withFab(undefined))).toBe(courtyard);
+    // No bodies drawn, nothing to say about where they came from.
+    expect(captionOf({ ...withFab(212), groups: [] })).not.toContain('Component bodies');
   });
   it('a reduced-tier board says its bodies are not drawn and that pads still answer', async () => {
     state.scene = scene([], false);
