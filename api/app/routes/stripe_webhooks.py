@@ -8,18 +8,28 @@ more than a bearer token would (that Stripe signed THIS exact body, recently).
 The raw body bytes are verified BEFORE any JSON parsing: the signature covers
 the bytes on the wire, and parse-then-reserialize would both break
 verification and hand unauthenticated input to a parser.
+
+The webhook itself never calls Stripe. An outcome that leaves Stripe-side work
+(a sale's card move, a refused sale's refund, a deleted subscription's open
+invoices) schedules ``billing_followups.run_followup`` as a background task,
+which runs after the 200 is sent; the hourly sweep retries anything it leaves.
 """
 
 from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
-from app.services.stripe_webhook import apply_stripe_event, verify_stripe_signature
+from app.services.billing_followups import run_followup
+from app.services.stripe_webhook import (
+    apply_stripe_event,
+    followup_for,
+    verify_stripe_signature,
+)
 
 router = APIRouter(prefix="/api/stripe", tags=["stripe"])
 
@@ -29,7 +39,9 @@ MAX_BODY_BYTES = 256 * 1024
 
 
 @router.post("/webhook")
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dict:
+async def stripe_webhook(
+    request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+) -> dict:
     secret = (settings.STRIPE_WEBHOOK_SECRET or "").strip()
     if not secret:
         # An unconfigured door does not
@@ -40,9 +52,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dic
     if len(payload) > MAX_BODY_BYTES:
         raise HTTPException(status_code=400, detail="payload_too_large")
 
-    if not verify_stripe_signature(
-        payload, request.headers.get("stripe-signature"), secret
-    ):
+    if not verify_stripe_signature(payload, request.headers.get("stripe-signature"), secret):
         raise HTTPException(status_code=400, detail="invalid_signature")
 
     try:
@@ -52,4 +62,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dic
     if not isinstance(event, dict):
         raise HTTPException(status_code=400, detail="invalid_json")
 
-    return {"received": True, "outcome": apply_stripe_event(db, event)}
+    outcome = apply_stripe_event(db, event)
+    followup = followup_for(event, outcome)
+    if followup is not None:
+        background_tasks.add_task(run_followup, *followup)
+    return {"received": True, "outcome": outcome}
