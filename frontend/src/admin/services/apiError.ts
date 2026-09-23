@@ -18,6 +18,29 @@ const CODE_MESSAGES: Record<string, string> = {
   feed_not_configured: 'Add this supplier’s API key in Settings to enable nightly imports.',
   // auth_service.READ_ONLY_DETAIL — a `viewer` account on any write.
   read_only: 'This account is view-only — changes are disabled.',
+
+  // ── Gold/Platinum sales + the billing console (spec §9, 2026-09-23) ──────
+  // require_billing_reader — a viewer asking for billing, codes or quotes.
+  no_billing_access: 'Billing and sales codes are hidden from view-only accounts.',
+  // R15 — delete/expire refused while a Stripe subscription still charges.
+  billing_active:
+    'This sponsorship is still billed in Stripe — cancel it under Billing first, then expire or delete it.',
+  // The subscription sits on retired price objects; the rule cannot re-price it.
+  legacy_price:
+    'This subscription is on an older price, so its discount cannot be changed here — ask the owner.',
+  // R13 — more than one live subscription names this sponsor.
+  ambiguous_subscription:
+    'Several Stripe subscriptions name this sponsorship — the owner needs to resolve which one is real.',
+  // /v1/invoice_payments answered with something other than a card payment.
+  unsupported_payment:
+    'This invoice was not paid by card, so it cannot be refunded from here — ask the owner.',
+  // R7 — the bound company already holds this placement.
+  already_sponsor:
+    'This company already sponsors that placement — upgrades on the same category go through the desk.',
+  // A money action sent without its confirm dialog's key.
+  idempotency_key_required: 'That action was sent without its safety key — reload the page and try again.',
+  // /join anti-squatting, surfaced here when staff drive a checkout.
+  hold_limit: 'There is already a checkout open for this buyer — wait for it to finish or lapse.',
 };
 
 /**
