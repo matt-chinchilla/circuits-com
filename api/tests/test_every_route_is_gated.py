@@ -116,6 +116,11 @@ PUBLIC_ROUTES = {
     ("GET", "/api/checkout/silver"),
     ("POST", "/api/checkout/silver"),
     ("GET", "/api/checkout/silver/boards"),
+    # The customer's card-update link a rep sends (spec §9). The customer has
+    # no login: the signed, versioned, expiring token in the path IS the
+    # credential, and a newer link revokes the old one.
+    ("GET", "/api/billing/card/{token}"),
+    ("GET", "/api/billing/card/{token}/done"),
     # The BOM tool is explicitly no-login, share links included.
     ("POST", "/api/bom/match"),
     ("POST", "/api/bom/resolve"),
