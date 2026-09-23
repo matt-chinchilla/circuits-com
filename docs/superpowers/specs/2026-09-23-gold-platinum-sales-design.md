@@ -1,211 +1,276 @@
-# Gold & Platinum sales on /join — design
+# Gold & Platinum sales on /join — design (v2)
 
-- **Date:** 2026-09-23 · **Status:** design approved in chat (owner, 2026-09-23 14:09); this document awaits owner review
-- **Branch:** `updates` · alembic head today `056` → this work adds `057`
-- **Code map this spec argues from:** `.superpowers/sdd/2026-09-23-gold-platinum-sales/facts/*.md` (six read-only mappers, every claim anchored `path:line`)
+- **Date:** 2026-09-23 · **Status:** APPROVED by owner 14:36 ("just get it done") with amendments D8–D10; **v2** folds the max-effort review (`.superpowers/sdd/2026-09-23-gold-platinum-sales/review/{lines-up,stripe-api}.md`; ledger in §16)
+- **Branch:** `updates` · alembic head `056` → this work adds `057`
+- **Code map:** `.superpowers/sdd/2026-09-23-gold-platinum-sales/facts/*.md` (every claim anchored `path:line`)
 
 ## 1. Intent
 
 Sales reps must be able to sell **Gold** and **Platinum** sponsorships **now**, on `https://circuitcenter.ai/join`, and give discounts, without ever opening the Stripe dashboard. Every sale is billed monthly by Stripe, recorded in our database, and charged automatically each month; a sponsor whose payments stop is released after two weeks.
 
 **Success looks like:**
-1. A customer can buy an open Gold (subcategory) or Platinum (top-level category) slot on /join and pay on Stripe's hosted page; the board goes live within seconds of payment, not an hour.
-2. A rep can create a discount code in /admin, send the customer a `/join?code=…` link, and see the resulting sale credited to them.
-3. From a sponsor's admin page a rep can see its payments and invoices, cancel, refund, change the discount, and send a card-update link — no Stripe access needed.
-4. Nothing can charge the customer a price the server did not compute, and two buyers can never both end up paying for one exclusive slot (the loser is refunded automatically).
+1. A customer can buy an open Gold (subcategory) or Platinum (top-level category) slot on /join and pay on Stripe's hosted page; the board goes live within seconds of payment.
+2. A rep can create a discount code in /admin, send the customer a `/join?code=…` link, and see the sale credited to them.
+3. From a sponsor's admin page a rep can see payments and invoices, cancel (and undo a scheduled cancel), refund, change the discount, retry a payment, and hand the customer a card-update link — no Stripe access.
+4. Nothing charges a price the server did not compute; no path discounts more than 30% off list; two buyers never both keep a payment for one exclusive slot (the loser is cancelled and refunded automatically, and any failure of that is visible and retryable in the app).
 
-## 2. Owner decisions (verbatim sources: chat 2026-09-23)
+## 2. Owner decisions (chat, 2026-09-23)
 
 | # | Decision |
 |---|---|
-| D1 | **Both** channels: self-serve for open slots **and** rep-generated codes. "all actions that would otherwise be done in Stripe need to be able to be done programmatically in the app. They are not allowed to see the Stripe app." |
-| D2 | **Discount cap: 30% off list, total.** "we are running a 15% discount right now, they can only add another 15% from the base." |
-| D3 | Reps get **all five** console actions now: payments/invoices view, cancel, refund, change discount, card-update link. |
-| D4 | **Failed payments:** automatic retries for two weeks, then the sponsorship expires and the slot reopens. |
-| D5 | The **Founder price is charged, forever** ("What founding partners keep, forever"), and the customer always gets the better deal (2026-09-21). |
-| D6 | UI design choices first search trendy components via the Figma skills; a **shader only where one arises organically** (memory `feedback_design_components_figma`). |
-| D7 | Deploys never build the frontend on the prod box again (2026-09-23 outage; memory `project_prod_build_thrash_2026_09_23`). |
+| D1 | **Both** channels: self-serve for open slots **and** rep-generated codes. Everything that would otherwise be done in Stripe is doable in the app; reps never see Stripe. |
+| D2 | **Discount cap: 30% off list, total** ("they can only add another 15% from the base"). |
+| D3 | Reps get the console actions now: payments/invoices view, cancel, refund, change discount, card-update link. |
+| D4 | **Failed payments:** retries for two weeks, then the sponsorship expires and the slot reopens. |
+| D5 | The Founder price is charged, **forever**; the customer always gets the better deal. |
+| D6 | UI design choices first search trendy components via the Figma skills; a shader only where one arises organically. |
+| D7 | No deploy builds the frontend on the prod box again (2026-09-23 outage). |
+| D8 | A named **"Founder's Deal"** for every tier — Silver $210, Gold $2,100, Platinum $8,500 — charged, and shown by that name on /join, the receipt and Stripe invoices. |
+| D9 | **All discounts come off the base (list) price, up to 30% off in total.** |
+| D10 | Self-serve is expected (salesmen guide customers); the owner re-credits a self-serve sale through the sponsor's existing **Sold by** field when needed. |
 
-## 3. Rulings made while writing this spec (differences from the chat design)
+## 3. Rulings
 
-Each is a correction the code map forced; each names what it costs if wrong.
+Each names why and what it costs if wrong. Findings `LU-Fn` / `SA-Fn` refer to the review files.
 
-- **R1 — `sold_by` keeps today's meaning.** Self-serve without a code keeps `sold_by = settings.SELF_SERVE_ONBOARDING_REP` (currently "Daniel"); a code sale gets the code's rep. The *channel* (`self_serve` / `rep_code` / `quote`) is recorded in a new column instead. *Why:* a literal "Self-serve" would render as a fake rep in the dashboard's book-of-business and as "(former)" in the Sold-by select (`routes/dashboard.py:563-620`, `sponsors/form/index.tsx:1142`). *If wrong:* a one-line settings change.
-- **R2 — The slot hold is NOT a sponsor row.** It is a `checkout_intents` row; one live intent per exclusive slot is enforced by a partial unique index. *Why:* any Active/NULL-status sponsor row renders on the public board (`category_service.active_sponsor_filter`), and a new "Pending" status would ripple through every status union.
-- **R3 — Billing state lives beside the sponsor, not on it** (`sponsor_billing`, `sponsor_payments`). *Why:* the webhook's stale-event gate compares `event.created` to `sponsors.updated_at`; writing payment facts onto the sponsor row would make legitimate later events read as stale (`stripe_webhook.py:391-404`).
-- **R4 — The audit log is its own staff-only table** (`billing_audit`). *Why:* `activity_events` has no actor column and is readable by the customer console for the customer's own supplier (`account_dashboard.py:594-598`).
-- **R5 — The dunning sweep runs inside the api process** (a daemon thread, like the category-cache warmer), not a new container. *Why:* the 1.9 GB box went down today from memory pressure; an extra Python container costs ~80 MB, and only the api process can clear the category cache. *If wrong:* moving it to a container later is mechanical.
-- **R6 — "Demo refused" is dropped.** The demo account is retired (migrations 043/044) and `test_demo_is_retired.py` forbids re-adding its helpers. Viewers stay read-only through the existing `require_staff` wall, matching today's quote posture.
-- **R7 — A rep code may be bound to an EXISTING supplier.** Self-serve still always mints a fresh supplier (anti-impersonation, unchanged), but a rep who sells to a company already on file picks it when creating the code, so the sale attaches there instead of duplicating the company. *Cost:* the webhook must reuse an inactive `(supplier, category)` row rather than insert (unique `uq_sponsor_supplier_category` has no status predicate).
-- **R8 — Codes apply to Gold and Platinum only in this release.** Silver keeps its category-page checkout, gains the Founder price ($210), and gets no code field. *Why:* the ask was Gold/Platinum; a Silver code field means reworking the category-page modal. *If wrong:* the pricing and code tables are tier-generic; only the Silver modal needs the field.
-- **R9 — Existing bugs fixed on the way** (all in paths this work rewrites): the webhook never clears the category cache (boards lag ≤ 60 min today); a missing `amount_total` passes the amount gate; a tier-matrix trigger error (`InternalError`) escapes as a 500 and would start a Stripe retry storm; coupon `applies_to` uses hard-coded LIVE product ids so nothing discounted can be tested in the sandbox; the QuotePanel shows write buttons to viewers.
+- **R1 — `sold_by` keeps today's meaning.** Self-serve without a code → `settings.SELF_SERVE_ONBOARDING_REP` (currently "Daniel"); a code sale → the code's rep; the **channel** (`self_serve` / `rep_code` / `quote`) is its own column. A literal "Self-serve" would render as a fake rep on the dashboard. D10 confirms the owner re-credits by hand.
+- **R2 — The slot hold is a `checkout_intents` row, never a sponsor row** (any Active/NULL sponsor row renders on the public board). One live intent per exclusive slot is a partial unique index.
+- **R3 — Billing state lives beside the sponsor** (`sponsor_billing`, `sponsor_payments`); writing it onto `sponsors` would trip the webhook's stale-event gate (`stripe_webhook.py:391-404`).
+- **R4 — A staff-only `billing_audit` table**; `activity_events` has no actor and is customer-readable.
+- **R5 — The sweep is a thread inside the api process** (like the category-cache warmer): no new container on the memory-starved box, and it can clear the in-process category cache.
+- **R6 — Viewers are refused billing reads** (LU-F13). The viewer role is an outsider; card details, invoice links and live discount codes are customer money and bearer discounts. A new `require_billing_reader` (403 `no_billing_access`) guards the billing GET, the sales-codes GET, **and the existing quote list and PDF reads**. The retired demo account needs nothing (`test_demo_is_retired.py`).
+- **R7 — A rep code may be bound to an existing company** (owner-confirmed), **with guards** (LU-F12, SA-F13): a bound code requires an `email_lock`; creating or redeeming it is refused (409 `already_sponsor`) while that company holds a non-Expired row on the target category (upgrades on the same category go through the desk); only an Expired row is reused, and its old subscription can no longer act on it (R13's foreign-subscription rule); buyer-typed fields never overwrite the bound company; checkout uses that company's Stripe customer (`customer=` + `customer_update[address]=auto`, `customer_update[name]=auto`) instead of creating another.
+- **R8 — Codes apply to Gold and Platinum only in this release.** Silver keeps its category-page checkout and is now charged its Founder's Deal ($210) instead of $250; it gets no code field.
+- **R9 — Existing bugs fixed on the way:** the webhook never clears the category cache (boards lag ≤ 60 min); a missing `amount_total` passes the amount gate; a tier-matrix trigger error (`InternalError`) escapes as a 500; coupon `applies_to` uses hard-coded LIVE product ids; QuotePanel shows write buttons to viewers.
+- **R10 — Checkout is card-only** (`payment_method_types[]=card`) for Silver, Gold and Platinum (LU-F8). ACH completes days later as an async event nothing handles; a buyer would be charged with no board. ACH stays available through quotes (emailed invoices).
+- **R11 — No new webhook event subscriptions** (LU-F23, SA-F2). Holds lapse by their own `expires_at`; refunds and period ends are read live from Stripe by the console; console actions write their own mirror rows. The live webhook endpoint is not touched, which removes a live-Stripe change from the rollout.
+- **R12 — Quotes are priced by the same rule** (LU-F2, D2, D9). The quote route takes `code_points` 0–15 and prices through `sales_pricing`; `QUOTE_LADDER` shrinks to `{tier: [list]}` (the list-price single home, `test_ladder_first_entry_is_the_list_price` still holds). Subscriptions already on old ladder coupons are untouched.
+- **R13 — One subscription per sponsor row** (LU-F3). The new checkout path stamps `sponsors.stripe_subscription_id` as the legacy path does. Once a sponsor has a stored subscription id, any event or console action for a different subscription naming that `sponsor_id` is ignored (outcome `foreign_subscription`). The console's lookup for a rep-quoted row with no stored id stores a match only when exactly one non-canceled subscription carries its `sponsor_id`; otherwise it shows "Several subscriptions — resolve" (409 `ambiguous_subscription`).
+- **R14 — The card lives on the customer** (SA-F1, LU-F10). Checkout saves the card as the *subscription's* default, which outranks the customer's, so a portal card update would never be charged. At activation (and again whenever a card link is opened, which covers legacy subscriptions) the card is moved: customer `invoice_settings.default_payment_method` = the subscription's, then the subscription's field is cleared (`default_payment_method=""`).
+- **R15 — A billed sponsor cannot be deleted or expired around its subscription** (LU-F14e). Sponsor DELETE, supplier DELETE, and a PATCH to `status=Expired` answer 409 `billing_active` ("Cancel it under Billing first") while the sponsor has a stored, non-terminal subscription. Paused stays allowed.
+- **R16 — "Taken" for exclusive self-serve = any same-category, same-tier row that is not `Expired`** (Active, NULL or Paused) (LU-F7), defined once beside `is_single_slot` in `models/sponsor.py`. A paused sponsor is still paying.
+- **R17 — No `FOUNDER_PRICING_ENABLED` flag** (LU-F16): D5 says forever; a flag could silently raise a Founder customer on the next discount change.
 
 ## 4. Pricing — one rule, one home
 
-New module `api/app/services/sales_pricing.py` is the **single home**; nothing else computes a price, and the browser only ever displays numbers the server returned.
+`api/app/services/sales_pricing.py` is the **single home**; nothing else computes a price, and the browser only displays numbers the server returned.
 
 ```
-LIST          = QUOTE_LADDER[tier][0]          # 250 / 2,500 / 10,000 (unchanged single home)
-FOUNDER       = {silver: 210, gold: 2100, platinum: 8500}   # owner-set literals (2026-09-21)
-FLOOR         = LIST * 70 // 100               # 175 / 1,750 / 7,000  (D2: 30% total cap)
-MAX_CODE_PTS  = 15                             # D2: reps add at most 15 points of LIST
-FOUNDER_PRICING_ENABLED (Settings, default true) — when false, FOUNDER = LIST for NEW sales
+LIST          = QUOTE_LADDER[tier][0]          # 250 / 2,500 / 10,000
+FOUNDER       = {silver: 210, gold: 2100, platinum: 8500}   # the Founder's Deal (D8)
+FLOOR         = LIST * 70 // 100               # 175 / 1,750 / 7,000  (D2, D9)
+MAX_CODE_PTS  = 15
 
-price(tier, code_pts) = max(FLOOR, FOUNDER - ceil(code_pts * LIST / 100))   # whole dollars
+price(tier, code_pts) = max(FLOOR, FOUNDER - ceil(code_pts * LIST / 100))   # whole dollars, code_pts 0..15
 ```
 
-- `code_pts` is an integer 0–15; 0 means "Founder price only". Rounding favours the customer (`ceil` on the discount).
-- Worked values (pinned by tests): Silver 0 → **210**; Gold 0 → **2,100**; Gold 10 → **1,850**; Gold 15 → 1,725 → floor **1,750**; Platinum 10 → **7,500**; Platinum 15 → **7,000**.
-- **Charged as ONE `amount_off` coupon, `duration: forever`**, id `{TIER}-AT-{price}` (the existing ladder naming, so a quote and a checkout at the same price share one coupon object). Never a percentage coupon, never two discounts on one subscription (percentages multiply and move the 90/10 NY tax split — `docs/claude-gotchas/billing-stripe.md`).
-- `stripe_quotes._ensure_ladder_coupon` becomes a public `ensure_price_coupon(client, tier, target_usd, product_ids)`: adds a `0 < target < list` guard, verifies `amount_off` + `duration` + `currency` + `applies_to` on reuse, and takes the product ids **from the resolved prices** (`GET /v1/prices` rows carry `product`) instead of `_TIER_PRODUCTS`, so it works in the sandbox. The quotes path calls the same helper.
-- Founder literals also live on the Join page's `JOIN_TIERS.fd` for display; a cross-language test pins them equal to `FOUNDER` (the `test_site_stats.py` precedent), so the card can never advertise a price the server does not charge.
+- Worked values (pinned by tests): Silver 0 → **210**; Gold 0 → **2,100**; Gold 10 → **1,850**; Gold 15 → **1,750** (floor); Platinum 10 → **7,500**; Platinum 15 → **7,000**.
+- Used by: `/join` quote + checkout, Silver checkout, **rep quotes** (R12), and the console's discount change.
+- **One `amount_off` coupon, `duration: forever`**, id `{TIER}-AT-{price}`; never a percentage coupon, never two discounts on one subscription (billing-stripe gotcha: percentages multiply and move the 90/10 tax split). Checkout-minted coupons are named `"{Tier} Founder's Deal — ${price}/mo"`; an id that already exists keeps its name (names are cosmetic, unverified).
+- `stripe_quotes._ensure_ladder_coupon` becomes public `ensure_price_coupon(client, tier, target_usd, product_ids)`: `0 < target < list` guard; product ids **from the resolved prices** (`GET /v1/prices` rows carry `product`) instead of `_TIER_PRODUCTS` (which is deleted); reuse verifies `amount_off`, `duration == forever`, `currency == usd`, `valid is true`, and `set(applies_to.products)` via `GET /v1/coupons/{id}?expand[]=applies_to` (SA-F8).
+- The Join page's `JOIN_TIERS.fd` literals stay for the card display; a cross-language test pins them to `FOUNDER`.
 
-## 5. Data model — migration `057_gold_platinum_sales`
+## 5. Stripe API version and object shapes (SA-F2, SA-F6, LU-F1)
 
-All new tables are FK-free toward `sponsors`/`suppliers`/`users` **except** `sponsor_billing` (1:1, `ON DELETE CASCADE`), so payment history and the audit trail survive a `--reseed` (whose `TRUNCATE … CASCADE` is transitive) the way `sold_by`/`lead_contacts.recorded_by` do. Actors are username strings, never user FKs.
+- **Task 0 (before any code):** read, without writing, the live and sandbox accounts' default API versions and the live webhook endpoint's `api_version` (`GET /v1/webhook_endpoints/we_1U4WbrDqTxm052QNt6qH7IUn`); record them in the ledger. Require ≥ `2026-01-28.clover` (the release that reinstated `amount_off` + `forever` coupons on subscriptions and Checkout). If the endpoint version and the account default differ, stop and ask the owner.
+- `make_client` pins `Stripe-Version` to the recorded account default, so REST shapes can never change under the code. Webhook payloads follow the endpoint's version; the parsers keep today's dual-shape posture.
+- Field paths used everywhere (FakeStripe emits exactly these shapes, including invoices with **no** `payment_intent`/`charge` keys):
+
+| need | path |
+|---|---|
+| an invoice's PaymentIntent | `GET /v1/invoice_payments?invoice=<in_>&status=paid` (via `params=`) → `data[].payment.payment_intent` (require `payment.type == "payment_intent"`, else 409 `unsupported_payment`) |
+| a subscription's first invoice | `GET /v1/subscriptions/{id}` → `latest_invoice` (never `session.invoice`) |
+| period end | `max(item.current_period_end for item in sub.items.data)` |
+| scheduled cancel | `cancel_at_period_end` **or** `cancel_at is not None` (flexible billing mode) |
+| next charge amount | `POST /v1/invoices/create_preview {subscription}` |
+| clear a subscription discount | the literal form field `discounts=` (empty string); an empty list sends nothing (SA-F5) |
+
+## 6. Data model — migration `057_gold_platinum_sales`
+
+New tables are FK-free toward `sponsors`/`suppliers`/`users` except `sponsor_billing` (1:1, `ON DELETE CASCADE`). Actors are username strings.
 
 ### `sales_codes`
-| column | type | notes |
-|---|---|---|
-| `id` | UUID PK | |
-| `code` | String(16) UNIQUE | normalised upper-case, Crockford base32 without I/L/O/U, 8 chars, shown as `XXXX-XXXX` (≈10¹² space) |
-| `code_points` | SmallInteger | CHECK 1–15 |
-| `tier` | String(10) NULL | `gold` / `platinum` / NULL = either (R8) |
-| `category_id` | UUID NULL | optional placement lock (validated against the tier matrix at create) |
-| `supplier_id` | UUID NULL | optional existing-company binding (R7) |
-| `email_lock` | String(200) NULL | checkout email must match, case-insensitive |
-| `max_uses` | SmallInteger | default 1, CHECK ≥ 1 |
-| `uses` | SmallInteger | redemptions counted at PAID completion |
-| `expires_at` | DateTime tz | default now + 14 days |
-| `rep` | String(120) | credited as `sold_by`; defaults to the creator |
-| `created_by` | String(120) | |
-| `note` | String(500) NULL | |
-| `active` | Boolean | reps switch codes off; codes are never deleted (history) |
-| `created_at` | DateTime tz | |
+`id` · `code` String(16) UNIQUE (Crockford base32, no I/L/O/U, 8 chars, shown `XXXX-XXXX`, case-insensitive) · `code_points` SmallInteger CHECK 1–15 · `tier` NULL (`gold`/`platinum`/NULL = either) · `category_id` NULL (placement lock, validated against the tier matrix) · `supplier_id` NULL (R7 binding; requires `email_lock`) · `email_lock` String(200) NULL · `max_uses` SmallInteger default 1 CHECK ≥ 1 · `uses` SmallInteger · `expires_at` default now + 14 days · `rep` String(120) (defaults to the creator) · `created_by` · `note` String(500) NULL · `active` Boolean · `created_at`.
 
-A code is **usable** when `active` AND `expires_at > now` AND `uses + open_intents_using_it < max_uses` AND its locks match the request. Every "not usable" reason returns the same public message (`This code isn't valid for this purchase.`) so the endpoint cannot be used to probe codes.
+Usable = `active` AND `expires_at > now` AND `uses + open intents using it < max_uses` AND the request matches its locks. The count runs after `SELECT … FOR UPDATE` on the code row inside the intent transaction (LU-F19). Every public "not usable" answer is the same sentence: "This code isn't valid for this purchase."
 
 ### `checkout_intents` (every Checkout Session we mint, all tiers)
-`id` UUID PK · `stripe_session_id` String(255) UNIQUE NULL (set after Stripe answers) · `tier` · `category_id` NULL · `keyword` NULL · `sales_code_id` NULL · `supplier_id` NULL (R7) · `list_usd` Integer · `price_usd` Integer · `channel` String(12) · `sold_by` String(120) · `company_name` · `email` · `website` · `status` String(12) `open|completed|expired|conflict` · `expires_at` DateTime tz · `created_at` · `resolved_at` NULL.
+`id` · `stripe_session_id` UNIQUE NULL · `release_token_hash` NULL · `tier` · `category_id` NULL · `keyword` NULL · `sales_code_id` NULL · `supplier_id` NULL (R7) · `list_usd` · `founder_usd` · `price_usd` · `channel` · `sold_by` · `company_name` · `email` · `website` · `client_ip_hash` · `status` `open|completed|expired|released|conflict` · `conflict_reason` NULL · `expires_at` · `created_at` · `resolved_at` NULL.
 
-- **The hold:** partial unique index `uq_live_exclusive_intent ON checkout_intents (category_id) WHERE status = 'open' AND tier IN ('gold','platinum')`, declared on the model (`postgresql_where` + `sqlite_where`) so the test suite builds it too.
-- Before inserting, the same transaction marks `open` intents whose `expires_at < now()` as `expired`, so a lapsed hold never blocks.
-- `expires_at` = Stripe session `expires_at` (now + 31 min; Stripe's minimum is 30) **+ 10 min grace** for webhook latency.
-- The webhook's expected amount comes **from this row** (looked up by session id), never from Stripe metadata.
+- Hold: partial unique index `uq_live_exclusive_intent ON (category_id) WHERE status='open' AND tier IN ('gold','platinum')`, declared on the model (`postgresql_where` + `sqlite_where`).
+- The same transaction first marks `open` intents with `expires_at < now()` as `expired`.
+- Stripe `expires_at` = now + **35 min**; the hold `expires_at` = that + 10 min (SA-F14).
+- The conflict queue **is** `status='conflict' AND resolved_at IS NULL`.
 
-### `sponsor_billing` (1:1 with a Stripe-billed sponsor)
-`sponsor_id` UUID PK FK→sponsors CASCADE · `stripe_customer_id` · `stripe_subscription_id` (also for rep-quoted rows, captured on their first `invoice.paid`) · `channel` · `list_usd` · `price_usd` · `sales_code_id` NULL · `payment_failing_since` DateTime tz NULL · `cancel_at_period_end` Boolean · `current_period_end` DateTime tz NULL · `updated_at`.
+### `sponsor_billing` (1:1)
+`sponsor_id` PK FK→sponsors CASCADE · `stripe_customer_id` · `stripe_subscription_id` · `collection_method` (`charge_automatically` | `send_invoice`) · `channel` · `list_usd` · `founder_usd` NULL · `price_usd` · `sales_code_id` NULL · `failing_since` DateTime tz NULL · `card_link_version` Integer default 0 · `post_activation_done_at` NULL · `updated_at`.
 
-### `sponsor_payments` (mirror of Stripe invoices, fed by the webhook)
-`id` UUID PK · `stripe_invoice_id` UNIQUE · `stripe_payment_intent_id` NULL · `sponsor_id` UUID (no FK) · `amount_due_cents` · `amount_paid_cents` · `amount_refunded_cents` · `status` `paid|failed|refunded|partially_refunded` · `invoice_created_at` · `paid_at` NULL · `hosted_invoice_url` NULL · `updated_at`. Idempotent by invoice id: every event upserts.
+- **Backfill in 057** (LU-F9b): one row for every sponsor that already has `stripe_subscription_id` (channel `self_serve`, collection `charge_automatically`, prices from `amount`). Every webhook handler that resolves a subscription upserts the row.
+
+### `sponsor_payments` (mirror, keyed by invoice)
+`id` · `stripe_invoice_id` UNIQUE · `stripe_subscription_id` · `sponsor_id` NULL (resolved lazily, SA-F7) · `stripe_payment_intent_id` NULL (filled when first needed) · `amount_due_cents` · `amount_paid_cents` · `amount_refunded_cents` · `status` `paid|failed|refunded|partially_refunded` · `invoice_created_at` · `paid_at` NULL · `hosted_invoice_url` NULL · `updated_at`.
 
 ### `billing_audit` (staff-only, append-only)
-`id` · `created_at` · `actor` String(120) (`username`, or `system:webhook` / `system:dunning`) · `sponsor_id` UUID NULL · `sales_code_id` UUID NULL · `action` String(40) (`code_created`, `code_disabled`, `checkout_started`, `sale_activated`, `sale_conflict_refunded`, `cancel_period_end`, `cancel_now`, `refund`, `discount_changed`, `card_link_created`, `card_link_emailed`, `dunning_cancelled`) · `amount_cents` NULL · `detail` String(500).
+`id` · `created_at` · `actor` (`username`, `system:webhook`, `system:sweep`) · `sponsor_id` NULL · `sales_code_id` NULL · `intent_id` NULL · `action` String(40) · `amount_cents` NULL · `detail` String(500).
+Actions: `code_created`, `code_updated`, `checkout_started`, `hold_released`, `sale_activated`, `sale_conflict`, `conflict_resolved`, `cancel_period_end`, `cancel_resumed`, `cancel_now`, `refund`, `discount_changed`, `payment_retried`, `card_link_created`, `card_updated`, `dunning_cancelled`, `quote_created`.
 
-### Changes to existing
-- `sponsors`: none. `amount` for new sales = the **charged** monthly price (Silver self-serve used to store list).
-- `data_versions.SCOPES`: new scope `"sales": ("sales_codes", "checkout_intents")`; `"money"` += `sponsor_payments`, `billing_audit`; `"sponsors"` += `sponsor_billing`. The TS `DataScope` union gains `'sales'` in the same change (`test_data_versions.py` pins both).
+### Existing tables and guards
+- `sponsors`: no new columns; `amount` for new sales = the charged monthly price.
+- `data_versions.SCOPES`: new scope `"sales": ("sales_codes", "checkout_intents")`; `"money"` += `sponsor_payments`, `billing_audit`; `"sponsors"` += `sponsor_billing`. TS `DataScope` gains `'sales'` in the same change.
+- `test_leads_schema.py`: `sponsor_billing` joins `ACCEPTED_LOSSES` (it is in the reseed cascade) (LU-F17).
 
-## 6. Public API (`/api/checkout`, all 404 when `STRIPE_SECRET_KEY` is unset)
+## 7. Public API (`/api/checkout`; every route 404s when `STRIPE_SECRET_KEY` is unset)
 
 | route | purpose |
 |---|---|
-| `GET /api/checkout/exclusive/slots?tier=gold\|platinum` | Open and held slots. Gold = subcategories, Platinum = top-level categories. Each row: `category_id, name, parent_name, path, state: "open" \| "held"`, `held_until` for held rows. Taken slots are omitted (the Silver `open_slots === 0` precedent). Also returns `list_usd`, `founder_usd`. |
-| `POST /api/checkout/quote` `{tier, category_id?, code?}` | The price summary: `list_usd, founder_usd, code: {accepted, points} \| null, price_usd, savings_usd, slot_state`. No side effects. |
-| `POST /api/checkout/exclusive` `{tier, category_id, code?, company_name, email, website?}` | Re-validates slot, code, locks and price server-side; inserts the intent (the hold); mints the Stripe Checkout Session; returns `{url}`. 409 `slot_taken` / `slot_held` (with `held_until`), 422 on validation. |
-| `GET /api/billing/card/{token}` | Card-update redirect (§8). |
+| `GET /exclusive/slots?tier=gold\|platinum` | Open and held slots (R16 defines taken; taken slots omitted). Rows: `category_id, name, parent_name, path, state ("open"\|"held"), held_until?`. Also `list_usd`, `founder_usd`. |
+| `POST /quote {tier, category_id?, code?, email?}` | `list_usd, founder_usd, price_usd, savings_usd, code: {accepted, points} \| null, slot_state`. `email_lock` is evaluated only when `email` is sent (LU-F18). No side effects. |
+| `POST /exclusive {tier, category_id, code?, company_name, email, website?}` | Re-validates everything; **commits** the intent (the hold); mints the session with `Idempotency-Key: checkout:{intent_id}`; on any Stripe error marks the intent `expired` before answering (LU-F6, SA-F14). Returns `{url, release_token}`. 409 `slot_taken` / `slot_held` (+`held_until`) / `already_sponsor`; 429 `hold_limit`. |
+| `POST /exclusive/release {release_token}` | The buyer's own "back" path: expires the Stripe session (`POST /v1/checkout/sessions/{id}/expire`), marks the intent `released`. |
+| `GET /api/billing/card/{token}` | Card-update redirect (§9). |
+| `GET /api/billing/card/{token}/done` | Portal return: pays any open invoice once, then redirects to `/join?card=updated`. |
 
-- Silver keeps `GET/POST /api/checkout/silver*`, now priced by `sales_pricing.price("silver", 0)` = $210 and recorded as an intent (non-blocking: Silver's 5-per-board capacity rule is unchanged).
-- **Session contract** (all tiers): `mode=subscription`, both tier prices, `discounts=[{coupon}]` when price < list, `automatic_tax.enabled`, `billing_address_collection=required`, `customer_email` = the entered email (Stripe locks it), `expires_at`, metadata on session **and** `subscription_data`: `managed_by=circuits-com`, `intent_id`, `tier`. Gold/Platinum `success_url` = `{APP_BASE_URL}/join?welcome={tier}`, `cancel_url` = `{APP_BASE_URL}/join`.
-- **Rate limits** (in-process, per IP, the existing `_rate_limited` pattern): checkout POSTs 8 / 10 min (unchanged); quote 30 / 10 min; after 10 rejected codes in an hour an IP gets only the generic message until the hour passes.
-- All four new public routes are added deliberately to `PUBLIC_ROUTES` in `test_every_route_is_gated.py`.
+- **Anti-squatting** (LU-F6): at most one open exclusive intent per client IP and per normalised email; after two lapsed-unpaid holds on the same slot from the same IP or email within 24 h, that pair gets 429 `hold_limit` for the rest of the 24 h. Released holds never count. Checkout POSTs stay 8 / 10 min per IP; `/quote` 30 / 10 min.
+- **Silver contract** (LU-F11): `GET /checkout/silver` and `/silver/boards` keep `monthly_total` = LIST (for cached old bundles) and **add** `price_usd` (charged, $210) and `founder_usd`; the Join card and `SilverCheckoutModal` render `price_usd`; `founderMonthly` is deleted. Silver sessions are recorded as intents (non-blocking; the 5-per-board rule is unchanged).
+- **Session contract** (all tiers): `mode=subscription`, both tier prices, `discounts=[{coupon}]` when price < list, `payment_method_types[]=card` (R10), `automatic_tax.enabled`, `billing_address_collection=required`, `customer_email` = the entered email (R7-bound sales use `customer=` instead), `expires_at`, and metadata on session **and** `subscription_data`: `managed_by=circuits-com`, `intent_id`, `tier`. Gold/Platinum `success_url` `{APP_BASE_URL}/join?welcome={tier}`, `cancel_url` `{APP_BASE_URL}/join?released=1`.
+- All new public routes are added deliberately to `PUBLIC_ROUTES` in `test_every_route_is_gated.py`.
 
-## 7. Webhook changes (`services/stripe_webhook.py`)
+## 8. Webhook (`services/stripe_webhook.py`) — same events as today (R11)
 
-The module keeps its contract: every verified event gets a 200 and a distinct outcome string; lifecycle events write `sponsors.status` only; creation on `checkout.session.completed` is the sole exception. Every existing outcome string and test stays.
+Contract kept: every verified event gets a 200 and a distinct outcome string; lifecycle events write only `sponsors.status`; creation on `checkout.session.completed` is the sole exception; every existing outcome string and test stays.
 
-| event | new behaviour |
-|---|---|
-| `checkout.session.completed` | **New path** when metadata has `intent_id`: load the intent by session id → gates: paid · subscription present · **`amount_total` present AND equal to `intent.price_usd × 100`** · idempotent by subscription id · tier-matrix pre-check (so the trigger never fires) · slot still free. Then create or reuse the supplier (fresh, or the code's bound supplier with inactive-row reuse, R7), create the sponsor (`status Active`, `amount` = price, `sold_by`), write `sponsor_billing`, count the code's use, mark the intent `completed`, audit `sale_activated`, **`category_cache.clear()`**. **Legacy path** (metadata `self_serve=silver`, no `intent_id`) unchanged except that a missing `amount_total` now fails, so Silver sessions minted before the deploy (24 h default expiry) still complete. |
-| — slot lost to a race | Intent → `conflict` (the queue IS `checkout_intents` rows with `status='conflict' AND resolved_at IS NULL` — no separate table); outcome `checkout_conflict_refunding`; the route schedules the refund as a FastAPI background task after acking, and the sweep (§9) retries anything left. |
-| `checkout.session.expired` (new) | Intent → `expired` (the hold is released). |
-| `invoice.paid` | Unchanged status write, **plus**: upsert `sponsor_payments`, clear `payment_failing_since`, capture `stripe_subscription_id`/`stripe_customer_id` into `sponsor_billing` for rep-quoted rows, `category_cache.clear()` when the status changed. |
-| `invoice.payment_failed` | Still writes no sponsor status (`test_payment_failed_changes_nothing` holds); upserts `sponsor_payments` as failed and sets `payment_failing_since` if unset. |
-| `charge.refunded` (new) | Resolves the payment row via `invoice` or `payment_intent` and updates the refunded amount and status. |
-| `customer.subscription.updated` (new) | Mirrors `cancel_at_period_end`, `current_period_end` into `sponsor_billing` (no sponsor write). |
-| `customer.subscription.deleted` | Unchanged → `Expired`, **plus `category_cache.clear()`**. |
+**Mirroring runs BEFORE the status gates** (LU-F4). For every `invoice.*` event with a subscription: upsert `sponsor_payments` by invoice id; resolve the sponsor through the stored subscription id → metadata `sponsor_id` (R13 rules) → subscription metadata `intent_id` → intent → sponsor; upsert `sponsor_billing`; set `failing_since` on `invoice.payment_failed` (if unset), clear it on `invoice.paid`. None of this writes the sponsor row. Only then do the existing status gates run (`no_sponsor_id`, `stale_event`, `left_paused`, `unchanged`, `slot_conflict`).
 
-- `IntegrityError` **and** `InternalError` are both caught around every commit (roll back, still ack).
-- The live endpoint `we_1U4WbrDqTxm052QNt6qH7IUn` must additionally subscribe to `checkout.session.expired`, `charge.refunded`, `customer.subscription.updated`. `enabled_events` **replaces** the list, so a new `scripts/stripe_webhook_events.py` does GET → union → POST (idempotent, `--live` gate). Running it against live is a rollout step that needs the owner's go-ahead (§12).
+`checkout.session.completed`, **new path** (metadata carries `intent_id`):
+1. Load the intent by `metadata.intent_id`; the stored session id must match or be NULL (then store it). Short-circuit `completed` → `duplicate_checkout`, `conflict` → `conflict_already_queued`.
+2. Gates, in order: paid · subscription present · `amount_total` present **and** equal to `intent.price_usd × 100` · category exists and the tier matrix allows it (pre-checked, so the trigger never fires) · **slot free by R16** · R7 guard. The intent may be `open` **or** `expired` (a deploy's 502 window can push Stripe's retry past the hold); it is honoured whenever the slot is still free (LU-F5c).
+3. **Any gate failure after payment** sets the intent `conflict` with `conflict_reason` (`amount_mismatch`, `slot_taken`, `matrix`, `category_missing`, `already_sponsor`, `bad_metadata`) and audits `sale_conflict`; outcome `checkout_conflict_refunding` (LU-F5a).
+4. Success: create or reuse the supplier (fresh; or the bound company, R7), create the sponsor (`Active`, `amount` = price, `sold_by`, **`stripe_subscription_id`**), upsert `sponsor_billing`, attach any `sponsor_payments` rows already mirrored for this subscription, count the code's use, mark the intent `completed`, audit `sale_activated`, **`category_cache.clear()`**.
+5. The route then runs a FastAPI background task for Stripe follow-ups; the sweep retries anything left (`post_activation_done_at IS NULL` or unresolved conflicts):
+   - after activation: R14 card move; stamp `metadata[supplier_id]` on the Stripe customer; mirror `latest_invoice` (covers the first invoice's `invoice.paid` arriving before the sponsor existed, SA-F7);
+   - after a conflict: the conflict resolution in §10.
 
-## 8. Rep console (admin, no Stripe access)
+**Legacy path** (metadata `self_serve=silver`, no `intent_id`): unchanged, gate pinned to `QUOTE_LADDER["silver"][0]` ($250), except that a missing `amount_total` now fails. Sessions minted before the deploy keep completing.
 
-All routes sit on a router with `dependencies=[Depends(require_staff)]` (viewers read, 403 `read_only` on writes); all 404 when Stripe is unconfigured; Stripe ids are regex-validated before path interpolation; query strings only via `params=`; every POST carries an `Idempotency-Key` (new optional `_call` argument); every action writes `billing_audit`; error `detail`s are strings, with new machine codes added to `CODE_MESSAGES`.
+`customer.subscription.deleted`: unchanged → `Expired`, **plus** `category_cache.clear()` and a queued void of the subscription's open invoices (a canceled subscription's open invoice can still be paid and resurrect the row; SA-F3).
+
+Around every commit, `IntegrityError` **and** `InternalError` are caught (roll back, still ack).
+
+## 9. Rep console (admin; no Stripe access)
+
+Routers carry `dependencies=[Depends(require_staff)]` (viewers get 403 `read_only` on writes); billing and code reads add `require_billing_reader` (R6); every route 404s when Stripe is unconfigured; Stripe ids are regex-validated before path interpolation; query strings only via `params=`; every action writes `billing_audit`; `detail`s are strings and new machine codes get `CODE_MESSAGES` entries.
+
+**Idempotency** (LU-F22, SA-F9): each confirm dialog mints a UUID once and sends it as `Idempotency-Key`; the api forwards it to Stripe, so a double-click or retry cannot double-refund. The sweep uses `conflict-cancel:{intent}` / `conflict-refund:{intent}:{invoice}` and reads Stripe state before each step, treating "already canceled" and `charge_already_refunded` as success (Stripe prunes keys after 24 h).
 
 ### Sales codes — `/api/admin/sales-codes`
-`GET /` (list with uses, rep, status, the sales each code produced), `POST /` (create: points 1–15, tier, optional category / supplier / email locks, max uses, expiry, note; returns the code and its `/join?code=` link), `PATCH /{id}` (switch off, extend expiry, edit note). No delete.
+`GET /` (codes, uses, rep, status, the sales each produced) · `POST /` (points 1–15, tier, optional placement / company+email / email locks, max uses, expiry, note; returns the code and a ready link `/join?code=X&tier=…&slot=…` built from its own locks, LU-F18) · `PATCH /{id}` (switch off, extend expiry, edit note). No delete.
 
 ### Billing — `/api/admin/sponsors/{id}/billing`
-| route | Stripe calls |
+| route | behaviour |
 |---|---|
-| `GET` | subscription (`expand[]=default_payment_method`, falling back to the customer's default) + its invoices + our `sponsor_payments`; returns status, next charge date and amount, card brand/last4/expiry, current price and discount, list price, channel, sold_by, code, `payment_failing_since`, invoices (number, date, amount, status, refunded, hosted URL, PDF URL). For a rep-quoted sponsor with no stored subscription id it looks the subscription up by `metadata['sponsor_id']` (Search API) and stores it. |
-| `POST …/cancel {when: "period_end" \| "now"}` | `period_end` → `cancel_at_period_end=true`. `now` → cancel the subscription (`invoice_now=false`, `prorate=false`), **void its open invoices** (a late `invoice.paid` would otherwise resurrect it — billing-stripe gotcha), set the sponsor `Expired` immediately, `category_cache.clear()`. The client wraps it in `bustingAfter`. |
-| `POST …/refund {invoice_id, amount_cents?}` | `POST /v1/refunds {payment_intent, amount}` for a paid invoice of THIS sponsor's subscription (ownership checked); full when `amount_cents` is absent; cannot exceed the refundable remainder. Does not cancel. |
-| `POST …/discount {code_points: 0–15}` | New price by §4, `ensure_price_coupon`, `POST /v1/subscriptions/{id}` with `discounts[0][coupon]` (or cleared at list price); applies from the next invoice. **Refused (409 `legacy_price`) when the subscription's items are not the tier's current prices** (subscriptions still on the archived 2026-08-22 prices; a quote re-prices those). |
-| `POST …/card-link {email: bool}` | Returns a signed link `{APP_BASE_URL}/api/billing/card/{token}` valid 7 days (HMAC over sponsor id + expiry with a key derived from `ADMIN_SECRET_KEY`; no table); `email: true` also sends it to the supplier's billing email through the existing mail path. Opening the link mints a Stripe **billing-portal** session limited to updating the card (`flow_data[type]=payment_method_update`, portal configuration ensured once per account and found by metadata) and redirects. Portal sessions are short-lived, which is why the emailed link is ours and not Stripe's. |
+| `GET` | Live from Stripe plus our mirror: subscription status, scheduled cancel (§5), period end, next charge amount (`create_preview`), card brand/last4/expiry (customer default, R14), current price and discount, list and Founder's Deal price, channel, sold_by, code, `failing_since` and the date the sweep will cancel, invoices (number, date, amount, paid, refunded, status, hosted URL, PDF URL). Rep-quoted rows with no stored id: R13 lookup (Search query `metadata['sponsor_id']:'<id>' AND -status:'canceled'`). |
+| `POST …/cancel {when: "period_end" \| "now" \| "resume"}` | `period_end` → `cancel_at_period_end=true`. `resume` → `cancel_at_period_end=false` (and `cancel_at=""` when set). `now` → cancel (`invoice_now=false`, `prorate=false`), void every open invoice (`GET /v1/invoices?subscription=…&status=open`), sponsor `Expired`, `category_cache.clear()`; the client wraps it in `bustingAfter`. |
+| `POST …/refund {invoice_id, amount_cents?}` | The invoice must belong to THIS sponsor's subscription; PaymentIntent by §5; `POST /v1/refunds {payment_intent, amount}` (full when absent, never above the remainder); mirror row updated. Does not cancel. |
+| `POST …/discount {code_points: 0–15}` | Price by §4; `ensure_price_coupon`; `POST /v1/subscriptions/{id}` with `discounts[0][coupon]` (or `discounts=` to clear at list); re-read `sub.discounts` and 502 if it is not the expected coupon (SA-F5). **409 `legacy_price`** when the subscription's items are not the tier's current prices. Applies from the next invoice. |
+| `POST …/retry-payment` | `POST /v1/invoices/{id}/pay` on the oldest open invoice (LU-F14d). |
+| `POST …/card-link` | Bumps `card_link_version`; returns `{url, expires_at}`: `{APP_BASE_URL}/api/billing/card/{token}`, 7 days, HMAC over (sponsor id, version, expiry) with a key derived from `ADMIN_SECRET_KEY` — a new link revokes the old one. The UI offers **Copy** and an **Open in email** (`mailto:` prefilled to the supplier's billing email). **Hidden for `send_invoice` subscriptions**, which show "Invoice due {date}" and the hosted invoice link instead (SA-F4). |
 
-### Permissions
-Admins and the owner act; viewers see the console read-only (matching today's quote PDFs); customers are refused by the staff wall. Client-side, `useAuth().isReadOnly` hides every action button, and the same fix is applied to `QuotePanel`.
+**Card link open** (`GET /api/billing/card/{token}`): verify token and version → R14 card move (idempotent, covers legacy subscriptions) → ensure the portal configuration (created once per account: `features[payment_method_update][enabled]=true`, every other feature disabled, `metadata[managed_by]=circuits-com`; found by paging `GET /v1/billing_portal/configurations`) → portal session with `flow_data[type]=payment_method_update` and `flow_data[after_completion][type]=redirect` to `/api/billing/card/{token}/done` → 302. `…/done` pays any open invoice once, audits `card_updated`, redirects to `/join?card=updated`.
 
-## 9. Monthly billing, failures, and the background sweep
+### Needs-attention actions (LU-F14a/b)
+`POST /api/admin/checkout-intents/{id}/resolve` (retry cancel + refund of a conflict) and `POST /api/admin/checkout-intents/{id}/release` (release a live hold).
 
-- Stripe renews and charges each subscription; retries on failure are Stripe's (the account's Smart Retries).
-- **`billing_sweep` thread in the api process** (R5), started with the app, disabled under pytest by a setting (the `CATEGORY_CACHE_WARM` precedent), running **hourly** on the hour boundary (`seconds_until_hour` from `feed_import_daily`):
-  1. Marks lapsed `open` intents `expired`.
-  2. Drains conflict intents (`status='conflict' AND resolved_at IS NULL`): refund the session's first-invoice payment, cancel the subscription, set `resolved_at`, audit `sale_conflict_refunded`. Idempotent; a failure leaves the row unresolved and it shows in the Sales codes page's **Needs attention** strip (§11).
-  3. **Dunning:** for every `sponsor_billing` row with `payment_failing_since` older than `BILLING_GRACE_DAYS` (default **14**, D4) whose subscription is still unpaid in Stripe: cancel it (void open invoices), set the sponsor `Expired`, `category_cache.clear()`, audit `dunning_cancelled`.
-  - Survives an un-migrated schema (the `_is_missing_schema` pattern) and never kills the thread on an error.
-- A rep sees **"Payment failing since {date} · cancels {date + 14 days}"** on the sponsor, from the first failed charge.
+### Guards on existing admin writes (R15)
+Sponsor DELETE, supplier DELETE and sponsor PATCH to `Expired` → 409 `billing_active` while a stored subscription is non-terminal.
 
-## 10. /join (customer-facing)
+## 10. The sweep (thread in the api process, R5)
 
-- **Stage 01:** the Gold and Platinum cards change their CTA from "Ask about…" to **Buy**; Silver unchanged. `?code=XXXX-XXXX` is read **once** from the URL in a `useState` initializer and stripped with a functional `setSearchParams(…, {replace: true})` (the category page's `welcome` pattern). A tier-locked code preselects its tier; a placement-locked code preselects its slot.
-- **Stage 02 (Gold/Platinum):** an in-page slot picker (it SELECTS; it does not navigate like the Silver board rows), fed by `exclusive/slots`. Held slots show "Being purchased — try again after {time}". A failed fetch shows the error or desk fallback and **never reads as sold out**. When nothing is open, the existing "Ask the desk" application stays available.
-- **Price summary** (server numbers only, from `POST /quote`): list price struck through, Founder price, the code's line when one is accepted, **You pay $X/month, tax included**, "12-month minimum · billed monthly". A `money()` formatter adds thousands separators (`monthlyLabel` does not).
-- **Confirm → Stripe:** a new `join/ExclusiveCheckoutModal.tsx` mirroring `SilverCheckoutModal` (portal, scrim rules, Esc; stash written only after the URL returns, read once, 24 h TTL, own key `cc.exclusiveCheckout`), fields company / email / website, then "Continue to secure checkout". 409s map to "This slot was just taken" / "Being purchased — held until {time}".
-- **Receipt:** `/join?welcome=gold|platinum` shows a receipt ticket: **PAYMENT RECEIVED**, never "LIVE" (the webhook may lag).
-- **Copy updates:** the header contract comment (`index.tsx:22-36`), stage-02 line "arranged, never self-served", the `arrange` strings, the FAQ "Is buying through the desk more expensive?", and the applying label (which ignores the Founder price today).
-- **Design pass** (D6): `frontend-design` plus a Figma component search (`figma-use`; the Figma connector needs a one-time owner sign-in) for the slot picker, price summary, and receipt. **Shader candidate, decided in that pass, never forced:** the Gold/Platinum price ticket, a metallic surface the Platinum/Gold boards already establish. Any motion gets a reduced-motion state; the standing perf rules apply (no per-path SVG filters, no animated `drop-shadow`, `whileHover` only behind `@media (hover: hover)`).
-- Pure helpers (price formatting, code normalisation, slot grouping) live in a `.ts` file so vitest can test them.
+Hourly on the hour boundary (the `sync_costs.py:307` sleep, LU-F20); disabled under pytest (the `CATEGORY_CACHE_WARM` precedent); `run_sweep(now=…)` has an injectable clock and a CLI lever `python -m app.jobs.billing_sweep --once [--now ISO]` for rehearsal; survives an un-migrated schema (`_is_missing_schema`) and never dies on an error.
 
-## 11. Admin UI
+1. Lapsed `open` intents → `expired`.
+2. Post-activation follow-ups not done (§8.5).
+3. **Conflicts** (`status='conflict' AND resolved_at IS NULL`), in this order (LU-F5b): cancel the subscription (`invoice_now=false`, `prorate=false`) → refund **every** paid invoice of it → set `resolved_at`, audit `conflict_resolved`. Failures stay listed in Needs attention.
+4. **Dunning** (D4; SA-F3, SA-F4, LU-F9):
+   - `charge_automatically`: `failing_since` older than `BILLING_GRACE_DAYS` (**14**) and the live subscription status is `past_due` or `unpaid` → cancel, void open invoices, sponsor `Expired`, `category_cache.clear()`, audit `dunning_cancelled`.
+   - `send_invoice` (rep quotes): the oldest open invoice's `due_date` is more than 14 days past → the same.
+   - Live status `canceled` (Stripe or anyone else canceled) → void open invoices; the webhook already expired the row.
+5. Queued open-invoice voids from `customer.subscription.deleted`.
 
-- **Sales codes page** at `/admin/sales-codes` (+ `/new`): nav item after Sponsors in `CATALOG_LINKS` (staff-only, never in `customerLinks`), explicit `TITLE_MAP` entries (the fallback regex `\w+` does not match a hyphen), the Expenses list/form shape, a customer-mount self-gate, a copy-link button, and a rep select fed by `getSalesRepOptions()`. The sidebar height is re-measured (it must not scroll at 100% zoom on 1080p).
-- **Needs attention** strip at the top of the Sales codes page: unresolved conflict intents (a buyer paid for a slot someone else won and the automatic refund has not gone through yet) and sponsors whose payments are failing, each linking to its sponsor. Hidden when empty.
-- **Billing panel** on the sponsor edit page directly after `QuotePanel` (`sponsors/form/index.tsx:1271`), outside the `<form>`, hidden when the routes 404; the existing panel's heading "Stripe billing" becomes "Quotes" so the two read apart. Status strip, invoice list with PDF links, the four actions each behind a confirm dialog that states the money consequence ("Refund $2,100.00 to Acme?").
+**Required account setting (owner, sandbox and live; D1's one Dashboard-only item):** Billing → Revenue recovery → Smart Retries over **3 weeks**, ending in **"Leave the subscription past-due"**, so our 14-day sweep is the only thing that ends a sponsorship. The rehearsal reads it back.
+
+A rep sees **"Payment failing since {date} · cancels {date + 14 days}"** from the first failed charge.
+
+## 11. /join
+
+- **Stage 01:** Gold and Platinum CTAs become **Buy**; Silver unchanged. `?code=`, `?tier=`, `?slot=`, `?welcome=`, `?released=`, `?card=` are read once in a `useState` initializer and stripped with a functional `setSearchParams(…, {replace: true})`. Before stripping, confirm the page-view tracker records the pathname only; if it records the query, exclude `code`.
+- **Stage 02 (Gold/Platinum):** an in-page slot picker that SELECTS (it does not navigate like the Silver rows). Held slots read "Being purchased — try again after {time}". A failed fetch shows the error and the desk fallback and **never reads as sold out**. With nothing open, "Ask the desk" stays.
+- **Price summary** (server numbers only): list struck through, the **Founder's Deal** line, the code line when accepted, **You pay $X/month, tax included**, "12-month minimum · billed monthly". A `money()` formatter adds thousands separators.
+- **Confirm → Stripe:** `join/ExclusiveCheckoutModal.tsx` mirroring `SilverCheckoutModal` (portal, scrim rules, Esc; stash written only after the URL returns, read once, 24 h TTL, key `cc.exclusiveCheckout`, which also holds the `release_token`). 409s map to "This slot was just taken" / "Being purchased — held until {time}" / "This company already sponsors this category — ask your rep"; 429 `hold_limit` → "You already have a checkout open".
+- **Back from Stripe** (`?released=1`): post the stashed `release_token`, then show the slot as open again.
+- **Receipt** (`?welcome=gold|platinum`): **PAYMENT RECEIVED**, never "LIVE". **`?card=updated`**: a small confirmation.
+- **Copy updates:** the header contract comment (`index.tsx:22-36`), "arranged, never self-served", the `arrange` strings, the FAQ "Is buying through the desk more expensive?" (quotes now price identically), and the applying label.
+- **Design pass** (D6): `frontend-design` plus a Figma component search (`figma-use`, after the owner's one-time Figma sign-in) for the slot picker, price summary and receipt. Shader candidate, decided in that pass and never forced: the Gold/Platinum price ticket. Reduced-motion states and the standing perf rules apply.
+- Pure helpers (money formatting, code normalisation, slot grouping) live in a `.ts` file for vitest.
+
+## 12. Admin UI
+
+- **Sales codes page** `/admin/sales-codes` (+ `/new`): nav item after Sponsors in `CATALOG_LINKS` (staff-only), explicit `TITLE_MAP` entries, Expenses list/form shape, customer-mount self-gate, Copy link, rep select from `getSalesRepOptions()`, the blocked state for viewers. Sidebar re-measured (no scroll at 100% zoom on 1080p).
+- **Needs attention** strip at the top of that page: unresolved conflicts (with Retry), live holds (with Release), failing payments (linking to the sponsor). Hidden when empty.
+- **Billing panel** on the sponsor edit page after `QuotePanel` (`sponsors/form/index.tsx:1271`), outside the `<form>`, hidden on 404, blocked state for viewers; status strip; invoice list with PDF links; actions behind confirm dialogs that state the money ("Refund $2,100.00 to Acme?"). `QuotePanel`'s heading becomes "Quotes", its select lists code points with the server's price (R12), and both panels hide write buttons for viewers.
 - Both go through the D6 design pass.
 
-## 12. Rollout
+## 13. Rollout
 
-1. **Local, test mode:** `STRIPE_SECRET_KEY` = the sandbox key and a `stripe listen --forward-to` secret, both in one recreate; `APP_BASE_URL` is added to the compose allowlist (default mirrors `https://circuitcenter.ai`) so return URLs come back to localhost.
-2. **Sandbox setup script** (`scripts/stripe_sandbox_setup.py`, refuses live keys): creates the Gold and Platinum inclusive prices with the live lookup keys and tax codes, and the portal configuration.
-3. **Rehearsal checklist** (recorded in the ledger): each tier with and without a code; a held slot seen by a second browser; a forced double-payment (refund arrives); every console action; dunning via a Stripe **test clock** advanced 15 days.
-4. **Owner playtest locally**, then explicit go-ahead to deploy (memory `feedback_phase_gated_builds`).
-5. **Deploy:** reporting pulled before and after; api built on the box as today; **frontend built locally and shipped by `docker save | ssh docker load`**, which becomes `deploy.sh`'s frontend path, building from a clean worktree of `origin/master` (D7).
-6. **Live Stripe steps, each with the owner's go-ahead:** update the webhook endpoint's events (script, §7) and ensure the live portal configuration. Then probe: unsigned POST to `/api/stripe/webhook` → 400; `GET /api/checkout/exclusive/slots?tier=gold` → 200.
+1. **Task 0** (§5): record API versions; verify the local `.env` and prod `/opt/circuits-com/.env` for an `APP_BASE_URL` key (names only) before allowlisting it (LU-F21).
+2. **Local test mode:** sandbox key + `stripe listen --forward-to` secret passed on the recreate command line (never `.env`); `APP_BASE_URL=http://localhost` likewise.
+3. **Sandbox setup script** `scripts/stripe_sandbox_setup.py` (refuses live keys): Gold and Platinum inclusive prices with the live lookup keys and tax codes; the portal configuration.
+4. **Owner steps:** the Smart Retries setting in sandbox and live (§10); the one-time Figma sign-in for the design pass.
+5. **Rehearsal checklist** (ledger): each tier with and without a code; R7 bound code; a second browser seeing a held slot; back-from-Stripe release; a forced double payment ending refunded; every console action (cancel/resume/now, refund full+partial, discount change and clear, retry payment, card link → portal → `done`); dunning by forcing a failed renewal (`pm_card_chargeCustomerFail`, `billing_cycle_anchor=now`) then `billing_sweep --once --now <+15 days>`.
+6. **Owner playtest locally**, then the deploy go-ahead.
+7. **Deploy:** reporting pulled before and after; `deploy.sh` never builds the frontend on the box in ANY path (LU-F15) — every path builds the image locally from a clean worktree of `origin/master`, ships it with `docker save | ssh … docker load`, then `up -d --no-build`; a guard test asserts no `COMPOSE_CMD build` line names `frontend`. The api still builds on the box.
+8. **Probes after deploy:** unsigned POST `/api/stripe/webhook` → 400; `GET /api/checkout/exclusive/slots?tier=gold` → 200.
+9. **Reseed guard** (LU-F17): `confirm_reseed` prints the count of Stripe-billed sponsors that would lose their board while still being charged, and refuses unless it is 0 or the operator types the number.
 
-## 13. Testing
+## 14. Testing
 
-- **pytest:** the FakeStripe transport (which filters on query params) is extended for checkout sessions, subscriptions, invoices, refunds, the portal and search, rather than monkeypatching. Covered: the price table (§4 values); code usability and locks, with the uniform public message; the hold (the partial index rejects a second live intent; a lapsed intent frees the slot); every webhook row in §7, including the conflict path queueing a refund and the legacy Silver path; every console action including the ownership check on refunds and the `legacy_price` refusal; the sweep's three duties; the route-gate and compose-passthrough guards; the scopes mirror; and a cross-language guard for Founder literals.
-- **PG harness** (`tests/pg_harness.py`): migration 057's real `upgrade()` and the partial unique index on Postgres.
-- **vitest:** the /join pure helpers; the SCSS source witnesses for new rules (`css:false` makes class assertions vacuous).
+- **pytest**, FakeStripe extended (it filters on query params and emits §5's shapes): the §4 price table and the quote route's new contract; code usability, locks, `FOR UPDATE`, the uniform message; the hold index, lazy expiry, release, anti-squatting; every §8 branch including mirror-before-gates, `open`/`expired` honouring, each conflict reason, R13 `foreign_subscription`, R16 Paused-is-taken, and the legacy Silver path; every console action including refund ownership, `legacy_price`, discount clear on the wire, card-link revocation; R15 guards; the sweep's five duties with an injected clock; route-gate, compose-passthrough, data-versions, ACCEPTED_LOSSES and the deploy guard; the Founder cross-language guard.
+- **PG harness:** migration 057's real `upgrade()` (including the backfill) and the partial unique index.
+- **vitest:** /join pure helpers; SCSS source witnesses for new rules.
 - **Gates:** `npx tsc -b`, `npx eslint --ext .ts,.tsx src/`, `npm test`, `pytest`.
 
-## 14. Out of scope (named so they are not mistaken for gaps)
+## 15. Out of scope
 
-- Keyword placements for Gold (multi-occupant; no slot to hold).
-- Customer self-service billing (the card-update link is the only customer-facing billing surface).
-- Changing a live sponsor's tier or placement from the console (a new sale or quote does that).
-- `--reseed` destroying Stripe-sold sponsor rows: an existing risk of the reseed path, recorded here rather than solved (the new tables deliberately survive it).
-- The dashboard's stale `_TIER_DEFAULT_AMOUNT` placeholders.
-- Pinning `Stripe-Version` (the code reads both invoice shapes today; pinning mid-flight changes payload shapes).
+- Keyword placements for Gold; changing a live sponsor's tier or placement on the same category (upgrades go through the desk: expire the old sponsorship first).
+- Customer self-service billing beyond the card-update link; emailing the card link from our server (the rep's own mail client is used).
+- New webhook event subscriptions (R11); async payment methods in Checkout (R10).
+- `--reseed` destroying Stripe-sold sponsor rows beyond the §13.9 guard; the dashboard's stale `_TIER_DEFAULT_AMOUNT` placeholders.
+
+## 16. Review ledger (v1 → v2)
+
+| finding | disposition |
+|---|---|
+| LU-F1, SA-F2, SA-F6, SA-F8 | §5 (version pin, field paths), §4 coupon reuse |
+| LU-F2 | R12 |
+| LU-F3 | R13 |
+| LU-F4, SA-F7 | §8 mirror-before-gates, lazy sponsor resolution, `latest_invoice` follow-up |
+| LU-F5 | §8 conflict reasons and `open`/`expired` honouring; §10.3 order |
+| LU-F6, SA-F14 | §7 commit-then-mint, release route, anti-squatting, 35 + 10 min |
+| LU-F7 | R16 |
+| LU-F8 | R10 |
+| LU-F9, SA-F3, SA-F4 | §6 backfill, §10.4, owner retry setting, send_invoice handling |
+| LU-F10, SA-F1, SA-F11 | R14, card-link open/`done` flow, pinned portal configuration |
+| LU-F11 | §7 Silver contract |
+| LU-F12, SA-F13 | R7 guards |
+| LU-F13 | R6 |
+| LU-F14 | §9 resume, retry-payment, Needs-attention actions, R15 |
+| LU-F15 | §13.7 |
+| LU-F16 | R17 |
+| LU-F17 | §6 ACCEPTED_LOSSES, §13.9 |
+| LU-F18 | §7 `/quote` email, §9 ready link |
+| LU-F19 | §6 `FOR UPDATE` |
+| LU-F20, SA-F12 | §10 cadence and injectable clock, §13.5 rehearsal method |
+| LU-F21 | §13.1–2 |
+| LU-F22, SA-F9 | §9 idempotency, card-link version |
+| LU-F23 | cuts taken: R11 (no new events), R17 (no flag), no server email, no bad-code counter; R7 kept (owner-confirmed) |
+| SA-F5 | §5 table, §9 discount |
+| SA-F10 | R13 lookup rule |
