@@ -69,8 +69,7 @@ class FakeStripe:
                 200,
                 json={
                     "data": [
-                        {"id": f"price_{k}", "lookup_key": k, "product": f"prod_{k}"}
-                        for k in keys
+                        {"id": f"price_{k}", "lookup_key": k, "product": f"prod_{k}"} for k in keys
                     ]
                 },
             )
@@ -86,7 +85,12 @@ class FakeStripe:
             if self.coupon_exists:
                 return httpx.Response(
                     400,
-                    json={"error": {"message": "Coupon already exists.", "code": "resource_already_exists"}},
+                    json={
+                        "error": {
+                            "message": "Coupon already exists.",
+                            "code": "resource_already_exists",
+                        }
+                    },
                 )
             return httpx.Response(200, json={"id": self.form(request).get("id")})
         if method == "GET" and path.startswith("/v1/coupons/"):
@@ -109,7 +113,12 @@ class FakeStripe:
             total = self.right_total if self.finalized_total is None else self.finalized_total
             return httpx.Response(
                 200,
-                json={"id": "qt_testquote0001", "number": "QT-0001", "status": "open", "amount_total": total},
+                json={
+                    "id": "qt_testquote0001",
+                    "number": "QT-0001",
+                    "status": "open",
+                    "amount_total": total,
+                },
             )
         if method == "POST" and path.endswith("/cancel"):
             if self.cancel_fails:
@@ -157,7 +166,9 @@ def _sent(fake: FakeStripe, method: str, path: str) -> dict:
     for m, p, form in fake.tape:
         if m == method and p == path:
             return form
-    raise AssertionError(f"{method} {path} never reached Stripe; tape={[(m, p) for m, p, _ in fake.tape]}")
+    raise AssertionError(
+        f"{method} {path} never reached Stripe; tape={[(m, p) for m, p, _ in fake.tape]}"
+    )
 
 
 # ── create_sponsor_quote ────────────────────────────────────────────────────
@@ -196,7 +207,11 @@ def test_list_price_quote_sends_no_discount():
 def test_existing_customer_is_reused_and_address_refreshed():
     fake = FakeStripe()
     fake.customers = [
-        {"id": "cus_existing", "email": "info@kennedy.com", "metadata": {"supplier_id": "supplier-1"}}
+        {
+            "id": "cus_existing",
+            "email": "info@kennedy.com",
+            "metadata": {"supplier_id": "supplier-1"},
+        }
     ]
     result = _quote(fake)
     assert result["customer_id"] == "cus_existing"
@@ -211,7 +226,11 @@ def test_shared_billing_inbox_never_overwrites_another_suppliers_customer():
     and this supplier gets its own."""
     fake = FakeStripe()
     fake.customers = [
-        {"id": "cus_other", "email": "info@kennedy.com", "metadata": {"supplier_id": "someone-else"}}
+        {
+            "id": "cus_other",
+            "email": "info@kennedy.com",
+            "metadata": {"supplier_id": "someone-else"},
+        }
     ]
     result = _quote(fake)
     assert result["customer_id"] == "cus_new"
@@ -224,7 +243,11 @@ def test_plus_addressed_email_is_percent_encoded_in_the_lookup():
     The params channel must encode it."""
     fake = FakeStripe()
     fake.customers = [
-        {"id": "cus_plus", "email": "billing+ap@kennedy.com", "metadata": {"supplier_id": "supplier-1"}}
+        {
+            "id": "cus_plus",
+            "email": "billing+ap@kennedy.com",
+            "metadata": {"supplier_id": "supplier-1"},
+        }
     ]
     fake.right_total = 125000
     result = _run(
@@ -346,10 +369,22 @@ def test_sponsor_quote_list_filters_to_this_sponsorship():
         {"id": "cus_1", "email": "info@kennedy.com", "metadata": {"supplier_id": "supplier-1"}}
     ]
     fake.quote_rows = [
-        {"id": "qt_mine00000001", "number": "QT-1", "status": "open", "amount_total": 30000,
-         "created": 1, "metadata": {"sponsor_id": "sponsor-1"}},
-        {"id": "qt_other0000001", "number": "QT-2", "status": "open", "amount_total": 9000,
-         "created": 2, "metadata": {"sponsor_id": "sponsor-OTHER"}},
+        {
+            "id": "qt_mine00000001",
+            "number": "QT-1",
+            "status": "open",
+            "amount_total": 30000,
+            "created": 1,
+            "metadata": {"sponsor_id": "sponsor-1"},
+        },
+        {
+            "id": "qt_other0000001",
+            "number": "QT-2",
+            "status": "open",
+            "amount_total": 9000,
+            "created": 2,
+            "metadata": {"sponsor_id": "sponsor-OTHER"},
+        },
     ]
     rows = _run(
         fake,
@@ -363,7 +398,11 @@ def test_sponsor_quote_list_filters_to_this_sponsorship():
 def test_sponsor_quote_list_is_empty_when_no_customer_matches_the_supplier():
     fake = FakeStripe()
     fake.customers = [
-        {"id": "cus_other", "email": "info@kennedy.com", "metadata": {"supplier_id": "someone-else"}}
+        {
+            "id": "cus_other",
+            "email": "info@kennedy.com",
+            "metadata": {"supplier_id": "someone-else"},
+        }
     ]
     rows = _run(
         fake,
@@ -420,8 +459,13 @@ def test_create_quote_uses_the_sponsor_row(client, seeded_db, auth_header, strip
 
     async def fake_create(client_, **kwargs):
         seen.update(kwargs)
-        return {"quote_id": "qt_x", "number": "QT-1", "amount_total": 30000,
-                "customer_id": "cus_1", "status": "open"}
+        return {
+            "quote_id": "qt_x",
+            "number": "QT-1",
+            "amount_total": 30000,
+            "customer_id": "cus_1",
+            "status": "open",
+        }
 
     monkeypatch.setattr(stripe_quotes, "create_sponsor_quote", fake_create)
     sponsor = seeded_db["sponsor"]
@@ -499,8 +543,15 @@ def test_sponsor_quotes_route_scopes_to_supplier_and_sponsor(
 
     async def fake_list(client_, *, email, supplier_id, sponsor_id):
         seen.update(email=email, supplier_id=supplier_id, sponsor_id=sponsor_id)
-        return [{"quote_id": "qt_testquote0001", "number": "QT-0001", "status": "open",
-                 "amount_total": 30000, "created": 1}]
+        return [
+            {
+                "quote_id": "qt_testquote0001",
+                "number": "QT-0001",
+                "status": "open",
+                "amount_total": 30000,
+                "created": 1,
+            }
+        ]
 
     monkeypatch.setattr(stripe_quotes, "list_sponsor_quotes", fake_list)
     resp = client.get(f"/api/admin/sponsors/{sponsor.id}/quotes", headers=auth_header())
@@ -513,7 +564,9 @@ def test_sponsor_quotes_route_scopes_to_supplier_and_sponsor(
     }
 
 
-def test_pdf_and_ladder_run_end_to_end_against_mock_transport(client, seeded_db, auth_header, stripe_key, monkeypatch):
+def test_pdf_and_ladder_run_end_to_end_against_mock_transport(
+    client, seeded_db, auth_header, stripe_key, monkeypatch
+):
     """One route exercised WITHOUT monkeypatching the service — the transport
     is swapped instead, so route→service→httpx wiring is proven whole."""
     fake = FakeStripe()

@@ -66,6 +66,7 @@ QUOTE_LADDER: dict[str, list[int]] = {
     "platinum": [10000, 9000, 8000, 7000, 6000, 5000],
 }
 
+
 def lookup_keys_for(tier: str) -> list[str]:
     return [f"{tier}_advertising_monthly", f"{tier}_platform_monthly"]
 
@@ -84,7 +85,9 @@ class StripeApiError(Exception):
         self.code = code
 
 
-def make_client(secret_key: str, transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
+def make_client(
+    secret_key: str, transport: httpx.AsyncBaseTransport | None = None
+) -> httpx.AsyncClient:
     """One client for both api.stripe.com and files.stripe.com (absolute URLs
     override base_url). ``transport`` exists for tests — MockTransport plays
     Stripe without a network."""
@@ -352,9 +355,7 @@ async def create_sponsor_quote(
     if tier_key not in QUOTE_LADDER:
         raise StripeApiError(f"tier {tier!r} has no quote ladder", status=422)
     if monthly_total_usd not in QUOTE_LADDER[tier_key]:
-        raise StripeApiError(
-            f"${monthly_total_usd}/mo is not on the {tier_key} ladder", status=422
-        )
+        raise StripeApiError(f"${monthly_total_usd}/mo is not on the {tier_key} ladder", status=422)
 
     prices = await resolve_tier_prices(client, tier_key)
     price_ids = [p["id"] for p in prices]
@@ -368,9 +369,7 @@ async def create_sponsor_quote(
         "automatic_tax": {"enabled": True},
         "collection_method": "send_invoice",
         "invoice_settings": {"days_until_due": 30},
-        "subscription_data": {
-            "metadata": {"sponsor_id": sponsor_id, "managed_by": "circuits-com"}
-        },
+        "subscription_data": {"metadata": {"sponsor_id": sponsor_id, "managed_by": "circuits-com"}},
         "header": f"Circuit Center — {tier_key.capitalize()} Sponsorship",
         "metadata": {"sponsor_id": sponsor_id, "managed_by": "circuits-com"},
     }
@@ -477,5 +476,7 @@ async def quote_pdf(client: httpx.AsyncClient, quote_id: str) -> bytes:
     except httpx.HTTPError as exc:
         raise StripeApiError(f"could not reach Stripe ({type(exc).__name__})") from exc
     if resp.status_code >= 400:
-        raise StripeApiError(f"Stripe returned {resp.status_code} for the PDF", status=resp.status_code)
+        raise StripeApiError(
+            f"Stripe returned {resp.status_code} for the PDF", status=resp.status_code
+        )
     return resp.content
