@@ -25,6 +25,11 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 FROM base AS build
+# The build's live set outgrew Node's default heap on the t3.small (980 MB,
+# measured 2026-09-22: "Reached heap limit" in the prerender step after the
+# bundle was written). 1536 MB fits the box's RAM + 2 GB swap; the prod image
+# build runs one service at a time (deploy.sh), so nothing else competes.
+ENV NODE_OPTIONS=--max-old-space-size=1536
 COPY . .
 RUN npm run build
 
