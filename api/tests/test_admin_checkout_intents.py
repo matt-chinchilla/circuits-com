@@ -12,27 +12,12 @@ from decimal import Decimal
 import pytest
 
 from app.config import settings
-from app.models import Category, Sponsor, User
+from app.models import Category, Sponsor
 from app.models.sales import BillingAudit, CheckoutIntent, SponsorBilling
 from app.services import stripe_quotes
-from app.services.auth_service import create_token
 from tests.fake_stripe import FakeStripe
 
 URL = "/api/admin/checkout-intents"
-
-
-def _viewer_header(db) -> dict[str, str]:
-    viewer = User(
-        id=uuid.uuid4(),
-        username="viewer@test.example",
-        email="viewer@test.example",
-        password_hash="x",
-        role="viewer",
-        email_verified_at=datetime.now(UTC),
-    )
-    db.add(viewer)
-    db.commit()
-    return {"Authorization": f"Bearer {create_token(str(viewer.id), 'viewer')}"}
 
 
 @pytest.fixture
@@ -225,8 +210,8 @@ def test_release_of_something_not_held_is_a_no(client, db, child, fake, auth_hea
     }
 
 
-def test_a_viewer_cannot_act(client, db, child, fake):
-    viewer = _viewer_header(db)
+def test_a_viewer_cannot_act(client, db, child, fake, viewer_header):
+    viewer = viewer_header()
     hold = _intent(db, child)
     resp = client.post(f"{URL}/{hold.id}/release", headers=viewer)
     assert resp.status_code == 403
@@ -243,9 +228,9 @@ def test_a_customer_is_refused(client, db, child, fake, seeded_db, auth_header):
     assert client.post(f"{URL}/{hold.id}/release", headers=customer).status_code == 403
 
 
-def test_a_viewer_cannot_read_the_attention_list(client, db, fake):
+def test_a_viewer_cannot_read_the_attention_list(client, db, fake, viewer_header):
     """R6: the list names paying customers and their failing charges — a view-only
     outsider is refused it like every other billing read."""
-    resp = client.get(f"{URL}/attention", headers=_viewer_header(db))
+    resp = client.get(f"{URL}/attention", headers=viewer_header())
     assert resp.status_code == 403
     assert resp.json()["detail"] == "no_billing_access"

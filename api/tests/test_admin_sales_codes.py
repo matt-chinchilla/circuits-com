@@ -238,21 +238,8 @@ def test_list_is_newest_first(client, seeded_db, auth_header):
     assert ids.index(second["id"]) < ids.index(first["id"])
 
 
-def test_a_viewer_cannot_create_a_code(client, db, seeded_db):
-    from app.models import User
-    from app.services.auth_service import create_token
-
-    viewer = User(
-        id=uuid.uuid4(),
-        username="codes-viewer",
-        email="codes-viewer@test.example",
-        password_hash="x",
-        role="viewer",
-        email_verified_at=datetime.now(UTC),
-    )
-    db.add(viewer)
-    db.commit()
-    headers = {"Authorization": f"Bearer {create_token(str(viewer.id), 'viewer')}"}
+def test_a_viewer_cannot_create_a_code(client, db, seeded_db, viewer_header):
+    headers = viewer_header()
     resp = client.post(BASE, json={"code_points": 5}, headers=headers)
     assert resp.status_code == 403
     assert resp.json()["detail"] == "read_only"

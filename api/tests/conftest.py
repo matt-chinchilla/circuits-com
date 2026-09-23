@@ -217,6 +217,38 @@ def auth_header(client):
 
 
 @pytest.fixture
+def viewer_header(db):
+    """A Bearer header for a FRESH user minted straight into the DB —
+    ``viewer_header()`` for a read-only ``viewer``, ``viewer_header("admin")``
+    / ``("owner")`` / ``("user")`` for the other roles a wall test compares.
+
+    THE home for the read-only-staff header (it was hand-copied into three
+    test modules, one importing it from another). Every call mints a new user
+    with a uuid-suffixed username + email, so two calls in one test never
+    collide on ``uq_users_email_lower``. No login round-trip: the token is
+    minted directly, so it works without ``seeded_db``.
+    """
+    from app.models import User
+    from app.services.auth_service import create_token
+
+    def _make(role: str = "viewer") -> dict[str, str]:
+        tag = uuid.uuid4().hex[:10]
+        user = User(
+            id=uuid.uuid4(),
+            username=f"{role}-{tag}",
+            email=f"{role}-{tag}@test.example",
+            password_hash="x",
+            role=role,
+            email_verified_at=datetime.now(UTC),
+        )
+        db.add(user)
+        db.commit()
+        return {"Authorization": f"Bearer {create_token(str(user.id), role)}"}
+
+    return _make
+
+
+@pytest.fixture
 def seeded_db(db):
     """Seed minimal test data with all model types."""
     # This fixture builds its rows by hand rather than running `seed()`, so the
