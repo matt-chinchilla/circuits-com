@@ -126,7 +126,14 @@ CARRIED_BY_HAND = {
 # cascade (nothing truncated REFERENCES it) and `_seed_badges` rebuilds it
 # from source, so after a reseed the editor still offers both founder keys —
 # only the GRANTS have to be re-applied by hand, and there is one today.
-ACCEPTED_LOSSES = {"activity_events", "supplier_badges"}
+#
+# sponsor_billing (057) is 1:1 with a sponsor row and CASCADEs with it: the
+# reseed already destroys the sponsor it describes, so carrying the billing row
+# would describe nothing. The Stripe side survives (the subscription keeps
+# billing), which is why deploy.sh's reseed guard (spec §13.9) refuses while
+# Stripe-billed sponsors exist. sponsor_payments / billing_audit / sales_codes /
+# checkout_intents are FK-free and outside the cascade on purpose.
+ACCEPTED_LOSSES = {"activity_events", "supplier_badges", "sponsor_billing"}
 
 
 def _truncate_cascade_closure(metadata=None) -> set[str]:

@@ -194,6 +194,18 @@ class Settings(BaseSettings):
     # partners desk for deals it onboards, not only deals it closes by hand.
     SELF_SERVE_ONBOARDING_REP: str = "Daniel"
 
+    # Gold & Platinum sales (spec 2026-09-23). Days a failing
+    # charge_automatically subscription (or an overdue send_invoice one) is
+    # carried before the billing sweep cancels it and reopens the slot (D4).
+    BILLING_GRACE_DAYS: int = 14
+    # The hourly billing sweep thread inside the api process (R5): lapsed
+    # holds, post-activation follow-ups, conflict refunds, dunning, queued
+    # voids. Off in the test suite (conftest sets the env var), like the
+    # category-cache warmer.
+    BILLING_SWEEP_ENABLED: bool = True
+    # Lifetime of a rep's card-update link; a newer link revokes the older.
+    SALES_CARD_LINK_DAYS: int = 7
+
     # Flat recurring bills the cost sync plants monthly — semicolon-separated
     # `category:vendor:amount` triples (see services/cost_sources/recurring.py).
     # Ships defaulted to the Claude Max subscription because that bill exists

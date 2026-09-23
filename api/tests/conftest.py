@@ -7,6 +7,8 @@ from decimal import Decimal
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 # The category-page warmer must never start under pytest (see app/config.py).
 os.environ.setdefault("CATEGORY_CACHE_WARM", "false")
+# Nor may the hourly billing sweep (a thread inside the api process, spec §10).
+os.environ.setdefault("BILLING_SWEEP_ENABLED", "false")
 
 import bcrypt
 import pytest

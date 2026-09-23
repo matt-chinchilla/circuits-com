@@ -66,3 +66,35 @@ def postgres_engine():
             "application schema (test_auth_hardening defaults it to `postgres`)."
         )
     return engine
+
+
+def upgrade_in_transaction(connection) -> list[str]:
+    """Bring a local database that lags the code's alembic head up to head,
+    INSIDE the caller's always-rolled-back transaction; returns the revisions
+    applied (``[]`` when already at head).
+
+    A branch that adds a migration would otherwise fail every harness test
+    that reads the new schema until someone runs `alembic upgrade head` on the
+    shared local database — which a feature branch must not do. Postgres DDL is
+    transactional, so the caller's rollback undoes every step here.
+    """
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from alembic.script import ScriptDirectory
+
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    scripts = ScriptDirectory.from_config(config)
+    context = MigrationContext.configure(connection)
+    current, head = context.get_current_revision(), scripts.get_current_head()
+    if current == head:
+        return []
+    pending = list(reversed(list(scripts.iterate_revisions(head, current))))
+    with Operations.context(context):
+        for revision in pending:
+            revision.module.upgrade()
+    return [revision.revision for revision in pending]

@@ -14,6 +14,7 @@ from .part_listing import PartListing, PriceBreak
 from .presence_fake import PresenceFake
 from .provider_credential import ProviderCredential
 from .revenue import Revenue
+from .sales import BillingAudit, CheckoutIntent, SalesCode, SponsorBilling, SponsorPayment
 from .sponsor import Sponsor
 from .supplier import CategorySupplier, Supplier
 from .supplier_feed import SupplierFeed
@@ -41,4 +42,9 @@ __all__ = [
     "ActivityEvent",
     "ProviderCredential",
     "SupplierFeed",
+    "SalesCode",
+    "CheckoutIntent",
+    "SponsorBilling",
+    "SponsorPayment",
+    "BillingAudit",
 ]

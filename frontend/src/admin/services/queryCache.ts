@@ -41,7 +41,8 @@ export type DataScope =
   | 'people'
   | 'messages'
   | 'leads'
-  | 'badges';
+  | 'badges'
+  | 'sales';
 
 export type ScopeVersions = Partial<Record<DataScope, string>>;
 

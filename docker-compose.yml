@@ -76,6 +76,14 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       # Onboarding rep credited (Sponsor.sold_by) for self-serve checkout sales.
       SELF_SERVE_ONBOARDING_REP: ${SELF_SERVE_ONBOARDING_REP:-Daniel}
+      # Gold & Platinum sales (spec 2026-09-23). Defaults MIRROR config.py —
+      # an empty default would overwrite it (the allowlist gotcha).
+      # APP_BASE_URL is the origin of Checkout return URLs and card links;
+      # local test mode overrides it on the recreate command line only.
+      APP_BASE_URL: ${APP_BASE_URL:-https://circuitcenter.ai}
+      BILLING_GRACE_DAYS: ${BILLING_GRACE_DAYS:-14}
+      BILLING_SWEEP_ENABLED: ${BILLING_SWEEP_ENABLED:-true}
+      SALES_CARD_LINK_DAYS: ${SALES_CARD_LINK_DAYS:-7}
       # ── Distributor part feed (Mouser Search API) ─────────────────────
       # Powers POST /api/suppliers/{id}/sync. Empty = the route 404s
       # ("sync_unavailable") and the admin console shows the feature as

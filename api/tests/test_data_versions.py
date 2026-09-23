@@ -31,6 +31,13 @@ def test_every_scoped_table_exists(seeded_db):
             assert table in known, (scope, table)
 
 
+def test_the_sales_tables_sit_in_their_scopes():
+    """Spec §6 (057): a cached console read over a new table must see it move."""
+    assert SCOPES["sales"] == ("sales_codes", "checkout_intents")
+    assert {"revenue", "expenses", "sponsor_payments", "billing_audit"} == set(SCOPES["money"])
+    assert {"sponsors", "sponsor_billing"} == set(SCOPES["sponsors"])
+
+
 def test_scope_names_mirror_the_client_union():
     """The client declares which scopes each cached read depends on; a scope
     the server does not report would hash as `?` forever and never match."""

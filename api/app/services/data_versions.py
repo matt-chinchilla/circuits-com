@@ -47,8 +47,10 @@ SCOPES: dict[str, tuple[str, ...]] = {
         "badges",  # 055 — `founder` is derived from these now
     ),
     "traffic": ("page_views", "outbound_clicks"),
-    "money": ("revenue", "expenses"),
-    "sponsors": ("sponsors",),
+    # 057: the payments mirror and the staff-only billing audit are money;
+    # a sponsor's billing row moves with its sponsor.
+    "money": ("revenue", "expenses", "sponsor_payments", "billing_audit"),
+    "sponsors": ("sponsors", "sponsor_billing"),
     "activity": ("activity_events",),
     "people": ("users",),
     "messages": ("messages",),
@@ -57,6 +59,8 @@ SCOPES: dict[str, tuple[str, ...]] = {
     # `catalog`, while the badge editor's own reads want a fingerprint that
     # moves on a grant WITHOUT the whole catalog (any part write) moving.
     "badges": ("badges", "supplier_badges"),
+    # 057: the sales-codes page (codes, their open holds, Needs attention).
+    "sales": ("sales_codes", "checkout_intents"),
 }
 
 _TABLES: tuple[str, ...] = tuple(sorted({t for tables in SCOPES.values() for t in tables}))
