@@ -10,15 +10,19 @@ Five duties, each row on its own so one failure never stops the others:
    predate it (057 backfilled their billing rows with no done stamp).
 3. Unresolved conflicts: cancel → refund every paid invoice → resolved.
 4. Dunning (D4): a ``charge_automatically`` subscription whose
-   ``failing_since`` is older than ``BILLING_GRACE_DAYS`` and whose LIVE status
-   is ``past_due`` or ``unpaid`` is cancelled, its open invoices voided, the
-   sponsor ``Expired`` and audited ``dunning_cancelled``. A ``send_invoice``
-   subscription (rep quotes: emailed invoices never "fail") is treated the same
-   when its oldest open invoice is more than the grace past its due date. A
-   live ``canceled`` subscription (someone else ended it; the webhook already
-   expired the row) only has its open invoices voided. Stripe's own Smart
-   Retries must be set to "leave past-due" for 3 weeks (an owner Dashboard
-   step), so this sweep is the only thing that ends a sponsorship.
+   ``failing_since`` is older than ``BILLING_GRACE_DAYS`` costs ONE read of
+   the live subscription. ``past_due``/``unpaid`` → cancelled, its open
+   invoices voided, the sponsor ``Expired`` and audited ``dunning_cancelled``.
+   ``active``/``trialing`` → recovered: its ``latest_invoice`` is re-mirrored
+   (a lost ``invoice.paid`` is repaired) and ``failing_since`` recomputed from
+   the mirror, so a later failure starts a fresh clock. ``canceled`` (someone
+   else ended it; the webhook already expired the row) → open invoices voided
+   only. ``send_invoice`` subscriptions (rep quotes: emailed invoices never
+   "fail") cost ONE account-wide list of open ``send_invoice`` invoices due
+   before now − grace, whatever their number; only the subscriptions that list
+   names pay for the cancel + void. Stripe's own Smart Retries must be set to
+   "leave past-due" for 3 weeks (an owner Dashboard step), so this sweep is
+   the only thing that ends a sponsorship.
 5. Voids queued by ``customer.subscription.deleted``.
 
 ``run_sweep(now=…)`` takes an injectable clock (the rehearsal lever is
@@ -34,7 +38,6 @@ import threading
 import time
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, or_
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -44,14 +47,21 @@ from app.models import Sponsor
 from app.models.sales import CheckoutIntent, SponsorBilling
 from app.models.sponsor import exclusive_occupant_clause
 from app.services import billing_followups, category_cache, stripe_billing, stripe_quotes
-from app.services.billing_mirror import audit
+from app.services.billing_mirror import (
+    audit,
+    invoice_subscription_id,
+    recompute_failing_since,
+    upsert_payment_from_invoice,
+)
 from app.services.checkout_intents import CONFLICT, expire_lapsed
+from app.services.stripe_quotes import _call
 
 logger = logging.getLogger(__name__)
 
 SWEEP_ACTOR = "system:sweep"
 SWEEP_INTERVAL_SECONDS = 3600
 LIVE_FAILING = ("past_due", "unpaid")
+LIVE_RECOVERED = ("active", "trialing")
 
 # Seam for tests (the suite binds its own engine), like category_cache's.
 session_factory = SessionLocal
@@ -100,36 +110,11 @@ def _not_expired_billed(db: Session):
     )
 
 
-async def _dun_one(
-    db: Session, client, billing: SponsorBilling, sponsor: Sponsor, cutoff: datetime
-) -> bool:
+async def _release(
+    db: Session, client, billing: SponsorBilling, sponsor: Sponsor, reason: str
+) -> None:
+    """Cancel the subscription now, void its open invoices, expire the board."""
     sub_id = billing.stripe_subscription_id
-    sub = await stripe_billing.get_subscription(client, sub_id)
-    status = sub.get("status")
-    if status == "canceled":
-        voided = await stripe_billing.void_open_invoices(client, sub_id)
-        if voided:
-            logger.info("billing sweep: voided %d open invoice(s) of canceled %s", voided, sub_id)
-        return False
-
-    if billing.collection_method == "send_invoice":
-        open_invoices = await stripe_billing.list_invoices(client, sub_id, status="open", limit=100)
-        if not open_invoices:
-            return False
-        oldest = min(open_invoices, key=lambda inv: (inv.get("created") or 0, inv.get("id") or ""))
-        due = oldest.get("due_date")
-        if not isinstance(due, int) or due >= cutoff.timestamp():
-            return False
-        reason = (
-            f"invoice {oldest.get('id')} due "
-            f"{datetime.fromtimestamp(due, UTC).date().isoformat()} unpaid"
-        )
-    else:
-        if status not in LIVE_FAILING:
-            return False
-        since = _utc(billing.failing_since)
-        reason = f"payments failing since {since.date().isoformat() if since else '?'} ({status})"
-
     await stripe_billing.cancel_now(client, sub_id, f"dunning-cancel:{sub_id}")
     await stripe_billing.void_open_invoices(client, sub_id)
     sponsor.status = "Expired"
@@ -138,7 +123,67 @@ async def _dun_one(
     db.commit()
     category_cache.clear()
     logger.warning("billing sweep: sponsor %s released — %s", sponsor.id, reason)
+
+
+async def _repair_recovered(db: Session, client, sub: dict, sub_id: str) -> None:
+    """A live ``active`` subscription whose row still says failing: re-mirror
+    its latest invoice (repairs a lost ``invoice.paid``), then derive
+    ``failing_since`` from the mirror again (F5)."""
+    latest = sub.get("latest_invoice")
+    if isinstance(latest, str) and latest:
+        latest = await _call(
+            client, "GET", f"/v1/invoices/{stripe_billing.checked_id('in', latest)}"
+        )
+    if isinstance(latest, dict) and invoice_subscription_id(latest) == sub_id:
+        upsert_payment_from_invoice(db, latest)
+    recompute_failing_since(db, sub_id)
+    db.commit()
+
+
+async def _dun_card(db: Session, client, billing: SponsorBilling, sponsor: Sponsor) -> bool:
+    """A ``charge_automatically`` row failing past the grace: one read of the
+    live subscription decides."""
+    sub_id = billing.stripe_subscription_id
+    sub = await stripe_billing.get_subscription(client, sub_id)
+    status = sub.get("status")
+    if status == "canceled":
+        voided = await stripe_billing.void_open_invoices(client, sub_id)
+        if voided:
+            logger.info("billing sweep: voided %d open invoice(s) of canceled %s", voided, sub_id)
+        return False
+    if status in LIVE_RECOVERED:
+        await _repair_recovered(db, client, sub, sub_id)
+        return False
+    if status not in LIVE_FAILING:
+        return False
+    since = _utc(billing.failing_since)
+    reason = f"payments failing since {since.date().isoformat() if since else '?'} ({status})"
+    await _release(db, client, billing, sponsor, reason)
     return True
+
+
+async def _dun_invoiced(
+    db: Session, client, billing: SponsorBilling, sponsor: Sponsor, oldest: dict
+) -> bool:
+    """A ``send_invoice`` row the overdue list named: no further reads."""
+    due = oldest.get("due_date")
+    due_on = datetime.fromtimestamp(due, UTC).date().isoformat() if isinstance(due, int) else "?"
+    await _release(db, client, billing, sponsor, f"invoice {oldest.get('id')} due {due_on} unpaid")
+    return True
+
+
+def _oldest_overdue_by_subscription(invoices: list[dict]) -> dict[str, dict]:
+    """Subscription id → its oldest-due overdue invoice."""
+    found: dict[str, dict] = {}
+    for invoice in invoices:
+        sub_id = invoice_subscription_id(invoice)
+        if not sub_id:
+            continue
+        key = (invoice.get("due_date") or 0, invoice.get("id") or "")
+        held = found.get(sub_id)
+        if held is None or key < (held.get("due_date") or 0, held.get("id") or ""):
+            found[sub_id] = invoice
+    return found
 
 
 async def _stripe_duties(db: Session, key: str, now: datetime, counts: dict) -> None:
@@ -175,30 +220,54 @@ async def _stripe_duties(db: Session, key: str, now: datetime, counts: dict) -> 
                 billing_followups.resolve_conflict(db, client, intent_id, actor=SWEEP_ACTOR),
             )
 
-        # 4. dunning. Only rows that could be due cost a Stripe call.
+        # 4. dunning. Only rows that could be due cost a Stripe call: card rows
+        # failing past the grace (one subscription read each), and invoiced
+        # rows the ONE overdue-invoice list names (F14).
         cutoff = now - timedelta(days=settings.BILLING_GRACE_DAYS)
-        due = (
+        card_rows = (
             _not_expired_billed(db)
             .filter(
-                or_(
-                    and_(
-                        SponsorBilling.collection_method != "send_invoice",
-                        SponsorBilling.failing_since.isnot(None),
-                        SponsorBilling.failing_since < cutoff,
-                    ),
-                    SponsorBilling.collection_method == "send_invoice",
-                )
+                SponsorBilling.collection_method != "send_invoice",
+                SponsorBilling.failing_since.isnot(None),
+                SponsorBilling.failing_since < cutoff,
             )
             .all()
         )
-        for billing, sponsor in due:
+        for billing, sponsor in card_rows:
             await _each(
                 db,
                 counts,
                 "dunning_cancelled",
                 f"dunning for sponsor {sponsor.id}",
-                _dun_one(db, client, billing, sponsor, cutoff),
+                _dun_card(db, client, billing, sponsor),
             )
+
+        invoiced = {
+            billing.stripe_subscription_id: (billing, sponsor)
+            for billing, sponsor in _not_expired_billed(db)
+            .filter(SponsorBilling.collection_method == "send_invoice")
+            .all()
+        }
+        if invoiced:
+            try:
+                overdue = _oldest_overdue_by_subscription(
+                    await stripe_billing.list_overdue_send_invoice_invoices(client, cutoff)
+                )
+            except Exception:  # noqa: BLE001 - the list failing must not stop duty 5
+                counts["errors"] += 1
+                logger.exception("billing sweep: listing overdue invoices failed")
+                overdue = {}
+            for sub_id, oldest in overdue.items():
+                if sub_id not in invoiced:
+                    continue
+                billing, sponsor = invoiced[sub_id]
+                await _each(
+                    db,
+                    counts,
+                    "dunning_cancelled",
+                    f"dunning for invoiced sponsor {sponsor.id}",
+                    _dun_invoiced(db, client, billing, sponsor, oldest),
+                )
 
         # 5. voids queued by customer.subscription.deleted.
         queued = [
