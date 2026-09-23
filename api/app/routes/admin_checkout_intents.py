@@ -13,7 +13,10 @@ Stripe dashboard (D1):
   background task and the sweep run). ``false`` = still failing; the row stays.
 * ``POST /{id}/release`` → ``{"released": bool}``: expire a live hold's Stripe
   session and free the slot (a buyer whose release token was lost, a
-  squatter).
+  squatter). The session is READ first: one the buyer already paid
+  (``complete``, or ``payment_status`` paid) is 409 ``already_paid`` and the
+  hold stays, because the webhook is about to activate it; only an ``open``
+  session is expired, and an already-``expired`` one is simply released.
 
 STAFF-only (the router wall: viewers are read-only, customers 403). Every
 route 404s when ``STRIPE_SECRET_KEY`` is unset — an unconfigured billing back
@@ -41,6 +44,9 @@ from app.services.billing_mirror import audit
 from app.services.checkout_intents import CONFLICT, OPEN, RELEASED
 from app.services.sales_pricing import EXCLUSIVE_TIERS
 from app.services.stripe_quotes import StripeApiError
+
+# Staff Release on a hold whose buyer has already paid (F1).
+ALREADY_PAID = "already_paid"
 
 router = APIRouter(
     prefix="/api/admin/checkout-intents",
@@ -195,7 +201,17 @@ async def release(
     if intent.stripe_session_id:
         try:
             async with stripe_quotes.make_client(key) as client:
-                await stripe_billing.expire_checkout_session(client, intent.stripe_session_id)
+                session = await stripe_billing.get_checkout_session(
+                    client, intent.stripe_session_id
+                )
+                if session.get("status") == "complete" or session.get("payment_status") == "paid":
+                    # The buyer paid; the webhook that turns the hold into a
+                    # sponsorship just has not landed. Freeing the slot now
+                    # would hand it to someone else and turn this sale into a
+                    # refunded conflict.
+                    raise HTTPException(status_code=409, detail=ALREADY_PAID)
+                if session.get("status") == "open":
+                    await stripe_billing.expire_checkout_session(client, intent.stripe_session_id)
         except StripeApiError as exc:
             raise HTTPException(status_code=502, detail=f"stripe: {exc.message}") from None
     intent.status = RELEASED
