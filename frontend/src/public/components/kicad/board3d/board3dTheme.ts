@@ -117,14 +117,14 @@ export const leadTint = (family: PartRange['family']): number => (family === 'co
  * (down to its floor), so the material starts above the untextured value and
  * averages out near it. The bump is SCREEN-space in three (its height step per
  * pixel, the surface's own scale normalised away), so `bumpScale` is roughly
- * the normal's tilt per unit height step between neighbouring pixels: .25 on
+ * the normal's tilt per unit height step between neighbouring pixels: .15 on
  * a 4-texel grain is a few hundredths of a radian at close range — a satin
  * speckle, never a pitted surface — and mipmapping flattens it further out.
  */
 export interface SurfaceFinish { noise: NoiseSpec; repeat: number; bumpScale: number; roughness: number }
 export const SURFACE_FINISHES = {
   /** The opaque bodies: moulded epoxy, a fine satin speckle. */
-  body: { noise: GRAIN, repeat: 1, bumpScale: 0.25, roughness: 0.72 },
+  body: { noise: GRAIN, repeat: 1, bumpScale: 0.15, roughness: 0.68 },
   /** The leads: brushed plating, finer — two tiles per 2 mm. */
   lead: { noise: BRUSHED, repeat: 2, bumpScale: 0.15, roughness: 0.36 },
 } satisfies Record<'body' | 'lead', SurfaceFinish>;

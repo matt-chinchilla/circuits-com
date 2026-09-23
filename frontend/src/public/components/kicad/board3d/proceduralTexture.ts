@@ -26,8 +26,12 @@ export interface NoiseSpec {
   roughnessFloor: number;
 }
 
-/** Moulded epoxy: isotropic, fine. Four octaves from 32-texel cells down to 4. */
-export const GRAIN: NoiseSpec = { size: 256, seed: 0x5eed1, cellX: 32, cellY: 32, octaves: 4, roughnessFloor: 0.72 };
+/** Moulded epoxy: isotropic, fine. Three octaves from 16-texel cells (an
+ *  eighth of a millimetre at the body's repeat) down to 4. The first cut's
+ *  32-texel octave read as a cloudy mottle across a large package's walls on
+ *  the software renderer — concrete, not a moulding — so the largest feature is
+ *  halved and the roughness swing narrowed; far off, mipmapping evens it out. */
+export const GRAIN: NoiseSpec = { size: 256, seed: 0x5eed1, cellX: 16, cellY: 16, octaves: 3, roughnessFloor: 0.82 };
 
 /** Brushed plating: cells 64 texels long in x and 2 across in y, so the streaks
  *  run along x (the texture's u), three octaves. */
