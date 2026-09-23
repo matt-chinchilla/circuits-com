@@ -48,6 +48,20 @@ const POST_SHARE = 0.64, POST_MIN_MM = 0.3, POST_RISE_CONNECTOR_MM = 2.0, POST_R
 const MIN_SHOULDER_MM = 0.02;
 const EPS = 1e-6;
 
+/** A LEADLESS package, by its footprint name: a QFN/DFN/SON's terminals are
+ *  flush with its sides and a BGA's balls are under it, so a pad that sticks
+ *  out past such a body is solder fillet, never a formed lead climbing a wall. */
+const LEADLESS = /(?:^|[:_-])(?:[UVWX]?[DQ]FN|[UVWX]?SON|LGA|BGA|W?LCSP)(?=[-_\d]|$)/i;
+/** A CHIP passive, by the imperial size code its name carries as a token (the
+ *  `x` admits an array's `4x0402`): the one passive whose metal is a cap over
+ *  each end. Anything else — an electrolytic can, a moulded inductor — stands
+ *  on flat tabs, and a termination the height of a 6 mm can would read as a
+ *  metal wall through its middle. */
+const CHIP = /(?:^|[:_x])(?:01005|0201|0402|0603|0805|1008|1206|1210|1812|2010|2220|2512)(?=[_A-Za-z]|$)/;
+
+export const isLeadless = (lib: string): boolean => LEADLESS.test(lib);
+export const isChipPackage = (lib: string): boolean => CHIP.test(lib);
+
 /** Board → footprint-local: the inverse of `place`. */
 function unplace(p: Vec2, fp: FootprintModel): Vec2 {
   return rotate({ x: p.x - fp.place.at.x, y: p.y - fp.place.at.y }, -fp.place.rotDeg);
@@ -102,7 +116,7 @@ function termination(pad: PadModel, fp: FootprintModel, body: Box, height: numbe
  * out of is the one it overhangs most. A pad entirely under the body (a QFN's,
  * a BGA's) has no visible lead and draws nothing.
  */
-function gullWing(pad: PadModel, fp: FootprintModel, body: Box, height: number): LeadSolid[] {
+function gullWing(pad: PadModel, fp: FootprintModel, body: Box, height: number, flat = false): LeadSolid[] {
   const p = padBox(pad, fp);
   const over = [body.min.x - p.min.x, p.max.x - body.max.x, body.min.y - p.min.y, p.max.y - body.max.y];
   let side = 0;
@@ -116,7 +130,9 @@ function gullWing(pad: PadModel, fp: FootprintModel, body: Box, height: number):
   // Distances OUT from the wall: the toe's, and the heel's (negative when the
   // pad runs under the body).
   const toeOut = (toe - wall) * dir, heelOut = (heel - wall) * dir;
-  const footStart = heelOut > EPS ? heelOut : toeOut * (1 - FOOT_SHARE);
+  // A flat tab (a leadless package's fillet, a can's tab) runs from the body
+  // wall to the toe, and has no shoulder.
+  const footStart = flat ? 0 : heelOut > EPS ? heelOut : toeOut * (1 - FOOT_SHARE);
   const crossMin = alongX ? p.min.y : p.min.x, crossMax = alongX ? p.max.y : p.max.x;
   const mid = (crossMin + crossMax) / 2, half = ((crossMax - crossMin) * LEAD_WIDTH_SHARE) / 2;
   const c0 = mid - half, c1 = mid + half;
@@ -128,7 +144,7 @@ function gullWing(pad: PadModel, fp: FootprintModel, body: Box, height: number):
   const out: LeadSolid[] = [];
   const footBox = box(at(footStart, c0), at(toeOut, c1));
   if (hasArea(footBox)) out.push({ kind: 'foot', ring: placedBox(footBox, fp), lo: 0, hi: FOOT_MM, pad: pad.number });
-  if (footStart > MIN_SHOULDER_MM) {
+  if (!flat && footStart > MIN_SHOULDER_MM) {
     const top = SHOULDER_SHARE * height;
     const pt = (o: number, c: number, level: number): LeadPoint => { const q = place(at(o, c), fp.place); return { x: q.x, y: q.y, level }; };
     out.push({
@@ -146,8 +162,14 @@ function gullWing(pad: PadModel, fp: FootprintModel, body: Box, height: number):
 /** A through-hole pin: a square post on the drill, from the mask up past the
  *  body's top — well past it on a connector, whose pins are what a mating
  *  part plugs onto. */
-function post(pad: PadModel, fp: FootprintModel, height: number, family: PartFamily): LeadSolid | null {
+function post(pad: PadModel, fp: FootprintModel, body: Box, height: number, family: PartFamily): LeadSolid | null {
   if (pad.drill == null || !(pad.drill.d > 0)) return null;
+  // A plated hole under a part that is not a connector is a thermal via in an
+  // exposed pad, or the hole of a mounting pad — no pin stands in it, and a
+  // post would poke a stud through the top of the package.
+  if (family !== 'connector' && pad.at.x > body.min.x && pad.at.x < body.max.x && pad.at.y > body.min.y && pad.at.y < body.max.y) {
+    return null;
+  }
   const h = Math.max(POST_MIN_MM, POST_SHARE * pad.drill.d) / 2;
   const b: Box = { min: { x: pad.at.x - h, y: pad.at.y - h }, max: { x: pad.at.x + h, y: pad.at.y + h } };
   const rise = family === 'connector' ? POST_RISE_CONNECTOR_MM : POST_RISE_MM;
@@ -156,8 +178,9 @@ function post(pad: PadModel, fp: FootprintModel, height: number, family: PartFam
 
 /**
  * Every lead solid of one footprint, in pad order. Through-hole pads get a
- * post whatever the part; surface pads get a termination on a passive and a
- * gull-wing on an IC or a connector; an LED and an unclassified part draw no
+ * post whatever the part (unless the hole is under a non-connector's body);
+ * surface pads get a termination on a chip passive, a flat tab on any other
+ * passive and on a leadless IC, and a gull-wing on a leaded IC or a connector; an LED and an unclassified part draw no
  * surface leads (their pads say too little about the package to guess). A
  * body with no area, or a footprint with no body, has no leads.
  */
@@ -167,16 +190,18 @@ export function leadsOf(fp: FootprintModel, body: Courtyard, family: PartFamily)
   const out: LeadSolid[] = [];
   for (const pad of fp.pads) {
     if (pad.kind === 'thru_hole') {
-      const solid = post(pad, fp, body.heightMm, family);
+      const solid = post(pad, fp, box, body.heightMm, family);
       if (solid != null) out.push(solid);
       continue;
     }
     if (pad.kind !== 'smd' || !(pad.size.x > 0) || !(pad.size.y > 0)) continue;
-    if (family === 'passive') {
+    if (family === 'passive' && isChipPackage(fp.lib)) {
       const solid = termination(pad, fp, box, body.heightMm);
       if (solid != null) out.push(solid);
+    } else if (family === 'passive') {
+      out.push(...gullWing(pad, fp, box, body.heightMm, true));
     } else if (family === 'ic' || family === 'connector') {
-      out.push(...gullWing(pad, fp, box, body.heightMm));
+      out.push(...gullWing(pad, fp, box, body.heightMm, isLeadless(fp.lib)));
     }
   }
   return out;

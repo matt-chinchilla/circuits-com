@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fixtureText } from '../fixtures';
 import { courtyardOf } from './courtyards';
 import { bbox } from './geom';
-import { FOOT_MM, SHOULDER_SHARE, leadsOf, localBodyBox, pin1Mark, type LeadSolid } from './leads';
+import { FOOT_MM, SHOULDER_SHARE, isChipPackage, isLeadless, leadsOf, localBodyBox, pin1Mark, type LeadSolid } from './leads';
 import { placedPadRing } from './pads';
 import { partFamily } from './partFamily';
 import { readBoardModel } from './readBoardModel';
@@ -102,6 +102,34 @@ describe('leadsOf — Glasgow', () => {
       ?? glasgow.footprints.find((f) => f.lib === 'Glasgow:SOT-363_SC-70-6')!;
     const solids = leads(sot);
     expect(count(solids, 'foot')).toBe(6);
+  });
+  it('a QFN with thermal vias gets flat fillets and no studs through its top; a leaded TSSOP keeps its shoulders', () => {
+    const u1 = fpOf('U1');
+    expect(u1.lib).toContain('QFN-56');
+    expect(u1.pads.some((p) => p.kind === 'thru_hole')).toBe(true);
+    const solids = leads(u1);
+    expect(count(solids, 'post')).toBe(0);
+    expect(count(solids, 'shoulder')).toBe(0);
+    expect(count(solids, 'foot')).toBeGreaterThan(0);
+    for (const s of solids) if (s.kind === 'foot') expect(s.hi).toBe(FOOT_MM);
+    const tssop = glasgow.footprints.find((f) => f.lib.startsWith('Package_SO:TSSOP-8'))!;
+    expect(count(leads(tssop), 'shoulder')).toBe(8);
+  });
+  it('a mounting hole draws no post in its own hole', () => {
+    const mh = glasgow.footprints.find((f) => f.lib.includes('MountingHole'))!;
+    expect(count(leads(mh), 'post')).toBe(0);
+  });
+  it('an electrolytic can stands on two flat tabs, never on a termination as tall as the can', () => {
+    const can = glasgow.footprints.find((f) => f.lib === 'Capacitor_SMD:CP_Elec_6.3x5.9')!;
+    const solids = leads(can);
+    expect(solids.map((s) => s.kind)).toEqual(['foot', 'foot']);
+    for (const s of solids) if (s.kind === 'foot') expect(s.hi).toBe(FOOT_MM);
+  });
+  it('names: chip size codes (arrays included) are chips, cans are not; QFN/DFN/UDFN/BGA are leadless, SOT and TSSOP are not', () => {
+    for (const lib of ['Capacitor_SMD:C_0402_1005Metric', 'Glasgow:R_Array_Convex_4x0402', 'Resistor_SMD:R_1206_3216Metric']) expect(isChipPackage(lib)).toBe(true);
+    for (const lib of ['Capacitor_SMD:CP_Elec_6.3x5.9', 'Inductor_SMD:L_Bourns_SRN6045TA', 'Glasgow:SOT-23-6']) expect(isChipPackage(lib)).toBe(false);
+    for (const lib of ['Package_DFN_QFN:Cypress_QFN-56-1EP_8x8mm_P0.5mm', 'Glasgow:UDFN-14_3.5x1.35mm_P0.5mm', 'Glasgow:DFN-6-1EP_2x2mm', 'Package_BGA:BGA-121_9.0x9.0mm']) expect(isLeadless(lib)).toBe(true);
+    for (const lib of ['Glasgow:SOT-23-6', 'Package_SO:TSSOP-16_4.4x5mm_P0.65mm', 'Glasgow:VSSOP-10_3x3mm_P0.5mm', 'Glasgow:SOT-143']) expect(isLeadless(lib)).toBe(false);
   });
 });
 
