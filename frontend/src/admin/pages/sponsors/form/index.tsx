@@ -24,6 +24,7 @@ import { BrandColorSelectModal } from '@shared/components/BrandColorSelectModal'
 import ImageUploadField from '@admin/components/ImageUploadField';
 import { useAuth } from '@admin/contexts/AuthContext';
 import QuotePanel from './QuotePanel';
+import BillingPanel from './BillingPanel';
 import styles from './SponsorFormPage.module.scss';
 
 // Tier visual palette — the three tiers (Platinum/Gold/Silver) get flat fills.
@@ -189,6 +190,10 @@ function StaffSponsorFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  // A viewer sees the form but no write button (the server 403s read_only
+  // anyway; hiding them says so before the click). Wizard anchors stay in
+  // the source — the wizard never runs for a viewer.
+  const { isReadOnly } = useAuth();
 
   // One-shot consume from the Supplier-detail Quick Actions handoff.
   const [prefill] = useState<SponsorPrefill | null>(() =>
@@ -1238,7 +1243,7 @@ function StaffSponsorFormPage() {
         </section>
 
         <div className={styles.formActions}>
-          {isEdit && (
+          {isEdit && !isReadOnly && (
             <button
               type="button"
               className={`${styles.btn} ${styles.btnDanger}`}
@@ -1250,17 +1255,19 @@ function StaffSponsorFormPage() {
           )}
           <div className={styles.formActionsSpacer} />
           <Link to={consolePath('/admin/sponsors')} className={`${styles.btn} ${styles.btnGhost}`}>
-            Cancel
+            {isReadOnly ? 'Back' : 'Cancel'}
           </Link>
-          <button
-            type="submit"
-            data-tour="submit-sponsor"
-            className={`${styles.btn} ${styles.btnPrimary}`}
-            disabled={saving}
-          >
-            <Check size={14} strokeWidth={2} />
-            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create sponsorship'}
-          </button>
+          {!isReadOnly && (
+            <button
+              type="submit"
+              data-tour="submit-sponsor"
+              className={`${styles.btn} ${styles.btnPrimary}`}
+              disabled={saving}
+            >
+              <Check size={14} strokeWidth={2} />
+              {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create sponsorship'}
+            </button>
+          )}
         </div>
       </form>
 
@@ -1269,6 +1276,19 @@ function StaffSponsorFormPage() {
           stamps this row's id into the subscription metadata. Priced off the
           PERSISTED tier, never unsaved form state. */}
       {isEdit && id && persistedTier && <QuotePanel sponsorId={id} tier={persistedTier} />}
+
+      {/* Same placement rules as QuotePanel: outside the <form>, priced off the
+          persisted tier. Hidden on 404 (Stripe unconfigured / not billed). A
+          cancel-now expires the row server-side; mirror it into the form so a
+          later Save cannot write the old status back. */}
+      {isEdit && id && persistedTier && (
+        <BillingPanel
+          sponsorId={id}
+          tier={persistedTier}
+          companyName={suppliers.find((s) => s.id === form.supplier_id)?.name ?? ''}
+          onSponsorExpired={() => update('status', 'Expired')}
+        />
+      )}
 
       {showDeleteConfirm && (
         <div className={styles.modalBackdrop} role="dialog" aria-modal="true">
