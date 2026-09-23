@@ -63,7 +63,7 @@ const board = (): BoardScene => ({
     group('substrate', null), group('hole-wall', null), copper(), group('mask', 'F.Mask'),
     group('hole-wall', 'F.Marks'), group('silk', 'F.SilkS'), group('body', null, { parts: [{ ref: 'R1', start: 0, count: 18 }] }),
   ],
-  warnings: [], stats: { footprints: 1, pads: 2, vias: 0, tracks: 1, triangles: 42, buildMs: 1 },
+  warnings: [], stats: { footprints: 1, pads: 2, vias: 0, tracks: 1, triangles: 42, buildMs: 1, bodiesFromFab: 0 },
 });
 
 type Mesh = InstanceType<typeof THREE.Mesh>;

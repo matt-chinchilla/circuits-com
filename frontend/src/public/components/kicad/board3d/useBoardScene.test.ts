@@ -30,7 +30,7 @@ describe('useBoardScene', () => {
     const { seen } = mount(project('(kicad_pcb (version 20221018))'), () => w as unknown as Worker);
     expect(seen.at(-1)).toMatchObject({ status: 'building' });
     expect(w.posted).toHaveLength(1);
-    await act(async () => { w.reply({ ok: true, scene: { bounds: { min: { x: 0, y: 0 }, max: { x: 1, y: 1 } }, thicknessMm: null, groups: [], warnings: [], stats: { footprints: 0, pads: 0, vias: 0, tracks: 0, triangles: 0, buildMs: 1 } } }); });
+    await act(async () => { w.reply({ ok: true, scene: { bounds: { min: { x: 0, y: 0 }, max: { x: 1, y: 1 } }, thicknessMm: null, groups: [], warnings: [], stats: { footprints: 0, pads: 0, vias: 0, tracks: 0, triangles: 0, buildMs: 1, bodiesFromFab: 0 } } }); });
     expect(seen.at(-1)).toMatchObject({ status: 'ready' });
   });
   it('surfaces a worker failure as error, and retry builds again in a fresh worker', async () => {
@@ -44,7 +44,7 @@ describe('useBoardScene', () => {
     expect(workers).toHaveLength(2);
     expect(workers[1].posted).toHaveLength(1);
     expect(seen.at(-1)).toMatchObject({ status: 'building' });
-    await act(async () => { workers[1].reply({ ok: true, scene: { bounds: { min: { x: 0, y: 0 }, max: { x: 1, y: 1 } }, thicknessMm: null, groups: [], warnings: [], stats: { footprints: 0, pads: 0, vias: 0, tracks: 0, triangles: 0, buildMs: 1 } } }); });
+    await act(async () => { workers[1].reply({ ok: true, scene: { bounds: { min: { x: 0, y: 0 }, max: { x: 1, y: 1 } }, thicknessMm: null, groups: [], warnings: [], stats: { footprints: 0, pads: 0, vias: 0, tracks: 0, triangles: 0, buildMs: 1, bodiesFromFab: 0 } } }); });
     expect(seen.at(-1)).toMatchObject({ status: 'ready' });
   });
   it('falls back to the main thread when there is no worker, and builds a real board', async () => {

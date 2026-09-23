@@ -25,7 +25,7 @@ const tri = (material: BoardScene['groups'][number]['material'], layerName: stri
 const scene = (warnings: BoardScene['warnings'], withBody = true): BoardScene => ({
   bounds: { min: { x: -1, y: -1 }, max: { x: 1, y: 1 } }, thicknessMm: 1.6,
   groups: withBody ? [tri('body', null, 1)] : [],
-  warnings, stats: { footprints: 2, pads: 4, vias: 1, tracks: 3, triangles: 1, buildMs: 12 },
+  warnings, stats: { footprints: 2, pads: 4, vias: 1, tracks: 3, triangles: 1, buildMs: 12, bodiesFromFab: 0 },
 });
 const state = { status: 'ready', scene: scene([]), error: null as string | null, retry: vi.fn() };
 vi.mock('./useBoardScene', () => ({ useBoardScene: () => state }));

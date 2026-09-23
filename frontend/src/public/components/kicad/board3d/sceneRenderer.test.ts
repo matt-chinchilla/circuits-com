@@ -54,7 +54,7 @@ const board = (): BoardScene => ({
     normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]),
     indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
   }],
-  warnings: [], stats: { footprints: 0, pads: 0, vias: 0, tracks: 0, triangles: 2, buildMs: 1 },
+  warnings: [], stats: { footprints: 0, pads: 0, vias: 0, tracks: 0, triangles: 2, buildMs: 1, bodiesFromFab: 0 },
 });
 
 let host: HTMLDivElement;

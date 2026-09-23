@@ -120,11 +120,8 @@ const TIP_OFFSET_PX = 14;
 const clampTo = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
 /** How many bodies the pipeline drew from a Fab outline; 0 for a scene that
- *  does not say (one built before the count existed, or a test's fake). */
-function bodiesFromFab(scene: BoardScene): number {
-  const n = (scene.stats as BoardScene['stats'] & { bodiesFromFab?: number }).bodiesFromFab;
-  return typeof n === 'number' && Number.isFinite(n) ? n : 0;
-}
+ *  does not say (a test's hand-built fake predating the count). */
+const bodiesFromFab = (scene: BoardScene): number => scene.stats.bodiesFromFab ?? 0;
 
 /**
  * The caption, in the fixed order of spec §5 — the estimate disclaimer first,
