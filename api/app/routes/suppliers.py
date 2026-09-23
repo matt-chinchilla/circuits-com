@@ -27,6 +27,7 @@ from app.services.auth_service import (
     require_staff,
 )
 from app.services.badges import supplier_badge_fields
+from app.services.billing_guard import refuse_if_billing_active
 from app.services.part_feed import (
     PartFeedProvider,
     get_feed_key,
@@ -280,6 +281,10 @@ def delete_supplier(
     company row.
     """
     supplier = _supplier_or_404(db, supplier_id)
+
+    # R15: its sponsors' billing rows would cascade away while Stripe keeps
+    # charging — cancel them under Billing first.
+    refuse_if_billing_active(db, supplier_id=supplier.id)
 
     # Both columns in ONE read. The parts this supplier priced are about to
     # lose an offer, which RAISES their `best_price` (or clears it, when this
