@@ -5,6 +5,12 @@ import type { Sponsor } from '@public/types/sponsor';
 import type { PartDetail, RelatedParts } from '@public/types/part';
 import type { SearchResultsV2, PublicManufacturers } from '@public/types/search';
 import type { SiteStats } from '@public/types/stats';
+import type {
+  ExclusiveCheckoutResult,
+  ExclusiveTier,
+  QuoteResult,
+  SlotsResponse,
+} from '@public/types/checkout';
 
 import { CANONICAL_CATEGORY_QUERY } from '@public/services/categoryQuery';
 import { API_BASE_URL } from '@shared/services/constants';
@@ -175,7 +181,15 @@ export const api = {
 
   getSilverCheckoutInfo: () =>
     client
-      .get<{ monthly_total: number; tax_included: boolean }>('/checkout/silver')
+      // `monthly_total` is the LIST price (kept for bundles cached before the
+      // Founder's Deal); `price_usd` is what Stripe charges — render that via
+      // `chargedMonthly`. Optional on the type: an old API does not send it.
+      .get<{
+        monthly_total: number;
+        tax_included: boolean;
+        price_usd?: number | null;
+        founder_usd?: number | null;
+      }>('/checkout/silver')
       .then(r => r.data),
 
   // The /pricing placement picker: every subcategory board with its open
@@ -185,6 +199,8 @@ export const api = {
     client
       .get<{
         monthly_total: number;
+        price_usd?: number | null;
+        founder_usd?: number | null;
         boards: {
           category_id: string;
           name: string;
@@ -209,5 +225,44 @@ export const api = {
   }) =>
     client
       .post<{ session_id: string; url: string }>('/checkout/silver', body)
+      .then(r => r.data),
+
+  // ── Gold/Platinum self-serve (spec 2026-09-23 §7) ──────────────────────
+  // All four 404 when billing is unconfigured; the page treats that as "the
+  // desk sells this", never as sold out.
+
+  /** Open and held exclusive slots (taken ones are omitted server-side). */
+  getExclusiveSlots: (tier: ExclusiveTier) =>
+    client
+      .get<SlotsResponse>('/checkout/exclusive/slots', { params: { tier } })
+      .then(r => r.data),
+
+  /** The server's price for this tier + code (+ slot, + email for an
+   *  email-locked code). No side effects; the page renders only these numbers. */
+  quoteExclusive: (body: {
+    tier: ExclusiveTier;
+    category_id?: string;
+    code?: string;
+    email?: string;
+  }) => client.post<QuoteResult>('/checkout/quote', body).then(r => r.data),
+
+  /** Commits the slot hold and mints the Stripe session. 409 `slot_held`
+   *  carries the time in the `X-Held-Until` header (detail stays a code). */
+  createExclusiveCheckout: (body: {
+    tier: ExclusiveTier;
+    category_id: string;
+    code?: string;
+    company_name: string;
+    email: string;
+    website?: string;
+  }) =>
+    client
+      .post<ExclusiveCheckoutResult>('/checkout/exclusive', body)
+      .then(r => r.data),
+
+  /** The buyer's own Back-from-Stripe path: frees their hold at once. */
+  releaseExclusiveHold: (release_token: string) =>
+    client
+      .post<{ released: boolean }>('/checkout/exclusive/release', { release_token })
       .then(r => r.data),
 };

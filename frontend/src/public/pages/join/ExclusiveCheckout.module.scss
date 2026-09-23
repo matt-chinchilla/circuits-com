@@ -1,0 +1,494 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// Gold / Platinum buy flow on /join (spec 2026-09-23 §11).
+//
+// The slot picker reuses JoinPage.module.scss's picker primitives (search,
+// category accordion, board rows); this module adds only what is new:
+//
+//   1. .buy / .buyGrid         — picker column beside the price ticket
+//   2. .slotRow / .slotHeld    — rows that SELECT in-page (never navigate)
+//   3. .codeField              — the rep-code input + its status line
+//   4. .ticket                 — the price summary, server numbers only
+//   5. .panel[data-tier]       — retints the shared .sck-* placement ticket
+//   6. .receipt / .notice      — return-trip states
+//
+// Tier ink comes from the page's --tsel/--g* tokens (set on .stack by the
+// selected tier), so nothing here hardcodes gold vs platinum except the
+// portaled modal, which lives outside .stack.
+
+// ─── 1. layout ──────────────────────────────────────────────────────────────
+
+.buy {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.buyGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 20px;
+  align-items: start;
+
+  @include responsive(900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.state {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.55;
+  color: #454e49;
+  max-width: 62ch;
+}
+
+.stateCta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.pickHead {
+  margin: 0 0 10px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #37413c;
+}
+
+.flatList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+// ─── 2. slot rows ───────────────────────────────────────────────────────────
+
+// Layered on JoinPage's `.board` button: the row is a toggle (aria-pressed),
+// so the selected state is drawn, not implied by hover.
+.slotRow {
+  position: relative;
+
+  &[aria-pressed='true'] {
+    border-color: var(--tsel, #{$sponsor-gold});
+    background: color-mix(in srgb, var(--tsel, #{$sponsor-gold}) 7%, #ffffff);
+    box-shadow: inset 3px 0 0 var(--tsel, #{$sponsor-gold});
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tsel, #{$executive-blue});
+    outline-offset: 2px;
+  }
+}
+
+.slotMark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1.5px solid rgba(15, 35, 25, 0.2);
+  color: transparent;
+
+  .slotRow[aria-pressed='true'] & {
+    border-color: var(--tsel, #{$sponsor-gold});
+    background: var(--tsel, #{$sponsor-gold});
+    color: #ffffff;
+  }
+}
+
+// Someone else is paying for this slot right now. It stays in the list — a
+// vanished row reads as "sold", which is not yet true.
+.slotHeld {
+  cursor: not-allowed;
+  background: repeating-linear-gradient(
+    -45deg,
+    #f6f7f6 0 8px,
+    #ffffff 8px 16px
+  );
+
+  [data-name] {
+    color: #5f6964;
+  }
+}
+
+.heldNote {
+  font-family: $font-mono;
+  font-size: 0.68rem;
+  color: #6b5a1c;
+  white-space: normal;
+  text-align: right;
+  max-width: 17ch;
+}
+
+.openTag {
+  font-family: $font-mono;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: #2f6b45;
+  white-space: nowrap;
+}
+
+// ─── 3. rep code ────────────────────────────────────────────────────────────
+
+.codeField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(15, 35, 25, 0.12);
+}
+
+.codeLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #37413c;
+}
+
+.codeRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 320px;
+}
+
+.codeInput {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 35, 25, 0.16);
+  border-radius: 8px;
+  font-family: $font-mono;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #1c2420;
+  background: #ffffff;
+
+  &::placeholder {
+    letter-spacing: 0.12em;
+    color: #a3aca7;
+  }
+
+  &:focus {
+    outline: 2px solid color-mix(in srgb, var(--tsel, #{$executive-blue}) 40%, transparent);
+    border-color: var(--tsel, #{$executive-blue});
+  }
+
+  &[data-state='ok'] {
+    border-color: #2f8a4c;
+  }
+
+  &[data-state='bad'] {
+    border-color: $error-red;
+  }
+}
+
+.codeClear {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(15, 35, 25, 0.14);
+  border-radius: 50%;
+  background: #ffffff;
+  color: #5b655f;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    color: #14352a;
+    border-color: currentColor;
+  }
+}
+
+.codeStatus {
+  margin: 0;
+  min-height: 1.3em;
+  font-size: 0.8rem;
+  color: #5b655f;
+
+  &[data-state='ok'] {
+    color: #226b3a;
+    font-weight: 600;
+  }
+
+  &[data-state='bad'] {
+    color: #a3301f;
+  }
+}
+
+// ─── 4. price ticket ────────────────────────────────────────────────────────
+// The one loud element: a punched ticket whose stub carries the tier's metal.
+// Every figure is a server number; the rows only arrange them.
+
+.ticket {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid color-mix(in srgb, var(--tsel, #{$sponsor-gold}) 35%, rgba(15, 35, 25, 0.12));
+  box-shadow:
+    0 1px 2px rgba(12, 24, 18, 0.05),
+    0 18px 40px -28px color-mix(in srgb, var(--tsel, #{$sponsor-gold}) 70%, transparent);
+  overflow: hidden;
+
+  @include responsive(900px) {
+    max-width: 460px;
+  }
+}
+
+// Static metal stub — the tier's own gradient stops, never animated.
+.stub {
+  background: linear-gradient(180deg, var(--g2), var(--g3) 45%, var(--g5));
+  border-right: 2px dashed rgba(255, 255, 255, 0.85);
+}
+
+.ticketBody {
+  padding: 16px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ticketSlot {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--tsel, #14352a);
+
+  small {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.74rem;
+    font-weight: 500;
+    color: #5b655f;
+  }
+}
+
+.ticketEmpty {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #5b655f;
+}
+
+.lines {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.84rem;
+
+  > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  dt {
+    color: #4a544e;
+  }
+
+  dd {
+    margin: 0;
+    font-family: $font-mono;
+    font-variant-numeric: tabular-nums;
+    color: #1c2420;
+    white-space: nowrap;
+  }
+}
+
+.struck dd {
+  color: #7a847f;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+.deal dt {
+  font-weight: 600;
+  color: var(--tsel, #14352a);
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15, 35, 25, 0.1);
+}
+
+.totalLine {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #37413c;
+
+  strong {
+    display: inline-block;
+    font-family: $font-mono;
+    font-size: 1.55rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    color: #14231b;
+  }
+}
+
+// A one-shot tick when the charged number changes (a code landed) — motion
+// that answers the buyer's action; keyed remount replays it once.
+.tick {
+  animation: ticketTick 0.36s ease-out both;
+}
+
+@keyframes ticketTick {
+  from {
+    opacity: 0.2;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.save {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #226b3a;
+}
+
+.terms {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #5b655f;
+}
+
+.buyBtn {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.holdNote {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: #5b655f;
+}
+
+.warn {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  background: #fff6e0;
+  color: #6b4d0a;
+}
+
+.desk {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #5b655f;
+}
+
+// ─── 5. the portaled confirm/receipt panel ──────────────────────────────────
+// The modal reuses the Silver placement ticket (`.sck-*`, global) and swaps
+// its local palette. (0,2,0) beats `.sck-panel`'s own (0,1,0) declarations
+// regardless of stylesheet order.
+
+.panel[data-tier='gold'] {
+  --sv: #8f6f1e;
+  --sv-b: #e8c252;
+  --sv-l: #fff3cf;
+  --sv-e: #f08a24;
+  --sv-g3: #f3cf5c;
+  --sv-g4: #d0452e;
+  --sv-g5: #d7ad3c;
+}
+
+.panel[data-tier='platinum'] {
+  --sv: #75699a;
+  --sv-b: #c5bfd6;
+  --sv-l: #ece8f6;
+  --sv-e: #9fb7e8;
+  --sv-g3: #d6cdef;
+  --sv-g4: #9fb7e8;
+  --sv-g5: #b9a8e0;
+}
+
+.panelSub {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--sv-l);
+  opacity: 0.8;
+}
+
+.dealLine {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.74rem;
+  color: var(--sv-l);
+
+  s {
+    opacity: 0.7;
+  }
+}
+
+// ─── 6. return trips ────────────────────────────────────────────────────────
+
+.receipt {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #15803d;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid rgba(21, 128, 61, 0.28);
+  border-radius: 10px;
+  background: #effaf2;
+  color: #1b4d2c;
+  font-size: 0.9rem;
+
+  p {
+    flex: 1;
+    margin: 0;
+  }
+}
+
+.noticeClose {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tick {
+    animation: none;
+  }
+}
