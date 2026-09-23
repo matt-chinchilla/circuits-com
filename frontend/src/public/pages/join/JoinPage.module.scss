@@ -525,6 +525,12 @@
   }
 }
 
+// Gold/Platinum: the price ticket is the focal element, so the FIG. 1 aside
+// steps out and the buy flow takes the full row.
+.place[data-wide] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .placeMain {
   min-width: 0;
   background: var(--theme-card-bg, #ffffff);

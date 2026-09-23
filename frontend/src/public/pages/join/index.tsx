@@ -120,6 +120,10 @@ const JOIN_TIERS: JoinTier[] = [
 ];
 
 const DESK_EMAIL = "partners@circuitcenter.ai";
+
+// Tokens already posted to /checkout/exclusive/release this document — the
+// mount effect runs twice under StrictMode, and once is the whole job.
+const RELEASED_TOKENS = new Set<string>();
 const FORM_STEPS = ["Company", "Categories", "Confirm"];
 const TERMS_NOTE = "12-month minimum · billed monthly · tax included";
 
@@ -403,7 +407,8 @@ export default function JoinPage() {
   // slot list so the slot shows as open again.
   useEffect(() => {
     const token = released?.stash?.release_token;
-    if (!token) return;
+    if (!token || RELEASED_TOKENS.has(token)) return;
+    RELEASED_TOKENS.add(token);
     api
       .releaseExclusiveHold(token)
       .catch(() => undefined)
@@ -945,7 +950,10 @@ export default function JoinPage() {
                           ? "Every board is carrying its five sponsors right now — the desk keeps the list of what opens next."
                           : "The partners desk can place you while the live board list is unavailable."}
                 </p>
-                <div className={styles.place}>
+                <div
+                  className={styles.place}
+                  data-wide={tier !== "silver" || undefined}
+                >
                   <div className={styles.placeMain}>
                     {tier === "silver" ? (
                       haveBoards ? (
@@ -1103,14 +1111,16 @@ export default function JoinPage() {
                       />
                     ) : null}
                   </div>
-                  <aside className={styles.figAside} aria-hidden="true">
-                    <JoinIso />
-                    <span className={styles.figLabel}>FIG. 1 — BOARD PLACEMENT</span>
-                    <p className={styles.figLine}>
-                      Your logo and buy-link render on the board engineers actually
-                      browse.
-                    </p>
-                  </aside>
+                  {tier === "silver" && (
+                    <aside className={styles.figAside} aria-hidden="true">
+                      <JoinIso />
+                      <span className={styles.figLabel}>FIG. 1 — BOARD PLACEMENT</span>
+                      <p className={styles.figLine}>
+                        Your logo and buy-link render on the board engineers actually
+                        browse.
+                      </p>
+                    </aside>
+                  )}
                 </div>
               </section>
             )}
