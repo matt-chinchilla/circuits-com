@@ -539,3 +539,67 @@ def test_both_compose_files_pass_the_bom_budget_through():
 
 def test_bom_budget_compose_default_mirrors_code_default():
     assert Settings.model_fields["BOM_RESOLVE_DAILY_BUDGET"].default == 100
+
+
+# ── Gold & Platinum sales (spec 2026-09-23, T1) ─────────────────────────────
+#
+# APP_BASE_URL was never allowlisted: every container ran the code default, so
+# a local test-mode checkout could never return to localhost (LU-F21). The
+# three billing settings are new. Each must reach the api container with a
+# compose default that MIRRORS the code default — an empty `${VAR:-}` would
+# overwrite it (the CALENDAR_RECIPIENTS trap): a blank BILLING_GRACE_DAYS would
+# fail Settings validation and crash-loop the api on boot.
+
+SALES_SETTINGS = (
+    "APP_BASE_URL",
+    "BILLING_GRACE_DAYS",
+    "BILLING_SWEEP_ENABLED",
+    "SALES_CARD_LINK_DAYS",
+)
+
+
+def _compose_default(block: str, name: str) -> str:
+    line = next(
+        (ln for ln in block.splitlines() if ln.strip().startswith(f"{name}:")),
+        None,
+    )
+    assert line is not None, f"{name} is not in the api allowlist"
+    assert f"${{{name}:-" in line, f"{name} is pinned or has no default: {line.strip()!r}"
+    return line.split(":-", 1)[1].rsplit("}", 1)[0].strip()
+
+
+def _code_default_text(name: str) -> str:
+    value = Settings.model_fields[name].default
+    return str(value).lower() if isinstance(value, bool) else str(value)
+
+
+def test_the_sales_code_defaults():
+    assert Settings.model_fields["APP_BASE_URL"].default == "https://circuitcenter.ai"
+    assert Settings.model_fields["BILLING_GRACE_DAYS"].default == 14
+    assert Settings.model_fields["BILLING_SWEEP_ENABLED"].default is True
+    assert Settings.model_fields["SALES_CARD_LINK_DAYS"].default == 7
+
+
+def test_both_compose_files_pass_the_sales_settings_through_mirroring_the_code():
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        api = _service_block(path, "api")
+        for name in SALES_SETTINGS:
+            default = _compose_default(api, name)
+            assert default == _code_default_text(name), (
+                f"{path.name}: the api default for {name} ({default!r}) has drifted from "
+                f"Settings.{name} ({_code_default_text(name)!r})"
+            )
+
+
+def test_the_billing_sweep_never_runs_under_pytest():
+    """conftest switches the in-process sweep off, like the category warmer."""
+    from app.config import settings
+
+    assert settings.BILLING_SWEEP_ENABLED is False
+
+
+def test_the_sales_settings_stay_off_the_frontend():
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        frontend = _service_block(path, "frontend")
+        for name in SALES_SETTINGS[1:]:
+            assert name not in frontend, f"{path.name}: {name} leaked into the frontend service"
