@@ -6,7 +6,7 @@ import {
   type FormEvent,
 } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import PageHead from "@public/components/PageHead";
 import { STATIC_PAGE_SEO } from "@public/services/seoRoutes";
 import PageHeaderBand from "@public/components/layout/PageHeaderBand";
@@ -15,43 +15,58 @@ import Icon from "@shared/components/Icon";
 import { formatPhone } from "@shared/utils/phone";
 import { useCategories } from "@public/hooks/useCategories";
 import { api } from "@public/services/api";
+import { chargedMonthly } from "@public/services/checkoutPrice";
 import TierBannerRibbon, { type SponsorTierId } from "@public/components/widgets/TierBannerRibbon";
 import FounderDiscount, { Fire } from "./FounderDiscount";
+import ExclusiveBuy from "./ExclusiveBuy";
+import ExclusiveCheckoutModal from "./ExclusiveCheckoutModal";
+import {
+  isExclusiveTier,
+  money,
+  readJoinParams,
+  takeStash,
+  type ExclusiveStash,
+} from "./exclusive";
 import styles from "./JoinPage.module.scss";
+import xstyles from "./ExclusiveCheckout.module.scss";
 
-// Staged Join + Advertise surface (design kit "Join v3", 2026-08-14). One
-// decision per stage:
+// Staged Join + Advertise surface (design kit "Join v3", 2026-08-14; Gold and
+// Platinum self-serve, spec 2026-09-23). One decision per stage:
 //
 //   01 pick a tier   → honest fact banners, no fabricated popularity
-//   02 place it      → Silver: the real board picker; Gold/Platinum: the desk
-//   03 apply         → the existing POST /api/join application, three steps
+//   02 place it      → Silver: the board picker, which ROUTES to the board's
+//                      own page (`?sponsor=1`) so that sale happens standing on
+//                      the slot. Gold/Platinum: ExclusiveBuy, an in-page slot
+//                      picker + rep-code field + price ticket that hands off to
+//                      Stripe's hosted checkout (the slot is held while the
+//                      buyer pays, so nobody buys a slot that is already taken).
+//   03 apply         → the desk: the existing POST /api/join application
 //
 // This page absorbed the standalone /pricing route (Advertise), which now
-// redirects here. Two things it is NOT allowed to become:
+// redirects here, carrying its query. Read once at mount and then stripped:
+// ?code= ?tier= ?slot= (a rep's link), ?welcome= (Stripe success → receipt),
+// ?released=1 (Stripe cancel → free the buyer's own hold), ?card=updated.
 //
-//   * A checkout. Board rows ROUTE to that board's own page with the purchase
-//     panel open (`?sponsor=1`), so the sale happens standing on the slot.
-//   * A price oracle. The Silver number comes from the server probe, never a
-//     literal — a hardcoded fallback would keep showing the old price after a
-//     ladder change. Gold/Platinum are desk-quoted list prices.
+// It is NOT allowed to become a price oracle. Every number a buyer is charged
+// comes from the server (sales_pricing is the single home): the Silver probe's
+// `price_usd`, the exclusive slots payload, and /api/checkout/quote. The card
+// literals below are display copy, pinned to the server by a test.
 
 interface JoinTier {
   id: SponsorTierId;
   name: string;
-  /** Desk-quoted list price. Silver is null — its number comes from the API. */
+  /** List price for the card. Silver is null — its number comes from the API. */
   price: string | null;
-  /** The Founder's Discount price, struck in beside the list price once the
-   *  Founder band is open. Silver is null — derived from the probe through
-   *  founderMonthly. Gold/Platinum are OWNER-SET literals at or below 15% off
-   *  ($2,500 → $2,100, $10,000 → $8,500) — "always give the customer the
-   *  better deal" (2026-09-21); they are not derived by any formula. */
+  /** The Founder's Deal price, struck in beside the list price once the
+   *  Founder band is open. Silver is null — the probe's charged `price_usd`.
+   *  Gold/Platinum are card DISPLAY literals; what is charged comes from the
+   *  server's sales_pricing.FOUNDER_USD, and api/tests/test_sales_pricing.py
+   *  (test_founder_literals_match_the_join_page) pins these two to it. */
   fd: string | null;
   ribbon: string;
   el: string;
   lead: string;
   perks: string[];
-  /** Why this tier cannot be self-served (Gold/Platinum only). */
-  arrange?: string;
 }
 
 const JOIN_TIERS: JoinTier[] = [
@@ -86,8 +101,6 @@ const JOIN_TIERS: JoinTier[] = [
       "Audience insights",
       "API access for live stock + price sync",
     ],
-    arrange:
-      "Gold is one sponsor per subcategory — two buyers can't both have it. The desk checks your slot is open, then sends a quote you can pay online.",
   },
   {
     id: "platinum",
@@ -103,8 +116,6 @@ const JOIN_TIERS: JoinTier[] = [
       "Priority line of contact",
       "Access to proprietary AI",
     ],
-    arrange:
-      "Platinum is one sponsor per top-level category — the banner every subpage carries. The desk checks it's open, then sends a quote you can pay online.",
   },
 ];
 
@@ -273,9 +284,23 @@ function StageNum({ children }: { children: string }) {
 export default function JoinPage() {
   const navigate = useNavigate();
   const { categories } = useCategories();
+  const [, setSearchParams] = useSearchParams();
+
+  // ── URL params — read ONCE, then stripped (never setSearchParams in deps) ──
+  const [params] = useState(() => readJoinParams(window.location.search));
+  // Back from Stripe (?released=1): this tab's stash names the hold to free.
+  // Read-once, so a shared link can never release someone else's hold.
+  const [released] = useState<{ stash: ExclusiveStash | null } | null>(() =>
+    params.released ? { stash: takeStash() } : null,
+  );
+  const [welcome, setWelcome] = useState(params.welcome ?? null);
+  const [cardUpdated, setCardUpdated] = useState(params.card === "updated");
+  const [slotsVersion, setSlotsVersion] = useState(0);
 
   // ── Stage 01 ────────────────────────────────────────────────────────────
-  const [tier, setTier] = useState<SponsorTierId | null>(null);
+  const [tier, setTier] = useState<SponsorTierId | null>(
+    () => params.tier ?? released?.stash?.tier ?? null,
+  );
   const [hovered, setHovered] = useState<SponsorTierId | null>(null);
   // Founder's Discount band. `fdLive` trails `fdOpen` by one frame — the price
   // burns start only once the band has actually opened, so the two fires run
@@ -298,8 +323,10 @@ export default function JoinPage() {
   // ── Stage 02 (Silver board picker) ──────────────────────────────────────
   const [boards, setBoards] = useState<Board[] | null>(null);
   // Null until the server says otherwise — the page must never print a price
-  // it did not receive.
+  // it did not receive. `monthly` is Silver's LIST (the card's struck price);
+  // `silverPrice` is what Stripe charges (the probe's price_usd).
   const [monthly, setMonthly] = useState<number | null>(null);
+  const [silverPrice, setSilverPrice] = useState<number | null>(null);
   // 'unconfigured' = the documented 404 (no billing on this deployment) →
   // hide the picker silently and route to the desk. 'error' = anything else
   // (a 502 during the deploy window, a timeout, an ad-blocker eating
@@ -342,6 +369,7 @@ export default function JoinPage() {
         if (cancelled) return;
         setBoards(data.boards);
         setMonthly(data.monthly_total);
+        setSilverPrice(chargedMonthly(data));
         setLoadState("ok");
       })
       .catch((err: unknown) => {
@@ -355,6 +383,48 @@ export default function JoinPage() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Strip the read-once params so a refresh or a forwarded link cannot replay
+  // a receipt, a release or a rep's code. (The page-view tracker records the
+  // pathname only, so ?code= never reaches analytics either way.)
+  useEffect(() => {
+    if (Object.keys(params).length === 0) return;
+    setSearchParams(
+      prev => {
+        for (const k of ["code", "tier", "slot", "welcome", "released", "card"]) prev.delete(k);
+        return prev;
+      },
+      { replace: true },
+    );
+  }, []);
+
+  // Free the buyer's own hold on the way back from Stripe, THEN re-read the
+  // slot list so the slot shows as open again.
+  useEffect(() => {
+    const token = released?.stash?.release_token;
+    if (!token) return;
+    api
+      .releaseExclusiveHold(token)
+      .catch(() => undefined)
+      .finally(() => setSlotsVersion(v => v + 1));
+  }, []);
+
+  // A rep's link (or a return trip) lands with a tier chosen: bring stage 02
+  // into view once it has mounted.
+  useEffect(() => {
+    if (!params.tier && !released?.stash) return undefined;
+    const id = window.setTimeout(() => {
+      const el = stage2Ref.current;
+      if (el)
+        window.scrollTo({
+          top: el.getBoundingClientRect().top + window.scrollY - 76,
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+        });
+    }, 120);
+    return () => window.clearTimeout(id);
   }, []);
 
   useEffect(() => {
@@ -636,6 +706,32 @@ export default function JoinPage() {
             data-fd={fdLive ? "on" : undefined}
             data-fire={fireOff ? "off" : undefined}
           >
+            {cardUpdated && (
+              <div className={xstyles.notice} role="status">
+                <p>
+                  Card updated. Your next monthly charge uses it, and any payment
+                  that was waiting has been retried.
+                </p>
+                <button
+                  type="button"
+                  className={xstyles.noticeClose}
+                  onClick={() => setCardUpdated(false)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+            {released && (
+              <div className={xstyles.notice} role="status">
+                <p>
+                  {released.stash?.release_token
+                    ? `Checkout cancelled — nothing was charged, and ${
+                        released.stash.slot_name ?? "your slot"
+                      } is open again.`
+                    : "Checkout cancelled — nothing was charged. Any slot you were holding frees itself within the hour."}
+                </p>
+              </div>
+            )}
             <div className={styles.proof}>
               <div>
                 <strong>Buyer-intent traffic.</strong> Visitors arrive with a part
@@ -681,10 +777,13 @@ export default function JoinPage() {
                 aria-label="Sponsorship tier"
               >
                 {JOIN_TIERS.map(t => {
-                  const price = t.id === "silver" ? monthlyLabel(monthly) : t.price;
+                  const price =
+                    t.id === "silver" ? (monthly != null ? money(monthly) : null) : t.price;
                   const fdPrice =
                     t.id === "silver"
-                      ? monthlyLabel(monthly != null ? founderMonthly(monthly) : null)
+                      ? silverPrice != null
+                        ? money(silverPrice)
+                        : null
                       : t.fd;
                   return (
                     <div
@@ -790,8 +889,10 @@ export default function JoinPage() {
                       >
                         {tier === t.id ? (
                           <>&#10003; Selected</>
-                        ) : (
+                        ) : t.id === "silver" ? (
                           `Select ${t.name}`
+                        ) : (
+                          `Buy ${t.name}`
                         )}
                       </button>
                       <span className={styles.featLabel}>FEATURES</span>
@@ -826,12 +927,16 @@ export default function JoinPage() {
                   <h2 className={styles.stgTitle}>
                     {tier === "silver"
                       ? "Choose your board"
-                      : `Arrange your ${activeTier.name} slot`}
+                      : tier === "gold"
+                        ? "Choose your Gold subcategory"
+                        : "Choose your Platinum category"}
                   </h2>
                 </div>
                 <p className={styles.stgLine}>
                   {tier !== "silver"
-                    ? "Single-slot placements are arranged, never self-served — so nobody buys a slot that's already taken."
+                    ? `${activeTier.name} is one sponsor per ${
+                        tier === "gold" ? "subcategory" : "top-level category"
+                      } — pick an open one and it's held for you while you pay, so nobody buys a slot that's already taken.`
                     : haveBoards
                       ? `${emptyCount} of ${boardTotal} boards have no Silver sponsor yet — tap a category to see its boards.`
                       : silverState === "loading"
@@ -984,23 +1089,19 @@ export default function JoinPage() {
                           )}
                         </div>
                       )
-                    ) : (
-                      <div className={styles.arrange}>
-                        <p className={styles.arrangeLine}>{activeTier.arrange}</p>
-                        <div className={styles.arrangeCta}>
-                          <GlowButton
-                            type="button"
-                            variant="primary"
-                            onClick={() => setApplyOpen(true)}
-                          >
-                            Ask about {activeTier.name} {'→'}
-                          </GlowButton>
-                          <span className={styles.same}>
-                            Same price either way — the desk never marks up.
-                          </span>
-                        </div>
-                      </div>
-                    )}
+                    ) : isExclusiveTier(tier) ? (
+                      <ExclusiveBuy
+                        key={tier}
+                        tier={tier}
+                        tierName={activeTier.name}
+                        perks={activeTier.perks}
+                        iconIndex={iconIndex}
+                        initialCode={params.code}
+                        initialSlot={params.slot ?? released?.stash?.slot_id}
+                        refreshKey={slotsVersion}
+                        onAskDesk={() => setApplyOpen(true)}
+                      />
+                    ) : null}
                   </div>
                   <aside className={styles.figAside} aria-hidden="true">
                     <JoinIso />
@@ -1063,10 +1164,10 @@ export default function JoinPage() {
                       <span className={styles.applying}>
                         APPLYING FOR: {activeTier.name.toUpperCase()}
                         {activeTier.id === "silver"
-                          ? monthly != null
-                            ? ` $${monthly}/MO`
+                          ? silverPrice != null
+                            ? ` · FOUNDER'S DEAL ${money(silverPrice)}/MO`
                             : ""
-                          : ` ${activeTier.price}/MO`}
+                          : ` · FOUNDER'S DEAL ${activeTier.fd}/MO`}
                       </span>
                     )}
                   </div>
@@ -1353,15 +1454,17 @@ export default function JoinPage() {
                 <details>
                   <summary>Is buying through the desk more expensive?</summary>
                   <p>
-                    No. Same price either way — the desk never marks up. It exists so
-                    nobody pays for an exclusive slot that&rsquo;s already taken.
+                    No. The desk prices every tier by the same rule this page does —
+                    the Founder&rsquo;s Deal, less any code your rep gives you. Use it
+                    if you&rsquo;d rather talk it through or pay by invoice.
                   </p>
                 </details>
                 <details>
                   <summary>How fast am I live?</summary>
                   <p>
-                    A founder confirms your placement within one business day of your
-                    application.
+                    Buy on this page and your placement appears within a minute of
+                    payment. Apply through the desk and a founder confirms it within
+                    one business day.
                   </p>
                 </details>
                 <details>
@@ -1384,20 +1487,14 @@ export default function JoinPage() {
           </div>
         )}
       </div>
+      {welcome && (
+        <ExclusiveCheckoutModal
+          variant="receipt"
+          tier={welcome}
+          tierName={welcome === "gold" ? "Gold" : "Platinum"}
+          onClose={() => setWelcome(null)}
+        />
+      )}
     </motion.div>
   );
-}
-
-// The Silver price is whatever the checkout endpoint says it is. No literal
-// fallback: a stale hardcoded number on the page a buyer pays from is worse
-// than no number at all.
-function monthlyLabel(monthly: number | null): string | null {
-  return monthly != null ? `$${monthly}` : null;
-}
-
-/** Silver's Founder's Discount: 15% off the probed list price, rounded DOWN to
- *  the nearest $10 so the customer always gets the better deal ($250 → $210;
- *  owner, 2026-09-21). Gold/Platinum are owner-set literals on JOIN_TIERS. */
-function founderMonthly(monthly: number): number {
-  return Math.floor((monthly * 0.85) / 10) * 10;
 }
