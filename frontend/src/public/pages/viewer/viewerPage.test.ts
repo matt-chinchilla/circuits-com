@@ -200,6 +200,21 @@ vi.mock('@public/services/kicad/boardStackup', async () => {
     },
   };
 });
+/** The same wrapper around the thumbnail reader: WHEN the sheets are drawn. */
+const readSheetThumbnailCalls = vi.fn();
+vi.mock('@public/services/kicad/sheetThumbnail', async () => {
+  const actual =
+    await vi.importActual<typeof import('@public/services/kicad/sheetThumbnail')>(
+      '@public/services/kicad/sheetThumbnail',
+    );
+  return {
+    ...actual,
+    readSheetThumbnail: (text: string) => {
+      readSheetThumbnailCalls(text);
+      return actual.readSheetThumbnail(text);
+    },
+  };
+});
 /** The same wrapper around the placement reader: WHEN the board is scanned. */
 const readPlacementsCalls = vi.fn();
 vi.mock('@public/services/kicad/boardPlacements', async () => {
@@ -253,11 +268,19 @@ const BOARD_TEXT = `(kicad_pcb (version 20221018)
  * `sourcesFor` can hand the renderer only one of them, which is the condition
  * the dropped-chip path exists for. U1 lives on the sheet that survives.
  */
-function makeSession(over: { root?: string | null; board?: string | null; boardText?: string } = {}) {
+/** A tiny but REAL schematic, so the Sheets tab has something to draw. */
+const SHEET_TEXT = `(kicad_sch (version 20230121) (paper "A4")
+  (lib_symbols (symbol "Device:R" (symbol "R_0_1" (rectangle (start -1 -2.5) (end 1 2.5)))))
+  (wire (pts (xy 10 30) (xy 20 30)))
+  (symbol (lib_id "Device:R") (at 30 30 0) (unit 1))
+)`;
+
+function makeSession(over: { root?: string | null; board?: string | null; boardText?: string; sheetText?: string } = {}) {
+  const text = over.sheetText ?? '';
   const sheets = [
-    { path: 'main.kicad_sch', uuid: 'r', text: '' },
-    { path: 'sub/power.kicad_sch', uuid: 'a', text: '' },
-    { path: 'alt/power.kicad_sch', uuid: 'b', text: '' },
+    { path: 'main.kicad_sch', uuid: 'r', text },
+    { path: 'sub/power.kicad_sch', uuid: 'a', text },
+    { path: 'alt/power.kicad_sch', uuid: 'b', text },
   ];
   const board = over.board ?? null;
   const files = new Map(sheets.map((s) => [s.path, s.text]));
@@ -394,9 +417,21 @@ function tabButtons(): HTMLButtonElement[] {
   return list == null ? [] : [...list.querySelectorAll('button')];
 }
 
+/** The sheet rows, which live in the drawer's Sheets tab (2026-09-22). */
 function chips(): HTMLButtonElement[] {
-  const group = container.querySelector('[aria-label="Sheets"]');
+  const group = container.querySelector('[role="group"][aria-label="Sheets"]');
   return group == null ? [] : [...group.querySelectorAll('button')];
+}
+
+function railTab(label: string): HTMLButtonElement {
+  const found = [...container.querySelectorAll('aside [role="tab"]')].find((t) => t.textContent === label);
+  if (found == null) throw new Error(`no rail tab "${label}"`);
+  return found as HTMLButtonElement;
+}
+
+/** Open the drawer on Sheets, where the rows are. */
+async function openSheets() {
+  if (chips().length === 0) await click(railTab('Sheets'));
 }
 
 beforeEach(() => {
@@ -424,6 +459,7 @@ beforeEach(() => {
   board3d.props = null;
   readStackupCalls.mockClear();
   readPlacementsCalls.mockClear();
+  readSheetThumbnailCalls.mockClear();
   wb.reset.mockClear();
   // The Board panel remembers its dock per browser; a test must start blank.
   localStorage.clear();
@@ -543,6 +579,7 @@ describe('focusing a reference', () => {
     hash = '#U1';
     await rerender();
     expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
+    await openSheets();
     expect(chips()[1].getAttribute('aria-current')).toBe('true');
   });
 
@@ -558,8 +595,9 @@ describe('focusing a reference', () => {
 // I4 — sourcesFor drops the basename twin; activate() then returns false and
 // nothing between the controller and the page surfaced that boolean.
 describe('a sheet the renderer could not be handed', () => {
-  it('marks its chip and answers the click instead of doing nothing', async () => {
+  it('marks its row and answers the click instead of doing nothing', async () => {
     await render();
+    await openSheets();
     const dropped = chips()[2];
     expect(dropped.getAttribute('aria-disabled')).toBe('true');
     expect(dropped.getAttribute('title')).toMatch(/same filename/);
@@ -572,8 +610,9 @@ describe('a sheet the renderer could not be handed', () => {
     expect(canvas.activeSheet).toBeUndefined();
   });
 
-  it('leaves every other chip selectable', async () => {
+  it('leaves every other row selectable', async () => {
     await render();
+    await openSheets();
     expect(chips()[1].getAttribute('aria-disabled')).toBeNull();
     await click(chips()[1]);
     expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
@@ -587,6 +626,7 @@ describe('the unrenderable-sheet seam', () => {
   it('marks nothing when the renderer reports no dropped sheets', async () => {
     canvas.unrenderable = [];
     await render();
+    await openSheets();
     expect(chips()).toHaveLength(3);
     expect(chips().some((c) => c.getAttribute('aria-disabled') === 'true')).toBe(false);
     await click(chips()[2]);
@@ -597,13 +637,15 @@ describe('the unrenderable-sheet seam', () => {
   it('marks whichever sheet the renderer named, not one it worked out itself', async () => {
     canvas.unrenderable = ['main.kicad_sch'];
     await render();
+    await openSheets();
     expect(chips()[0].getAttribute('aria-disabled')).toBe('true');
     expect(chips()[2].getAttribute('aria-disabled')).toBeNull();
   });
 
   // MINOR-3
-  it('gives the dropped chip a described-by reason, not only a title', async () => {
+  it('gives the dropped row a described-by reason, not only a title', async () => {
     await render();
+    await openSheets();
     const id = chips()[2].getAttribute('aria-describedby');
     expect(id).not.toBeNull();
     const reason = container.querySelector(`#${id}`);
@@ -626,9 +668,10 @@ describe('a designator on a sheet the renderer could not take', () => {
       "U9 is on power.kicad_sch, which can't be drawn \u2014 another sheet in this project has the same filename.",
     );
     expect(canvas.focusRef).not.toHaveBeenCalled();
-    // The chip this page marks "can't be drawn" must not become the current one.
+    // The row this page marks "can't be drawn" must not become the current one.
     expect(canvas.activeSheet).toBeUndefined();
     await click(byText('Schematic'));
+    await openSheets();
     expect(chips()[2].getAttribute('aria-current')).toBe('false');
   });
 });
@@ -724,6 +767,7 @@ describe('a gesture made while a focus is still loading', () => {
     const pending = deferFocus();
 
     await click(bomRef('U1'));
+    await openSheets();
     await click(chips()[0]);
     await act(async () => pending[0].settle('focused'));
 
@@ -739,6 +783,7 @@ describe('a gesture made while a focus is still loading', () => {
     const pending = deferFocus();
 
     await click(bomRef('U1')); // aims at sub/power
+    await openSheets();
     await click(chips()[0]); // …and the reader picks the root instead
 
     // What the controller reports once it has stood down for that chip.
@@ -863,6 +908,7 @@ describe('the Stackup tab', () => {
     session = withBoard();
     await render();
     await canvasReady();
+    await openSheets();
     await click(chips()[1]);
     expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
 
@@ -1124,21 +1170,42 @@ describe('the part panel', () => {
     expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
   });
 
-  it('the sheet chips sit in the drawing column, so the panel beside it never moves with them', async () => {
+  it('the sheets live in the drawer as rows with a picture each, drawn on the first visit, and a row is a trip to that sheet', async () => {
+    session = makeSession({ board: 'main.kicad_pcb', sheetText: SHEET_TEXT });
     await render();
-    const chips = container.querySelector('[role="group"][aria-label="Sheets"]') as HTMLElement;
-    expect(chips).not.toBeNull();
-    const drawing = container.querySelector('#' + CSS.escape(chips.nextElementSibling?.id ?? 'none'));
-    expect(drawing?.getAttribute('role')).toBe('tabpanel');
-    // The chips' column is not the one that holds the part panel.
-    expect(chips.parentElement!.contains(panel())).toBe(false);
-    expect(chips.parentElement!.parentElement!.contains(panel())).toBe(true);
+    await canvasReady();
+    // Nothing above the drawing: the stage is the drawing.
+    expect(container.querySelector('#viewer-panel-drawing')!.previousElementSibling).toBeNull();
+    expect(readSheetThumbnailCalls).not.toHaveBeenCalled();
+    await click(byText('BOM'));
+    await openSheets();
+    // Inside the panel, three rows, the root marked, the root current.
+    const group = container.querySelector('[role="group"][aria-label="Sheets"]') as HTMLElement;
+    expect(panel().contains(group)).toBe(true);
+    expect(chips()).toHaveLength(3);
+    expect(chips()[0].textContent).toContain('main');
+    expect(chips()[0].textContent).toContain('root');
+    expect(chips()[0].getAttribute('aria-current')).toBe('true');
+    // A picture of each sheet, read from the file once, on this first visit.
+    expect(readSheetThumbnailCalls).toHaveBeenCalledTimes(3);
+    expect(group.querySelectorAll('svg[data-sheet-thumb]')).toHaveLength(3);
+    expect(chips()[0].textContent).toContain('1 symbol');
+    // Choosing a row from the BOM tab goes to the Schematic tab AND the sheet.
+    await click(chips()[1]);
+    expect(byText('Schematic').getAttribute('aria-selected')).toBe('true');
+    expect(canvas.activeSheet).toBe('sub/power.kicad_sch');
+    expect(chips()[1].getAttribute('aria-current')).toBe('true');
+    // Back and forth: no second read.
+    await click(railTab('Parts'));
+    await click(railTab('Sheets'));
+    expect(readSheetThumbnailCalls).toHaveBeenCalledTimes(3);
   });
 
   it('on a phone, a search from the open sheet keeps it open; a selection from outside collapses it', async () => {
     await render();
     await canvasReady();
-    const peek = panel().querySelector('button[aria-expanded]') as HTMLButtonElement;
+    // The peek is the handle row's own button; the rail tabs carry aria-expanded too.
+    const peek = panel().querySelector('button[aria-expanded]:not([role="tab"])') as HTMLButtonElement;
     await click(peek);
     expect(panel().dataset.open).toBeDefined();
     await type('u1');
@@ -1353,17 +1420,24 @@ describe('the Board panel', () => {
     session = makeSession({ board: 'main.kicad_pcb' });
   });
 
-  it('is the part panel alone, with no tabs, for a project with no board', async () => {
+  it('is Sheets and Parts, and nothing of the board, for a project with no board', async () => {
     session = makeSession();
+    await render();
+    expect(aside().getAttribute('aria-label')).toBe('Design panel');
+    expect([...aside().querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Sheets', 'Parts']);
+  });
+
+  it('is the part panel alone, with no tabs, for a drop with neither a schematic nor a board', async () => {
+    session = makeSession({ root: null });
     await render();
     expect(aside().getAttribute('aria-label')).toBe('Part');
     expect(aside().querySelector('[role="tablist"]')).toBeNull();
   });
 
-  it('offers Parts, Layers and Objects, and disables the board tabs on the schematic with the reason', async () => {
+  it('offers Sheets, Parts, Layers and Objects, and disables the board tabs on the schematic with the reason', async () => {
     await render();
     expect(aside().getAttribute('aria-label')).toBe('Board panel');
-    expect([...aside().querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Parts', 'Layers', 'Objects']);
+    expect([...aside().querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Sheets', 'Parts', 'Layers', 'Objects']);
     expect(panelTab('Parts').getAttribute('aria-selected')).toBe('true');
     expect(panelTab('Layers').getAttribute('aria-disabled')).toBe('true');
     expect(panelTab('Layers').title).toBe('Open the Board or 3D tab');
@@ -1491,8 +1565,11 @@ describe('the tab strip stylesheet', () => {
     const panelScss = readFileSync(join(__dirname, 'components', 'BoardPanel.module.scss'), 'utf8');
     const mobile = panelScss.slice(panelScss.indexOf('@include responsive($bp-tablet)'));
     const sheet = mobile.slice(mobile.indexOf('.panel {'), mobile.indexOf('.peek {'));
-    // The last background layer is a solid colour, not another translucent gradient.
-    expect(sheet).toMatch(/background:[\s\S]*,\s*#f7f8fb;/);
+    // Under the washes sits a solid colour, not another translucent gradient —
+    // the mode's own: the token is a plain hex in both sets.
+    expect(sheet).toMatch(/background-color:\s*var\(--vw-card-solid\)/);
+    const tokens = readFileSync(join(__dirname, '_workspaceTokens.scss'), 'utf8');
+    expect(tokens.match(/--vw-card-solid:\s*(#[0-9a-f]{6});/g)).toHaveLength(2);
     expect(panelScss).toMatch(/\.facts \{[^{}]*gap:\s*0;/);
   });
   it('keeps the stage clear of the bottom sheet on a phone and a tablet', () => {
@@ -1535,6 +1612,8 @@ describe('the workspace', () => {
 
   const workspace = () => container.querySelector('aside')!.parentElement!.parentElement as HTMLElement;
   const fsButton = () => [...container.querySelectorAll('button')].find((b) => /fullscreen/i.test(b.getAttribute('aria-label') ?? ''))!;
+  /** The night switch: named by its visible word, its state in aria-pressed. */
+  const nightBtn = () => [...container.querySelectorAll('button')].find((b) => b.textContent === 'Night')!;
 
   it('has no band once a project is open, and its status line carries the privacy sentence and the credit', async () => {
     session = makeSession({ board: 'main.kicad_pcb' });
@@ -1608,6 +1687,68 @@ describe('the workspace', () => {
     expect(workspace().querySelector('details')).toBeNull();
   });
 
+  it('starts in the day, the toggle turns the workspace to night, and the choice is remembered', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    const night = nightBtn();
+    expect(night).toBeDefined();
+    // One toggle on the top bar, in the end cluster beside fullscreen: a word
+    // and a glyph, the word constant, the state carried by aria-pressed.
+    expect(night.parentElement).toBe(fsButton().parentElement);
+    expect(night.querySelector('i.ph-moon')).not.toBeNull();
+    expect(night.getAttribute('aria-label')).toBeNull();
+    expect(workspace().dataset.mode).toBe('day');
+    expect(night.getAttribute('aria-pressed')).toBe('false');
+    expect(night.title).toBe('Switch to night');
+    expect(localStorage.getItem('cc.viewer.mode')).toBeNull();
+    await click(night);
+    expect(workspace().dataset.mode).toBe('night');
+    expect(nightBtn().getAttribute('aria-pressed')).toBe('true');
+    expect(nightBtn().textContent).toBe('Night');
+    expect(nightBtn().title).toBe('Back to day');
+    expect(localStorage.getItem('cc.viewer.mode')).toBe('night');
+    // A fresh mount reads it back.
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(workspace().dataset.mode).toBe('night');
+    await click(nightBtn());
+    expect(workspace().dataset.mode).toBe('day');
+    expect(localStorage.getItem('cc.viewer.mode')).toBe('day');
+  });
+
+  it('a first visit follows the system, without writing; a stored choice beats the system', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    const original = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+    Object.defineProperty(window, 'matchMedia', {
+      value: (media: string) => ({ media, matches: media === '(prefers-color-scheme: dark)', addEventListener() {}, removeEventListener() {} }),
+      configurable: true,
+      writable: true,
+    });
+    try {
+      await render();
+      expect(workspace().dataset.mode).toBe('night');
+      expect(nightBtn().getAttribute('aria-pressed')).toBe('true');
+      // Following the system writes nothing: a reader who never touched the
+      // switch keeps following it when the system changes.
+      expect(localStorage.getItem('cc.viewer.mode')).toBeNull();
+      await act(async () => root.unmount());
+      localStorage.setItem('cc.viewer.mode', 'day');
+      root = createRoot(container);
+      await render();
+      expect(workspace().dataset.mode).toBe('day');
+      // And a value that is not ours falls back to the system, not to day.
+      await act(async () => root.unmount());
+      localStorage.setItem('cc.viewer.mode', 'dusk');
+      root = createRoot(container);
+      await render();
+      expect(workspace().dataset.mode).toBe('night');
+    } finally {
+      if (original) Object.defineProperty(window, 'matchMedia', original);
+      else delete (window as { matchMedia?: unknown }).matchMedia;
+    }
+  });
+
   it('draws the toast inside the workspace', async () => {
     await render();
     await canvasReady();
@@ -1650,5 +1791,55 @@ describe('the workspace stylesheet', () => {
 
   it('keeps the toast inside the workspace so fullscreen still shows it', () => {
     expect(scss).toMatch(/\.toast \{[^{}]*position:\s*fixed/);
+  });
+
+  it('draws day and night from one set of names, and carries no literal ink of its own', () => {
+    const tokens = readFileSync(join(__dirname, '_workspaceTokens.scss'), 'utf8');
+    expect(tokens).toMatch(/@mixin workspace-day-tokens/);
+    expect(tokens).toMatch(/@mixin workspace-night-tokens/);
+    // The root declares the day set and re-declares the night set under the attribute.
+    expect(scss).toMatch(/\.workspace \{\s*@include workspace-day-tokens;/);
+    expect(scss).toMatch(/&\[data-mode='night'\] \{\s*@include workspace-night-tokens;/);
+    // Every name the day set declares, the night set declares too.
+    const names = (block: string) => [...block.matchAll(/--vw-[a-z0-9-]+(?=:)/g)].map((m) => m[0]).sort();
+    const day = tokens.slice(tokens.indexOf('@mixin workspace-day-tokens'), tokens.indexOf('@mixin workspace-night-tokens'));
+    const night = tokens.slice(tokens.indexOf('@mixin workspace-night-tokens'), tokens.indexOf('// ── The control recipes'));
+    expect(names(night)).toEqual(names(day));
+    // The three viewer stylesheets read the names; the old literal inks are gone.
+    const controls = readFileSync(join(__dirname, 'components', 'BoardControls.module.scss'), 'utf8');
+    for (const [file, text] of [['ViewerPage', scss], ['BoardPanel', panelScss], ['BoardControls', controls]] as const) {
+      for (const literal of ['#1a1f23', '#676c71', '#4b5158', '#2b3137', 'rgba(26, 31, 35, 0.1)']) {
+        expect(text, `${file} still carries ${literal}`).not.toContain(literal);
+      }
+    }
+    // Night is the instrument, and the browser is told so (form controls,
+    // scrollbars); the site's red and the drop-frame's gold each have a night
+    // ink, because neither reads on the dark bench as it is.
+    expect(scss).toMatch(/&\[data-mode='night'\] \{[^{}]*color-scheme:\s*dark/);
+    expect(scss).toMatch(/\.alert \{[^{}]*color:\s*var\(--vw-alert-ink\)/);
+    expect(scss).toMatch(/\.phaseWarn \{[^{}]*color:\s*var\(--vw-warn-ink\)/);
+    expect(scss).toMatch(/\.pageError \{[^{}]*color:\s*var\(--vw-alert-ink\)/);
+    // A placeholder is text, so it takes the tertiary ink, never the disabled one.
+    expect(tokens).toMatch(/&::placeholder \{[^{}]*color:\s*var\(--vw-ink-3\)/);
+  });
+
+  it('the night switch is a word and a glyph, 44px to a finger, and switches with no motion', () => {
+    expect(scss).toMatch(/\.modeBtn \{[^{}]*min-height:\s*40px/);
+    expect(scss).toMatch(/@mixin topbar-button \{[\s\S]*?@include tap-target\(-2px\)/);
+    expect(scss).toMatch(/\.modeLabel \{[^{}]+\}/);
+    // Nothing on the workspace root tweens: the change of mode is instant.
+    const rootBlock = scss.slice(scss.indexOf('.workspace {'), scss.indexOf('// ─── Top bar'));
+    expect(rootBlock).not.toMatch(/transition|animation/);
+    const reduced = scss.slice(scss.indexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(reduced).toMatch(/\.modeBtn[\s\S]*?transition:\s*none/);
+  });
+
+  it('the sheet rows are a finger tall, the picture is paper in the mode’s own white, and the lit row’s count line steps up an ink', () => {
+    expect(panelScss).toMatch(/\.sheetRow \{[^{}]*min-height:\s*80px/);
+    expect(panelScss).toMatch(/\.thumbPaper \{[^{}]*fill:\s*var\(--vw-thumb-paper\)/);
+    expect(panelScss).toMatch(/&\[aria-current='true'\] \{[^{}]*background:\s*var\(--vw-lit-bg\)[\s\S]*?\.sheetMeta \{[^{}]*color:\s*var\(--vw-ink-2\)/);
+    // Non-scaling strokes are the SVG's; the stylesheet gives them KiCad's own inks.
+    expect(panelScss).toMatch(/\.thumbWires \{[^{}]*stroke:\s*#1a7a3a/);
+    expect(panelScss).toMatch(/\.thumbSymbols \{[^{}]*stroke:\s*#8e2a2a/);
   });
 });

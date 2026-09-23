@@ -2,6 +2,7 @@
 @use '@shared/styles/mixins' as *;
 @use '@public/styles/bomMaterial' as *;
 @use '@public/styles/dropFrame' as *;
+@use './workspaceTokens' as *;
 
 // Design viewer — page shell.
 //
@@ -12,13 +13,9 @@
 // the rail opens, the stage, and a status line — edge to edge, seamed with
 // hairlines, no card radii, so the chrome reads as one panel and the drawing
 // as the window in it (owner, 2026-09-22: "as LARGE of a content-window as
-// possible").
+// possible"). Every colour below is a token from _workspaceTokens.scss, so
+// the same rules draw the day bench and the night instrument.
 @include drop-frame-intake;
-
-$seam: rgba(26, 31, 35, 0.1);
-$ink: #1a1f23;
-$ink-3: #676c71;
-$chrome: rgba(255, 255, 255, 0.5);
 
 .credit {
   margin: 6px 0 0;
@@ -40,22 +37,30 @@ $chrome: rgba(255, 255, 255, 0.5);
 // it the page scrolls instead. Fullscreen: the UA sheet pins the element to
 // the screen with `height: 100% !important`, so nothing here has to change.
 .workspace {
+  @include workspace-day-tokens;
   position: relative;
   display: flex;
   flex-direction: column;
   height: calc(100dvh - #{$nav-height});
   min-height: 520px;
+  color: var(--vw-ink);
   // The bench — the same atmosphere the intake and /bom stand on (dropFrame's
   // `.page`), repeated here because `.page` also carries that phase's padding
   // and the 1376px stack width, and the workspace is full-bleed.
-  background-color: #f2f4f9;
+  background-color: var(--vw-bench);
   background-image:
-    radial-gradient(1150px 540px at 12% -12%, rgba(185, 168, 224, 0.22), transparent 60%),
-    radial-gradient(950px 500px at 96% 0%, rgba(159, 183, 232, 0.2), transparent 58%),
-    radial-gradient(760px 420px at 58% 112%, rgba(217, 161, 184, 0.16), transparent 60%);
+    radial-gradient(1150px 540px at 12% -12%, var(--vw-wash-1), transparent 60%),
+    radial-gradient(950px 500px at 96% 0%, var(--vw-wash-2), transparent 58%),
+    radial-gradient(760px 420px at 58% 112%, var(--vw-wash-3), transparent 60%);
+  // Night: the instrument goes dark. The bench, every band and the drawer
+  // re-read the same names; the drawings are untouched.
+  &[data-mode='night'] {
+    @include workspace-night-tokens;
+    color-scheme: dark;
+  }
 }
 
-// ─── Top bar: the project, the views, fullscreen ──────────────────────────
+// ─── Top bar: the project, the views, night, fullscreen ───────────────────
 .topbar {
   display: flex;
   flex: 0 0 auto;
@@ -63,8 +68,8 @@ $chrome: rgba(255, 255, 255, 0.5);
   gap: 12px;
   min-height: 44px;
   padding: 0 8px 0 14px;
-  background: $chrome;
-  border-bottom: 1px solid $seam;
+  background: var(--vw-chrome);
+  border-bottom: 1px solid var(--vw-seam);
 }
 
 // The two end clusters share the leftover equally (`flex: 1 1 0`), so the tab
@@ -84,7 +89,7 @@ $chrome: rgba(255, 255, 255, 0.5);
   font-family: $font-mono;
   font-weight: 600;
   font-size: 0.95rem;
-  color: $ink;
+  color: var(--vw-ink);
   max-width: 28ch;
   @include truncate;
 }
@@ -92,11 +97,11 @@ $chrome: rgba(255, 255, 255, 0.5);
 .projectMeta {
   font-size: 0.8rem;
   white-space: nowrap;
-  color: $ink-3;
+  color: var(--vw-ink-3);
 }
 
 .openAnother {
-  @include bom-glass-control;
+  @include vw-glass-control;
   position: relative;
   flex: 0 0 auto;
   padding: 6px 10px;
@@ -120,12 +125,8 @@ $chrome: rgba(255, 255, 255, 0.5);
   margin: 0 auto;
   gap: 2px;
   padding: 3px;
-  background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28));
-  border: 1px solid rgba(26, 31, 35, 0.1);
+  @include vw-track;
   border-radius: 13px;
-  box-shadow:
-    inset 0 1px 2px rgba(60, 50, 90, 0.1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 .tab {
@@ -137,22 +138,18 @@ $chrome: rgba(255, 255, 255, 0.5);
   font-weight: 520;
   line-height: 1;
   white-space: nowrap;
-  color: #2b3137;
+  color: var(--vw-ink-ctl);
   background: transparent;
   border: 0;
   border-radius: 10px;
   cursor: pointer;
   transition: background-color 0.12s ease, color 0.12s ease;
+  // Ink-dark by day: the bright accent on the pale track is ~2.2:1, under the
+  // 3:1 a focus indicator needs. Night hands down the bright green (8.9:1).
+  @include vw-focus-ring;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.55);
-  }
-
-  // Ink-dark: the bright accent on this pale track is ~2.2:1, under the 3:1 a
-  // focus indicator needs.
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    background: var(--vw-hover-soft);
   }
 
   &[aria-selected='true'] {
@@ -187,22 +184,18 @@ $chrome: rgba(255, 255, 255, 0.5);
   font-size: 0.8rem;
   line-height: 1;
   white-space: nowrap;
-  color: #4b5158;
+  color: var(--vw-ink-2);
   list-style: none;
   border-radius: 9px;
   cursor: pointer;
+  @include vw-focus-ring;
 
   &::-webkit-details-marker {
     display: none;
   }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.7);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    background: var(--vw-hover);
   }
 }
 
@@ -212,7 +205,7 @@ $chrome: rgba(255, 255, 255, 0.5);
 }
 
 .notesList {
-  @include bom-card;
+  @include vw-card;
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
@@ -222,44 +215,70 @@ $chrome: rgba(255, 255, 255, 0.5);
   padding: 10px 14px 10px 30px;
   font-size: 0.8rem;
   line-height: 1.45;
-  color: #4b5158;
+  color: var(--vw-ink-2);
   border-radius: 12px;
 }
 
-// One glyph button on the top bar (fullscreen). Pressed = the same lit tint
-// the rail uses, so the two ends of the bar speak one language.
-.iconBtn {
+// A button on the top bar's end cluster. Pressed = the same lit tint the
+// rail's open tab wears, so the two ends of the bar speak one language.
+// 40px tall with a 2px halo: the 44px a finger needs.
+@mixin topbar-button {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  font-size: 20px;
   line-height: 1;
-  color: #2b3137;
+  color: var(--vw-ink-ctl);
   background: transparent;
   border: 0;
   border-radius: 10px;
   cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
   @include tap-target(-2px);
+  @include vw-focus-ring;
 
   &:hover {
-    color: $ink;
-    background: rgba(255, 255, 255, 0.7);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    color: var(--vw-ink);
+    background: var(--vw-hover);
   }
 
   &[aria-pressed='true'] {
-    color: #0c1a05;
-    background: rgba(68, 189, 19, 0.2);
-    box-shadow: inset 0 0 0 1px rgba(55, 162, 13, 0.55);
+    color: var(--vw-lit-ink);
+    background: var(--vw-lit-bg);
+    box-shadow: inset 0 0 0 1px var(--vw-lit-ring);
   }
+}
+
+// One glyph (fullscreen).
+.iconBtn {
+  @include topbar-button;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 20px;
+}
+
+// The night switch: the one control on the bar that carries a word, because
+// a moon on its own reads "it is night" as easily as "make it night". The
+// word is the button's name and never changes; pressed IS night.
+.modeBtn {
+  @include topbar-button;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px 0 8px;
+  font-family: $font-body;
+  font-size: 0.8rem;
+  font-weight: 520;
+  white-space: nowrap;
+}
+
+.modeGlyph {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.modeLabel {
+  line-height: 1;
 }
 
 // A missing sheet file is the one note that must not fold away: a strip under
@@ -268,10 +287,12 @@ $chrome: rgba(255, 255, 255, 0.5);
   margin: 0;
   padding: 8px 14px;
   font-size: 0.86rem;
-  color: $error-red;
-  background: rgba($error-red, 0.07);
+  // The rule stays the site's red in both modes; the words take the mode's
+  // alert ink, because $error-red itself is 3.3:1 on the night bench.
+  color: var(--vw-alert-ink);
+  background: var(--vw-alert-bg);
   border-left: 3px solid $error-red;
-  border-bottom: 1px solid $seam;
+  border-bottom: 1px solid var(--vw-seam);
 }
 
 // ─── Bench: the rail + drawer beside the stage ────────────────────────────
@@ -312,48 +333,20 @@ $chrome: rgba(255, 255, 255, 0.5);
 
   // The canvas frame is a bom-card on /bom, where it is a card among cards.
   // Here it is the window: flush to the rail and the bars, no radius, no cast
-  // shadow, the stage's own hairlines as its edge. DesignCanvas has no
-  // "flush" mode and the frame is its root, so the override lives at the host.
+  // shadow, the stage's own hairlines as its edge, and the bench's own ground
+  // (the day token IS the card's wash, so nothing changes by day; by night
+  // the frame around a loading drawing is dark). DesignCanvas has no "flush"
+  // mode and the frame is its root, so the override lives at the host.
   > :first-child {
     border: 0;
     border-radius: 0;
     box-shadow: none;
+    background: var(--vw-frame-bg);
   }
 }
 
-.chips {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 10px;
-}
-
-.chip {
-  @include bom-glass-control;
-  padding: 5px 10px;
-  font-size: 0.8rem;
-  line-height: 1;
-  cursor: pointer;
-
-  &[aria-current='true'] {
-    @include bom-primary-control;
-  }
-}
-
-// A sheet the renderer's basename-keyed file system could not take. Still
-// listed (the reader read it), visibly not selectable, and its click answers
-// with a toast rather than doing nothing. Composed onto `.chip` at the call
-// site, so it only needs the overrides.
-.chipDropped {
-  opacity: 0.6;
-  border-style: dashed;
-  cursor: not-allowed;
-}
-
-// One node, read by every dropped chip through aria-describedby. Public scope
-// has no shared sr-only utility and the >=2-consumer rule says not to invent one
-// for a single caller, so this mirrors the admin pages' own copy.
+// Public scope has no shared sr-only utility and the >=2-consumer rule says
+// not to invent one for a single caller, so this mirrors the admin pages' own copy.
 .srOnly {
   position: absolute;
   width: 1px;
@@ -369,9 +362,29 @@ $chrome: rgba(255, 255, 255, 0.5);
 // The BOM tab's panel. It sits below the drawing in source order and is shown
 // by `hidden`, so it needs no display of its own — declaring one here would
 // beat the UA sheet's `[hidden] { display: none }` exactly the way `.drawing`
-// above has to work around.
+// above has to work around. The table inside is a printed page (bom-card) in
+// both modes; only the bench's own prose around it takes the mode's ink.
 .bomPanel {
   padding: 14px 16px 28px;
+
+  .phaseText {
+    color: var(--vw-ink-3);
+  }
+
+  // The drop-frame's gold is 2.9:1 on the day bench and its red 3.3:1 on the
+  // night one; both prose lines stand on the bench here, so they read the
+  // mode's own inks.
+  .phaseWarn {
+    color: var(--vw-warn-ink);
+  }
+}
+
+.bomPanel,
+.stackupPanel {
+  .pageError {
+    color: var(--vw-alert-ink);
+    background: var(--vw-alert-bg);
+  }
 }
 
 // The Stackup tab's panel, on the same terms as `.bomPanel` above: shown by
@@ -397,7 +410,7 @@ $chrome: rgba(255, 255, 255, 0.5);
 .notice {
   margin: 10px 0 0;
   font-size: 0.78rem;
-  color: $text-secondary;
+  color: var(--vw-ink-3);
 
   a {
     color: inherit;
@@ -420,9 +433,9 @@ $chrome: rgba(255, 255, 255, 0.5);
   padding: 2px 14px;
   font-size: 0.72rem;
   line-height: 1.5;
-  color: $ink-3;
-  background: $chrome;
-  border-top: 1px solid $seam;
+  color: var(--vw-ink-3);
+  background: var(--vw-chrome);
+  border-top: 1px solid var(--vw-seam);
 }
 
 .statusCredit {
@@ -440,9 +453,10 @@ $chrome: rgba(255, 255, 255, 0.5);
   left: 50%;
   bottom: 36px;
   transform: translateX(-50%);
-  @include bom-card;
+  @include vw-card;
   padding: 10px 16px;
   font-size: 0.88rem;
+  color: var(--vw-ink);
   z-index: 50;
 }
 
@@ -515,5 +529,18 @@ $chrome: rgba(255, 255, 255, 0.5);
 
   .statusLine {
     padding: 3px 12px;
+  }
+}
+
+// The mode switch itself is instant — a custom property does not tween, and a
+// whole workspace fading between day and night would be a screen-wide effect
+// for a one-bit choice. The only motion on the bar is the controls' own
+// hover, and none of it under reduced motion.
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .iconBtn,
+  .modeBtn,
+  .openAnother {
+    transition: none;
   }
 }

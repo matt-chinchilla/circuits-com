@@ -27,9 +27,11 @@ import { footprintName, formatMm, type PartFacts } from '../partFacts';
 import type { BoardViewState, LayerGroupId, PanelLayer, SideFilter } from '../boardView';
 import { readDock, writeDock, type PanelDock, type PanelTab } from '../panelDock';
 import { LayersTab, ObjectsTab, type BoardContext, type ViewUpdate } from './BoardControls';
+import SheetsTab, { type SheetRow } from './SheetsTab';
 import styles from './BoardPanel.module.scss';
 
 export type { PanelTab } from '../panelDock';
+export type { SheetRow } from './SheetsTab';
 
 export type ShowOn = 'schematic' | 'board' | 'board3d';
 
@@ -52,6 +54,19 @@ export interface BoardPanelBoard {
   onOpen?: () => void;
 }
 
+/** The schematic half of the panel: its sheets. Absent for a board-only
+ *  project. */
+export interface BoardPanelSheets {
+  rows: readonly SheetRow[];
+  /** The sheet on screen. */
+  active: string;
+  droppedHint: string;
+  /** A sheet was chosen: the page shows it on the Schematic tab. */
+  onChoose: (path: string) => void;
+  /** The reader opened Sheets: the page draws the thumbnails then. */
+  onOpen?: () => void;
+}
+
 export interface BoardPanelProps {
   facts: PartFacts | null;
   /** Every designator the project names — the search's suggestions. */
@@ -69,6 +84,7 @@ export interface BoardPanelProps {
   /** The search field took focus — the page reads the board's placements then. */
   onSearchFocus?: () => void;
   board?: BoardPanelBoard | null;
+  sheets?: BoardPanelSheets | null;
 }
 
 const DASH = '—';
@@ -76,9 +92,15 @@ const SIDE: Record<'F' | 'B', string> = { F: 'Front', B: 'Back' };
 const MATCH_LABEL = { exact: 'Exact match', approx: 'Similar part', live: 'Live match' } as const;
 const LIFECYCLE_LABEL: Record<string, string> = { active: 'Active', nrnd: 'Not for new designs', obsolete: 'Obsolete' };
 const SHOW_ON: readonly [ShowOn, string][] = [['schematic', 'Schematic'], ['board', 'Board'], ['board3d', '3D']];
-/** The rail's tabs, with the Phosphor glyph each is drawn as: a chip for the
- *  part, a stack for the layers, a trace-and-pads for the objects. */
-const PANEL_TABS: readonly [PanelTab, string, string][] = [['parts', 'Parts', 'cpu'], ['layers', 'Layers', 'stack'], ['objects', 'Objects', 'circuitry']];
+/** The rail's tabs, with the Phosphor glyph each is drawn as: pages for the
+ *  sheets, a chip for the part, a stack for the layers, a trace-and-pads for
+ *  the objects. */
+const PANEL_TABS: readonly [PanelTab, string, string][] = [
+  ['sheets', 'Sheets', 'files'],
+  ['parts', 'Parts', 'cpu'],
+  ['layers', 'Layers', 'stack'],
+  ['objects', 'Objects', 'circuitry'],
+];
 
 /**
  * Up to this width the panel is the bottom SHEET, not the docked drawer, and
@@ -113,7 +135,7 @@ function sheetName(path: string): string {
 }
 
 const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardPanel(
-  { facts, knownRefs, views, current, onSearch, onClear, onShow, onPriceBom, onSearchFocus, board },
+  { facts, knownRefs, views, current, onSearch, onClear, onShow, onPriceBom, onSearchFocus, board, sheets },
   ref,
 ) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -132,11 +154,18 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
    *  Objects and back finds them as they were left. Reset with the project. */
   const [side, setSide] = useState<SideFilter>('both');
   const [collapsed, setCollapsed] = useState<ReadonlySet<LayerGroupId>>(() => new Set());
-  /** A tab is offered when the project has a board; Layers and Objects are
-   *  usable only while a drawing of it is on screen. */
-  const usable = (id: PanelTab) => id === 'parts' || (board != null && board.context != null);
-  // Without a board there is nothing but Parts to show.
-  const shownTab: PanelTab = board == null ? 'parts' : dock.tab;
+  /** Sheets is offered for a project with a schematic, Layers and Objects for
+   *  one with a board — and those two are usable only while a drawing of the
+   *  board is on screen. Parts is always there. */
+  const offered = PANEL_TABS.filter(([id]) => id === 'parts' || (id === 'sheets' ? sheets != null : board != null));
+  const usable = (id: PanelTab) => {
+    if (id === 'parts') return true;
+    if (id === 'sheets') return sheets != null;
+    return board != null && board.context != null;
+  };
+  const hasTabs = offered.length > 1;
+  // A remembered tab this project does not offer falls back to Parts.
+  const shownTab: PanelTab = offered.some(([id]) => id === dock.tab) ? dock.tab : 'parts';
   // Phone only: the sheet is either peeking (one row) or open. A selection made
   // OUTSIDE the panel peeks — the essentials are on that row and the drawing
   // the reader just tapped stays in view; a tap on the row opens the rest. A
@@ -221,28 +250,30 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
     }
     setDock({ tab: id, docked: true });
     setOpen(true);
-    if (id !== 'parts') board?.onOpen?.();
+    if (id === 'sheets') sheets?.onOpen?.();
+    else if (id !== 'parts') board?.onOpen?.();
   };
 
   /** The same roving tablist as the page's own: one tab stop, the arrows and
    *  Home/End move focus and selection, skipping a tab that is disabled. The
    *  rail is vertical on a desktop and a row on a phone, so both axes move. */
   const onTabKeys = (e: KeyboardEvent<HTMLDivElement>) => {
-    const offered = PANEL_TABS.map(([id]) => id).filter(usable);
-    const here = offered.indexOf(shownTab);
+    const open = offered.map(([id]) => id).filter(usable);
+    const here = open.indexOf(shownTab);
     let next: number;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (here + 1) % offered.length;
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (here - 1 + offered.length) % offered.length;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (here + 1) % open.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (here - 1 + open.length) % open.length;
     else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = offered.length - 1;
+    else if (e.key === 'End') next = open.length - 1;
     else return;
-    const target = offered[next];
+    const target = open[next];
     if (target == null) return;
     e.preventDefault();
     // Moving along the rail selects; it never closes what the reader has open.
     setDock({ tab: target, docked: true });
     setOpen(true);
-    if (target !== 'parts') board?.onOpen?.();
+    if (target === 'sheets') sheets?.onOpen?.();
+    else if (target !== 'parts') board?.onOpen?.();
     tabRefs.current[target]?.focus();
   };
 
@@ -250,24 +281,24 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
   const panelId = (id: PanelTab) => `${tabIds}-panel-${id}`;
   const hintId = `${tabIds}-hint`;
   const bodyId = `${listId}-body`;
-  const openLabel = board == null ? 'Part' : PANEL_TABS.find(([id]) => id === shownTab)?.[1] ?? 'Part';
+  const openLabel = !hasTabs ? 'Part' : PANEL_TABS.find(([id]) => id === shownTab)?.[1] ?? 'Part';
 
   return (
     <aside
       className={styles.panel}
-      aria-label={board == null ? 'Part' : 'Board panel'}
+      aria-label={!hasTabs ? 'Part' : board != null ? 'Board panel' : 'Design panel'}
       data-open={open || undefined}
       data-docked={dock.docked || undefined}
     >
       <div className={styles.rail}>
-        {board != null ? (
-          <div className={styles.railTabs} role="tablist" aria-label="Board panel" onKeyDown={onTabKeys}>
-            {board.context == null && (
+        {hasTabs ? (
+          <div className={styles.railTabs} role="tablist" aria-label={board != null ? 'Board panel' : 'Design panel'} onKeyDown={onTabKeys}>
+            {board != null && board.context == null && (
               <span id={hintId} className={styles.srOnly}>
                 {board.hint}
               </span>
             )}
-            {PANEL_TABS.map(([id, label, glyph]) => {
+            {offered.map(([id, label, glyph]) => {
               const disabled = !usable(id);
               const selected = shownTab === id;
               return (
@@ -282,7 +313,7 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
                   aria-controls={selected ? panelId(id) : undefined}
                   aria-disabled={disabled || undefined}
                   aria-describedby={disabled ? hintId : undefined}
-                  title={disabled ? board.hint : label}
+                  title={disabled && board != null ? board.hint : label}
                   tabIndex={selected ? 0 : -1}
                   ref={(el) => {
                     tabRefs.current[id] = el;
@@ -344,7 +375,13 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
         </div>
 
         <div id={bodyId} className={styles.body}>
-          {board != null && shownTab !== 'parts' && (
+          {sheets != null && shownTab === 'sheets' && (
+            <div id={panelId('sheets')} role="tabpanel" aria-labelledby={tabId('sheets')} className={styles.tabBody}>
+              <SheetsTab rows={sheets.rows} active={sheets.active} droppedHint={sheets.droppedHint} onChoose={sheets.onChoose} />
+            </div>
+          )}
+
+          {board != null && (shownTab === 'layers' || shownTab === 'objects') && (
             <div id={panelId(shownTab)} role="tabpanel" aria-labelledby={tabId(shownTab)} className={styles.tabBody}>
               {board.context == null ? (
                 <p className={styles.note}>{board.hint}</p>
@@ -367,9 +404,9 @@ const BoardPanel = forwardRef<BoardPanelHandle, BoardPanelProps>(function BoardP
 
           {shownTab === 'parts' && (
             <div
-              id={board == null ? undefined : panelId('parts')}
-              role={board == null ? undefined : 'tabpanel'}
-              aria-labelledby={board == null ? undefined : tabId('parts')}
+              id={!hasTabs ? undefined : panelId('parts')}
+              role={!hasTabs ? undefined : 'tabpanel'}
+              aria-labelledby={!hasTabs ? undefined : tabId('parts')}
               className={styles.tabBody}
             >
               <form className={styles.search} onSubmit={submit} role="search">

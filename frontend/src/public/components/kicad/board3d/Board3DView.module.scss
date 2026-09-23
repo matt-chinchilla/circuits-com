@@ -40,12 +40,12 @@
   display: inline-flex;
   gap: 2px;
   padding: 3px;
-  background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28));
-  border: 1px solid rgba(26, 31, 35, 0.1);
+  // The viewer's workspace hands its tokens down (day or night); the values
+  // after the comma are the day set, for a host with no workspace.
+  background: linear-gradient(var(--vw-track-a, rgba(255, 255, 255, 0.5)), var(--vw-track-b, rgba(255, 255, 255, 0.28)));
+  border: 1px solid var(--vw-glass-border, rgba(26, 31, 35, 0.1));
   border-radius: 13px;
-  box-shadow:
-    inset 0 1px 2px rgba(60, 50, 90, 0.1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  box-shadow: var(--vw-track-inset, inset 0 1px 2px rgba(60, 50, 90, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.3));
 }
 
 // The word before the View track. Quiet: it names what the three states act
@@ -59,7 +59,7 @@
 .trackLabel {
   font-size: 0.8rem;
   font-weight: 520;
-  color: #4b5158;
+  color: var(--vw-ink-2, #4b5158);
   white-space: nowrap;
 }
 
@@ -73,7 +73,7 @@
   font-size: 0.88rem;
   font-weight: 520;
   line-height: 1;
-  color: #2b3137;
+  color: var(--vw-ink-ctl, #2b3137);
   background: transparent;
   border: 0;
   border-radius: 10px;
@@ -81,13 +81,14 @@
   transition: background-color 0.12s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.55);
+    background: var(--vw-hover-soft, rgba(255, 255, 255, 0.55));
   }
 
   // Ink-dark, not the bright accent: #44bd13 on this pale track is ~2.2:1,
-  // under the 3:1 a focus indicator needs.
+  // under the 3:1 a focus indicator needs. (The night set hands down the
+  // bright green instead, which is 8.9:1 on the dark bench.)
   &:focus-visible {
-    outline: 2px solid $executive-blue;
+    outline: 2px solid var(--vw-focus, #{$executive-blue});
     outline-offset: -2px;
   }
 
@@ -276,7 +277,7 @@ $leader-shadow: rgba(10, 14, 12, 0.7);
 // The footer's ink — the part panel's secondary ink (4.7-4.8:1 on the bench).
 // $text-secondary (#6b7280) measured 4.3-4.4:1 there, under AA for text this
 // small, and the caption is the tab's honesty.
-$footer-ink: #676c71;
+$footer-ink: var(--vw-ink-3, #676c71);
 
 // The footer under the board: the caption that carries every admission this
 // tab makes, and the count of what was drawn. One line at width, the stats

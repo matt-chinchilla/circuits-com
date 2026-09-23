@@ -1,0 +1,203 @@
+@use '@shared/styles/variables' as *;
+
+// The workspace's palette as CSS custom properties, in two sets: DAY (the
+// bench the BOM tool and the intake stand on — every value here is the one
+// the three viewer stylesheets carried as a literal before 2026-09-22) and
+// NIGHT (owner: "everything is bright all the time"). The workspace root
+// declares the day set and re-declares the night set under
+// `[data-mode='night']`; the viewer's own stylesheets consume the names and
+// carry no literal ink of their own. The two canvas hosts (DesignCanvas,
+// Board3DView) are also mounted on /bom, outside any workspace, so THEY read
+// the names with the day value as a fallback.
+//
+// Night is the instrument going dark, not the site: the navbar is already the
+// steel theme's near-black, the 3D canvas is dark in both, the schematic is a
+// white sheet on the desk either way, and the BOM table and the stackup stay
+// the printed pages they are. Contrast (WCAG, measured against the night
+// bench #14181c and the drawer over it, ~#1b2025): ink 13.9:1, ink-2 10:1,
+// ink-3 5.8:1, the designator green 10:1, the focus ring 8.9:1.
+
+@mixin workspace-day-tokens {
+  --vw-bench: #f2f4f9;
+  --vw-wash-1: rgba(185, 168, 224, 0.22);
+  --vw-wash-2: rgba(159, 183, 232, 0.2);
+  --vw-wash-3: rgba(217, 161, 184, 0.16);
+  --vw-chrome: rgba(255, 255, 255, 0.5);
+  --vw-rail: rgba(255, 255, 255, 0.4);
+  --vw-drawer: rgba(255, 255, 255, 0.55);
+  --vw-seam: rgba(26, 31, 35, 0.1);
+  --vw-ink: #1a1f23;
+  --vw-ink-2: #4b5158;
+  --vw-ink-3: #676c71;
+  --vw-ink-4: #8a9099;
+  --vw-ink-ctl: #2b3137;
+  --vw-hover: rgba(255, 255, 255, 0.7);
+  --vw-hover-soft: rgba(255, 255, 255, 0.55);
+  --vw-surface: rgba(255, 255, 255, 0.72);
+  --vw-surface-border: rgba(26, 31, 35, 0.14);
+  --vw-surface-inset: inset 0 1px 2px rgba(60, 50, 90, 0.08);
+  --vw-glass-a: rgba(255, 255, 255, 0.62);
+  --vw-glass-b: rgba(255, 255, 255, 0.3);
+  --vw-glass-border: rgba(26, 31, 35, 0.1);
+  --vw-glass-rim: rgba(255, 255, 255, 0.38);
+  --vw-glass-top: rgba(255, 255, 255, 0.85);
+  --vw-track-a: rgba(255, 255, 255, 0.5);
+  --vw-track-b: rgba(255, 255, 255, 0.28);
+  --vw-track-inset: inset 0 1px 2px rgba(60, 50, 90, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  --vw-card:
+    radial-gradient(115% 78% at 0% 0%, rgba(246, 242, 251, 0.8), transparent 56%),
+    radial-gradient(105% 72% at 100% 0%, rgba(159, 183, 232, 0.26), transparent 54%),
+    radial-gradient(95% 88% at 100% 100%, rgba(217, 161, 184, 0.2), transparent 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.93), rgba(255, 255, 255, 0.85));
+  --vw-card-solid: #f7f8fb;
+  --vw-card-border: rgba(143, 134, 172, 0.2);
+  --vw-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(255, 255, 255, 0.34), 0 1px 2px rgba(38, 32, 58, 0.06), 0 16px 34px -16px rgba(117, 105, 154, 0.36);
+  --vw-sheet-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 -6px 24px -8px rgba(38, 32, 58, 0.28);
+  --vw-key-bg: rgba(255, 255, 255, 0.8);
+  --vw-lit-bg: rgba(68, 189, 19, 0.2);
+  --vw-lit-ring: rgba(55, 162, 13, 0.55);
+  --vw-lit-ink: #0c1a05;
+  --vw-focus: #{$executive-blue};
+  --vw-silk-ink: #2c5f45;
+  --vw-swatch-rim: rgba(26, 31, 35, 0.25);
+  --vw-link: #{$executive-blue};
+  --vw-alert-bg: rgba(192, 57, 43, 0.07);
+  --vw-alert-ink: #{$error-red};
+  // The gold the drop-frame gives a phase warning is 2.9:1 on this bench; the
+  // tier chip's darker gold reads at 5.6:1 and is the same family.
+  --vw-warn-ink: #6d5a1b;
+  --vw-thumb-paper: #fbfbf8;
+  --vw-frame-bg:
+    radial-gradient(115% 78% at 0% 0%, rgba(246, 242, 251, 0.8), transparent 56%),
+    radial-gradient(105% 72% at 100% 0%, rgba(159, 183, 232, 0.26), transparent 54%),
+    radial-gradient(95% 88% at 100% 100%, rgba(217, 161, 184, 0.2), transparent 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.93), rgba(255, 255, 255, 0.85));
+}
+
+@mixin workspace-night-tokens {
+  --vw-bench: #14181c;
+  --vw-wash-1: rgba(68, 189, 19, 0.07);
+  --vw-wash-2: rgba(79, 127, 196, 0.1);
+  --vw-wash-3: rgba(200, 52, 52, 0.05);
+  --vw-chrome: rgba(255, 255, 255, 0.04);
+  --vw-rail: rgba(255, 255, 255, 0.03);
+  --vw-drawer: rgba(255, 255, 255, 0.04);
+  --vw-seam: rgba(255, 255, 255, 0.1);
+  --vw-ink: #e6e9ec;
+  --vw-ink-2: #c3c9cf;
+  --vw-ink-3: #939ba3;
+  --vw-ink-4: #6f777f;
+  --vw-ink-ctl: #d6dbe0;
+  --vw-hover: rgba(255, 255, 255, 0.09);
+  --vw-hover-soft: rgba(255, 255, 255, 0.07);
+  --vw-surface: rgba(255, 255, 255, 0.06);
+  --vw-surface-border: rgba(255, 255, 255, 0.16);
+  --vw-surface-inset: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  --vw-glass-a: rgba(255, 255, 255, 0.11);
+  --vw-glass-b: rgba(255, 255, 255, 0.05);
+  --vw-glass-border: rgba(255, 255, 255, 0.14);
+  --vw-glass-rim: rgba(255, 255, 255, 0.06);
+  --vw-glass-top: rgba(255, 255, 255, 0.12);
+  --vw-track-a: rgba(0, 0, 0, 0.32);
+  --vw-track-b: rgba(0, 0, 0, 0.22);
+  --vw-track-inset: inset 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --vw-card: linear-gradient(180deg, #232930, #1b2025);
+  --vw-card-solid: #1b2025;
+  --vw-card-border: rgba(255, 255, 255, 0.12);
+  --vw-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 34px -16px rgba(0, 0, 0, 0.7);
+  --vw-sheet-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 -6px 24px -8px rgba(0, 0, 0, 0.7);
+  --vw-key-bg: rgba(255, 255, 255, 0.08);
+  --vw-lit-bg: rgba(68, 189, 19, 0.22);
+  --vw-lit-ring: rgba(98, 217, 43, 0.6);
+  --vw-lit-ink: #d9f5c9;
+  --vw-focus: #62d92b;
+  --vw-silk-ink: #8fd9a8;
+  --vw-swatch-rim: rgba(255, 255, 255, 0.28);
+  --vw-link: #8fd9a8;
+  --vw-alert-bg: rgba(192, 57, 43, 0.18);
+  // $error-red itself is 3.3:1 on the night bench — the strip keeps its red
+  // rule, the words go to a salmon that reads (8.7:1).
+  --vw-alert-ink: #f4a08f;
+  --vw-warn-ink: #e0c96a;
+  --vw-thumb-paper: #dfe3de;
+  --vw-frame-bg: #14181c;
+}
+
+// ── The control recipes, on the tokens ─────────────────────────────────────
+// `bom-glass-control` and `bom-card` (public/styles/_bomMaterial.scss) are the
+// same recipes with the day values written in; these read the names instead
+// so one rule draws right in both modes.
+
+@mixin vw-glass-control {
+  background: linear-gradient(var(--vw-glass-a), var(--vw-glass-b));
+  border: 1px solid var(--vw-glass-border);
+  border-radius: 11px;
+  color: var(--vw-ink);
+  font-weight: 520;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 1px var(--vw-glass-rim),
+    inset 0 1px 0 var(--vw-glass-top),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.04),
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 6px 16px -6px rgba(0, 0, 0, 0.18);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s, filter 0.18s;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px) scale(1.02);
+    box-shadow:
+      inset 0 0 0 1px var(--vw-glass-rim),
+      inset 0 1px 0 var(--vw-glass-top),
+      inset 0 -1px 1px rgba(0, 0, 0, 0.05),
+      0 4px 8px rgba(0, 0, 0, 0.12),
+      0 14px 28px -8px rgba(0, 0, 0, 0.26);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+  }
+}
+
+// The recessed track the tabs and every segmented control sit in.
+@mixin vw-track {
+  background: linear-gradient(var(--vw-track-a), var(--vw-track-b));
+  border: 1px solid var(--vw-glass-border);
+  box-shadow: var(--vw-track-inset);
+}
+
+// A text field.
+@mixin vw-input {
+  color: var(--vw-ink);
+  background: var(--vw-surface);
+  border: 1px solid var(--vw-surface-border);
+  box-shadow: var(--vw-surface-inset);
+  outline: none;
+
+  // The tertiary ink, not the fourth: a placeholder is text (4.5:1 applies),
+  // and ink-4 is the DISABLED colour, exempt, 3.2:1 by day and 3.9:1 by night.
+  &::placeholder {
+    font-family: $font-body;
+    color: var(--vw-ink-3);
+  }
+
+  &:focus-visible {
+    border-color: rgba(68, 189, 19, 0.7);
+    box-shadow: var(--vw-surface-inset), 0 0 0 3px rgba(68, 189, 19, 0.18);
+  }
+}
+
+// A floating card: the notes popover, the toast.
+@mixin vw-card {
+  background: var(--vw-card);
+  border: 1px solid var(--vw-card-border);
+  border-radius: 14px;
+  box-shadow: var(--vw-card-shadow);
+}
+
+@mixin vw-focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--vw-focus);
+    outline-offset: -2px;
+  }
+}

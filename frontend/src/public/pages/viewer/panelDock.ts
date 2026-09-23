@@ -11,7 +11,7 @@
 // hand-edited value must validate to the default, never reach the rail as a
 // tab it does not have.
 
-export type PanelTab = 'parts' | 'layers' | 'objects';
+export type PanelTab = 'sheets' | 'parts' | 'layers' | 'objects';
 
 export interface PanelDock {
   tab: PanelTab;
@@ -26,7 +26,7 @@ export const PANEL_DOCK_KEY = 'cc.viewer.panel';
  *  hint live there. */
 export const DEFAULT_DOCK: PanelDock = Object.freeze({ tab: 'parts', docked: true });
 
-const TABS: readonly PanelTab[] = ['parts', 'layers', 'objects'];
+const TABS: readonly PanelTab[] = ['sheets', 'parts', 'layers', 'objects'];
 
 export function isPanelTab(value: unknown): value is PanelTab {
   return typeof value === 'string' && (TABS as readonly string[]).includes(value);

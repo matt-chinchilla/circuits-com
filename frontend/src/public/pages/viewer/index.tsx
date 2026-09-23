@@ -22,8 +22,10 @@ import type { KicadProject } from '@public/services/kicad/types';
 import { clearDesignSession, getDesignSession, openDesign, type DesignSession } from '@public/services/designSession';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import ViewerIntake from './components/ViewerIntake';
-import BoardPanel, { type BoardPanelHandle, type ShowOn } from './components/BoardPanel';
+import BoardPanel, { type BoardPanelHandle, type SheetRow, type ShowOn } from './components/BoardPanel';
+import { readSheetThumbnail, type SheetThumbnail } from '@public/services/kicad/sheetThumbnail';
 import { knownRefs, partFacts, resolveRef } from './partFacts';
+import { readMode, writeMode, type ViewerMode } from './viewerMode';
 import {
   EMPTY_BOARD_VIEW,
   applyToCanvas,
@@ -60,12 +62,6 @@ export const POSITIONING =
 const DROPPED_SHEET_HINT =
   'Another sheet in this project has the same filename, so only one of them can be drawn.';
 
-/** One visually-hidden node carries the reason for every dropped chip; the
- *  chips point at it with `aria-describedby`, so the reason is ANNOUNCED rather
- *  than living only in a `title` (inconsistently read, invisible on touch) and
- *  the dashed styling. */
-const DROPPED_REASON_ID = 'viewer-unrenderable-sheet-reason';
-
 /** The same fact as a toast. `ref` is present when the gesture was about a
  *  designator rather than the chip itself — the reader needs to know which part
  *  they clicked went nowhere, not only that some sheet cannot be drawn. */
@@ -95,9 +91,9 @@ function refFromHash(hash: string): string | null {
   }
 }
 
-function sheetLabel(project: KicadProject, path: string): string {
-  const stem = basename(path).replace(/\.kicad_sch$/i, '');
-  return path === project.root ? `${stem} (root)` : stem;
+/** `sub/io_banks.kicad_sch` → `io_banks`. */
+function sheetStem(path: string): string {
+  return basename(path).replace(/\.kicad_sch$/i, '');
 }
 
 /**
@@ -222,6 +218,10 @@ export default function ViewerPage() {
   /** Has the reader opened Layers or Objects for THIS project? The same one-way
    *  latch as `stackupSeen`: the file's tables are read then, not on open. */
   const [boardTablesSeen, setBoardTablesSeen] = useState(false);
+  /** Has the reader opened Sheets for THIS project? The same latch: the
+   *  thumbnails re-read every sheet's lib_symbols (tens of ms each), so they
+   *  are drawn on the first visit to the tab, never on project open. */
+  const [sheetsSeen, setSheetsSeen] = useState(false);
   const canvasRef = useRef<DesignCanvasHandle>(null);
   const panelRef = useRef<BoardPanelHandle>(null);
   /**
@@ -289,6 +289,7 @@ export default function ViewerPage() {
     setCanvasLayers(NO_LAYERS);
     setCanvasNets(NO_NETS);
     setBoardTablesSeen(false);
+    setSheetsSeen(false);
   }, []);
 
   // The session is opened HERE and only here — never in an effect. React 19's
@@ -765,7 +766,7 @@ export default function ViewerPage() {
   };
 
   const chooseSheet = (path: string) => {
-    // A sheet chip is a newer gesture than any focus still in flight. The
+    // A sheet row is a newer gesture than any focus still in flight. The
     // controller yields the view to it; this hands it the toast to match.
     focusSeq.current += 1;
     if (droppedSheets.has(path)) {
@@ -773,7 +774,32 @@ export default function ViewerPage() {
       return;
     }
     setActiveSheet(path);
+    // The rows live in the drawer, on every tab: choosing one is a trip to
+    // the Schematic tab as well as to the sheet.
+    setTab('schematic');
   };
+
+  /** The Sheets tab's pictures, read from the files on the first visit. */
+  const sheetThumbs = useMemo(() => {
+    if (session == null || !sheetsSeen) return null;
+    const out = new Map<string, SheetThumbnail | null>();
+    for (const s of session.project.sheets) out.set(s.path, readSheetThumbnail(s.text));
+    return out;
+  }, [session, sheetsSeen]);
+
+  const sheetRows = useMemo<SheetRow[]>(
+    () =>
+      session == null
+        ? []
+        : session.project.sheets.map((s) => ({
+            path: s.path,
+            label: sheetStem(s.path),
+            root: s.path === session.project.root,
+            dropped: droppedSheets.has(s.path),
+            thumbnail: sheetThumbs?.get(s.path) ?? null,
+          })),
+    [session, droppedSheets, sheetThumbs],
+  );
 
   const drawingVisible = tab === 'schematic' || tab === 'board';
   /** The 2D drawing will not come (no WebGL, a timeout, an error): the Board
@@ -807,6 +833,19 @@ export default function ViewerPage() {
     else void el.requestFullscreen().catch(() => undefined);
   };
   const workspaceEl = useCallback(() => workspaceRef.current, []);
+
+  /**
+   * Day or night (owner, 2026-09-22): one attribute on the workspace root that
+   * its stylesheets read. Remembered per browser; a first visit follows the
+   * system. Written on the CLICK, not on mount, so a reader who never touched
+   * it keeps following the system when it changes.
+   */
+  const [mode, setMode] = useState<ViewerMode>(() => readMode());
+  const toggleMode = () => {
+    const next: ViewerMode = mode === 'night' ? 'day' : 'night';
+    writeMode(next);
+    setMode(next);
+  };
 
   /** What the reader skipped or could not find: the strip's notes, folded
    *  behind a count in the top bar. */
@@ -858,7 +897,7 @@ export default function ViewerPage() {
         // The workspace: one full-height instrument. The band above the page
         // is not drawn here — the top bar names the project, and every pixel
         // below the navbar belongs to the tools and the stage.
-        <div ref={workspaceRef} className={styles.workspace} data-view={tab}>
+        <div ref={workspaceRef} className={styles.workspace} data-view={tab} data-mode={mode}>
           <div className={styles.topbar}>
             <div className={styles.project}>
               <span className={styles.projectName}>{session.project.name}</span>
@@ -911,6 +950,21 @@ export default function ViewerPage() {
                   </ul>
                 </details>
               )}
+              {/* One toggle, named by its word: "Night" pressed is night, the
+                  same lit tint the rail's open tab wears. The name never
+                  changes — the state is aria-pressed — so a screen reader
+                  hears "Night, toggle button, pressed", not a label that
+                  flips under it. */}
+              <button
+                type="button"
+                className={styles.modeBtn}
+                onClick={toggleMode}
+                aria-pressed={mode === 'night'}
+                title={mode === 'night' ? 'Back to day' : 'Switch to night'}
+              >
+                <Icon name="moon" className={styles.modeGlyph} />
+                <span className={styles.modeLabel}>Night</span>
+              </button>
               {fullscreenEnabled && (
                 <button
                   type="button"
@@ -950,6 +1004,17 @@ export default function ViewerPage() {
               onShow={showOn}
               onPriceBom={() => setTab('bom')}
               onSearchFocus={() => setPlacementsSeen(true)}
+              sheets={
+                session.project.root == null
+                  ? null
+                  : {
+                      rows: sheetRows,
+                      active: activeSheet ?? session.project.root,
+                      droppedHint: DROPPED_SHEET_HINT,
+                      onChoose: chooseSheet,
+                      onOpen: () => setSheetsSeen(true),
+                    }
+              }
               board={
                 session.project.board == null
                   ? null
@@ -966,36 +1031,6 @@ export default function ViewerPage() {
             />
 
             <div className={styles.stage}>
-              {/* Inside the stage, not above it: only the drawing gives up the
-                  row's height, so the drawer beside it never jumps on a switch
-                  to and from Schematic. */}
-              {tab === 'schematic' && session.project.sheets.length > 1 && (
-                <div className={styles.chips} role="group" aria-label="Sheets">
-                  {droppedSheets.size > 0 && (
-                    <span id={DROPPED_REASON_ID} className={styles.srOnly}>
-                      {DROPPED_SHEET_HINT}
-                    </span>
-                  )}
-                  {session.project.sheets.map((s) => {
-                    const dropped = droppedSheets.has(s.path);
-                    return (
-                      <button
-                        key={s.path}
-                        type="button"
-                        className={dropped ? `${styles.chip} ${styles.chipDropped}` : styles.chip}
-                        aria-current={(activeSheet ?? session.project.root) === s.path}
-                        aria-disabled={dropped || undefined}
-                        aria-describedby={dropped ? DROPPED_REASON_ID : undefined}
-                        title={dropped ? DROPPED_SHEET_HINT : undefined}
-                        onClick={() => chooseSheet(s.path)}
-                      >
-                        {sheetLabel(session.project, s.path)}
-                        {dropped && <span aria-hidden="true"> &#9888;</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
               <div
                 id={PANEL_ID.drawing}
                 role="tabpanel"

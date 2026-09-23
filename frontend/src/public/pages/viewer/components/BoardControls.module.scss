@@ -1,6 +1,7 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
 @use '@public/styles/bomMaterial' as *;
+@use '../workspaceTokens' as *;
 
 // The Layers and Objects tabs of the Board panel. Same hairline list and type
 // as the part facts beside them: every row is at least 44px tall so a finger
@@ -9,10 +10,12 @@
 // (`pointer: fine`) the rows tighten to 36px, the density a layer tree has in
 // every desktop CAD tool; the 44px floor is for fingers.
 
-$hair: rgba(26, 31, 35, 0.1);
-$ink: #1a1f23;
-$ink-2: #4b5158;
-$ink-3: #676c71;
+// The workspace's tokens (../_workspaceTokens.scss), so the same rule draws
+// right by day and by night.
+$hair: var(--vw-seam);
+$ink: var(--vw-ink);
+$ink-2: var(--vw-ink-2);
+$ink-3: var(--vw-ink-3);
 $row: 44px;
 $row-fine: 36px;
 
@@ -53,12 +56,8 @@ $row-fine: 36px;
   display: inline-flex;
   gap: 2px;
   padding: 2px;
-  background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28));
-  border: 1px solid rgba(26, 31, 35, 0.1);
+  @include vw-track;
   border-radius: 10px;
-  box-shadow:
-    inset 0 1px 2px rgba(60, 50, 90, 0.1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 .segBtn {
@@ -70,20 +69,16 @@ $row-fine: 36px;
   font-weight: 520;
   line-height: 1;
   white-space: nowrap;
-  color: #2b3137;
+  color: var(--vw-ink-ctl);
   background: transparent;
   border: 0;
   border-radius: 8px;
   cursor: pointer;
   @include tap-target(-7px 0);
+  @include vw-focus-ring;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.55);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    background: var(--vw-hover-soft);
   }
 
   &[aria-pressed='true'] {
@@ -116,15 +111,11 @@ $row-fine: 36px;
   border-radius: 7px;
   cursor: pointer;
   @include tap-target(-6px 0);
+  @include vw-focus-ring;
 
   &:hover {
     color: $ink;
-    background: rgba(255, 255, 255, 0.6);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    background: var(--vw-hover-soft);
   }
 }
 
@@ -170,14 +161,10 @@ $row-fine: 36px;
   border: 0;
   border-radius: 8px;
   cursor: pointer;
+  @include vw-focus-ring;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.6);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    background: var(--vw-hover-soft);
   }
 }
 
@@ -271,7 +258,7 @@ $row-fine: 36px;
   }
 
   input:focus-visible {
-    outline: 2px solid $executive-blue;
+    outline: 2px solid var(--vw-focus);
     outline-offset: 2px;
   }
 }
@@ -280,7 +267,7 @@ $row-fine: 36px;
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  box-shadow: inset 0 0 0 1px rgba(26, 31, 35, 0.25);
+  box-shadow: inset 0 0 0 1px var(--vw-swatch-rim);
 }
 
 .name {
@@ -296,21 +283,17 @@ $row-fine: 36px;
   border-radius: 8px;
   cursor: pointer;
   @include truncate;
+  @include vw-focus-ring;
 
   &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.6);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    background: var(--vw-hover-soft);
   }
 
   &[aria-pressed='true'] {
     font-weight: 600;
-    color: #0c1a05;
-    background: rgba(68, 189, 19, 0.2);
-    box-shadow: inset 0 0 0 1px rgba(55, 162, 13, 0.55);
+    color: var(--vw-lit-ink);
+    background: var(--vw-lit-bg);
+    box-shadow: inset 0 0 0 1px var(--vw-lit-ring);
   }
 
   &:disabled {
@@ -389,7 +372,7 @@ $row-fine: 36px;
   cursor: pointer;
 
   &:focus-visible {
-    outline: 2px solid $executive-blue;
+    outline: 2px solid var(--vw-focus);
     outline-offset: -8px;
     border-radius: 6px;
   }
@@ -453,7 +436,7 @@ $row-fine: 36px;
   // and the LED read as the glass they are rather than as a pale grey.
   background-color: #0f1512;
   background-blend-mode: normal;
-  box-shadow: inset 0 0 0 1px rgba(26, 31, 35, 0.25);
+  box-shadow: inset 0 0 0 1px var(--vw-swatch-rim);
 }
 
 .legendName {
@@ -492,24 +475,8 @@ $row-fine: 36px;
   padding: 8px 12px;
   font-family: $font-mono;
   font-size: 0.86rem;
-  color: $ink;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(26, 31, 35, 0.14);
   border-radius: 10px;
-  box-shadow: inset 0 1px 2px rgba(60, 50, 90, 0.08);
-  outline: none;
-
-  &::placeholder {
-    font-family: $font-body;
-    color: #8a9099;
-  }
-
-  &:focus-visible {
-    border-color: rgba(68, 189, 19, 0.7);
-    box-shadow:
-      inset 0 1px 2px rgba(60, 50, 90, 0.08),
-      0 0 0 3px rgba(68, 189, 19, 0.18);
-  }
+  @include vw-input;
 }
 
 .lit {
@@ -531,7 +498,7 @@ $row-fine: 36px;
 }
 
 .litClear {
-  @include bom-glass-control;
+  @include vw-glass-control;
   position: relative;
   min-height: 32px;
   padding: 0 10px;
@@ -562,20 +529,16 @@ $row-fine: 36px;
   border-bottom: 1px solid $hair;
   cursor: pointer;
   @include truncate;
+  @include vw-focus-ring;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.6);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    background: var(--vw-hover-soft);
   }
 
   &[aria-pressed='true'] {
     font-weight: 600;
-    color: #0c1a05;
-    background: rgba(68, 189, 19, 0.2);
+    color: var(--vw-lit-ink);
+    background: var(--vw-lit-bg);
   }
 }
 

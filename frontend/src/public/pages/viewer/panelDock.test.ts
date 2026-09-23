@@ -44,7 +44,7 @@ describe('the panel dock', () => {
   });
 
   it('knows its own tabs', () => {
-    expect(['parts', 'layers', 'objects'].every(isPanelTab)).toBe(true);
+    expect(['sheets', 'parts', 'layers', 'objects'].every(isPanelTab)).toBe(true);
     expect(isPanelTab('nets')).toBe(false);
     expect(isPanelTab(1)).toBe(false);
   });

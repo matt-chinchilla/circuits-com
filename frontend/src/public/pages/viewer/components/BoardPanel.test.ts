@@ -14,7 +14,7 @@ import type { NetInfo } from '@public/components/kicad/canvasController';
 import { getViewMode, resetViewModeForTests } from '@public/components/kicad/board3d/viewMode';
 import { EMPTY_BOARD_VIEW, type BoardViewState, type PanelLayer } from '../boardView';
 import type { PartFacts } from '../partFacts';
-import BoardPanel, { SHEET_QUERY, type BoardPanelHandle } from './BoardPanel';
+import BoardPanel, { SHEET_QUERY, type BoardPanelHandle, type SheetRow } from './BoardPanel';
 import { NET_ROWS } from './BoardControls';
 import type { BoardContext } from './BoardControls';
 
@@ -46,9 +46,14 @@ interface HostProps {
   facts?: PartFacts | null;
   nets?: NetInfo[];
   board?: boolean;
+  /** The Sheets half: rows and the sheet on screen. */
+  sheets?: { rows: SheetRow[]; active: string };
 }
 
-function Host({ context, facts = null, nets = NETS, board = true }: HostProps) {
+/** What the Sheets tab reported. */
+const sheetsSeen = { chosen: [] as string[], opened: 0 };
+
+function Host({ context, facts = null, nets = NETS, board = true, sheets }: HostProps) {
   const [view, setView] = useState<BoardViewState>(EMPTY_BOARD_VIEW);
   state = view;
   return createElement(BoardPanel, {
@@ -63,6 +68,17 @@ function Host({ context, facts = null, nets = NETS, board = true }: HostProps) {
     onPriceBom: () => {},
     board: board
       ? { context, hint: 'Open the Board or 3D tab', layers: LAYERS, nets, view, onChange: setView }
+      : null,
+    sheets: sheets
+      ? {
+          rows: sheets.rows,
+          active: sheets.active,
+          droppedHint: 'Another sheet in this project has the same filename, so only one of them can be drawn.',
+          onChoose: (path: string) => sheetsSeen.chosen.push(path),
+          onOpen: () => {
+            sheetsSeen.opened += 1;
+          },
+        }
       : null,
   });
 }
@@ -106,6 +122,8 @@ const button = (text: string) =>
 beforeEach(() => {
   // The dock is remembered per browser; every test starts from the default.
   localStorage.clear();
+  sheetsSeen.chosen.length = 0;
+  sheetsSeen.opened = 0;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -521,5 +539,73 @@ describe('the layer tree', () => {
     await click(tab('Objects'));
     await click(tab('Layers'));
     expect(side('Bottom').getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+// The Sheets tab (owner, 2026-09-22): the schematic's sheets as rows with a
+// picture each, in the drawer, on every tab.
+describe('the Sheets tab', () => {
+  const thumb = { width: 297, height: 210, wires: 'M10 30L20 30', buses: '', symbols: 'M1 1L2 2', sheets: '', junctions: [{ x: 20, y: 30 }], counts: { wires: 1, buses: 0, symbols: 1, sheets: 0, pins: 2 } };
+  const ROWS: SheetRow[] = [
+    { path: 'main.kicad_sch', label: 'main', root: true, dropped: false, thumbnail: thumb },
+    { path: 'sub/power.kicad_sch', label: 'power', root: false, dropped: false, thumbnail: null },
+    { path: 'alt/power.kicad_sch', label: 'power', root: false, dropped: true, thumbnail: thumb },
+  ];
+  const rows = () => [...container.querySelectorAll('[role="group"][aria-label="Sheets"] button')] as HTMLButtonElement[];
+
+  it('is offered first, usable on every view, and draws a row per sheet with the root and the current one marked', async () => {
+    await render({ context: null, sheets: { rows: ROWS, active: 'sub/power.kicad_sch' } });
+    expect([...container.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Sheets', 'Parts', 'Layers', 'Objects']);
+    expect(tab('Sheets').getAttribute('aria-disabled')).toBeNull();
+    expect(tab('Layers').getAttribute('aria-disabled')).toBe('true');
+    await click(tab('Sheets'));
+    expect(sheetsSeen.opened).toBe(1);
+    expect(rows()).toHaveLength(3);
+    expect(rows()[0].textContent).toContain('root');
+    expect(rows()[1].getAttribute('aria-current')).toBe('true');
+    expect(rows()[0].getAttribute('aria-current')).toBe('false');
+    // A picture where the file gave one, a blank where it did not yet.
+    expect(rows()[0].querySelector('svg[data-sheet-thumb]')).not.toBeNull();
+    expect(rows()[1].querySelector('svg[data-sheet-thumb]')).toBeNull();
+    expect(rows()[0].querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 297 210');
+    expect(rows()[0].textContent).toContain('1 symbol');
+    // The dropped one is inert and says why.
+    expect(rows()[2].getAttribute('aria-disabled')).toBe('true');
+    expect(rows()[2].textContent).toContain("can\u2019t be drawn");
+    const reason = document.getElementById(rows()[2].getAttribute('aria-describedby')!);
+    expect(reason?.textContent).toMatch(/same filename/);
+    // A click hands the path up.
+    await click(rows()[1]);
+    expect(sheetsSeen.chosen).toEqual(['sub/power.kicad_sch']);
+  });
+
+  it('draws each picture as inline vector — no text, no image, nothing fetched — and hides it from the reader, whose label is the row', async () => {
+    await render({ context: null, sheets: { rows: ROWS, active: 'main.kicad_sch' } });
+    await click(tab('Sheets'));
+    const svg = rows()[0].querySelector('svg[data-sheet-thumb]')!;
+    expect(svg.getAttribute('aria-hidden')).toBe('true');
+    expect(svg.querySelector('text, image, foreignObject, use, [href]')).toBeNull();
+    // The paper at the sheet's own size, and every stroke a path whose width
+    // does not scale: one crisp pixel at any thumbnail size. The fixture has
+    // wires and symbols; buses and sub-sheets are empty and draw nothing.
+    expect(svg.querySelector('rect')?.getAttribute('width')).toBe('297');
+    const strokes = [...svg.querySelectorAll('path')].filter((p) => p.getAttribute('vector-effect') === 'non-scaling-stroke');
+    expect(strokes).toHaveLength(2);
+    expect(svg.querySelectorAll('path')).toHaveLength(3);
+  });
+
+  it('with a schematic and no board, the rail is Sheets and Parts', async () => {
+    await render({ context: null, board: false, sheets: { rows: ROWS, active: 'main.kicad_sch' } });
+    expect([...container.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Sheets', 'Parts']);
+    expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('Design panel');
+    await key(tab('Parts'), 'ArrowRight');
+    expect(tab('Sheets').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('a remembered tab the project does not offer falls back to Parts', async () => {
+    localStorage.setItem('cc.viewer.panel', JSON.stringify({ tab: 'sheets', docked: true }));
+    await render({ context: 'board' });
+    expect(tab('Parts').getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('input[aria-label="Find a reference"]')).not.toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 @use '@shared/styles/variables' as *;
 @use '@shared/styles/mixins' as *;
 @use '@public/styles/bomMaterial' as *;
+@use '../workspaceTokens' as *;
 
 // The Board panel: the workspace's RAIL and the DRAWER it opens. Its Parts
 // tab is the part panel — the one memorable element of the viewer, so
@@ -18,16 +19,13 @@
 // below $bp-tablet it is a sheet fixed along the bottom of the viewport: the
 // rail's icons move into the handle row beside the part peek, so the phone
 // has ONE bottom bar, and the drawer is what opens above it.
+//
+// Every colour is a token from ../_workspaceTokens.scss (the workspace root
+// declares the day set and the night set), so one rule draws both.
 
-$silk-ink: #2c5f45;
-$silk-tint: rgba(10, 74, 46, 0.16);
-$hair: rgba(26, 31, 35, 0.1);
+$hair: var(--vw-seam);
 $rail-w: 48px;
 $drawer-w: 340px;
-// The pressed rail icon wears the tint the Layers tab already gives a lit
-// layer, so one "lit" vocabulary runs through the whole instrument.
-$lit-bg: rgba(68, 189, 19, 0.2);
-$lit-ring: rgba(55, 162, 13, 0.55);
 
 .panel {
   display: flex;
@@ -46,7 +44,7 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   align-items: center;
   width: $rail-w;
   padding: 6px 0;
-  background: rgba(255, 255, 255, 0.4);
+  background: var(--vw-rail);
   border-right: 1px solid $hair;
 }
 
@@ -64,38 +62,36 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   width: 44px;
   height: 44px;
   padding: 0;
-  color: #2b3137;
+  color: var(--vw-ink-ctl);
   background: transparent;
   border: 0;
   border-radius: 10px;
   cursor: pointer;
   transition: background-color 0.12s ease, color 0.12s ease;
+  @include vw-focus-ring;
 
   &:hover:not([aria-disabled='true']) {
-    background: rgba(255, 255, 255, 0.7);
-    color: #1a1f23;
-  }
-
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    background: var(--vw-hover);
+    color: var(--vw-ink);
   }
 
   // Selected but folded away: the glyph goes to full ink so the rail still
   // says which tab a click would reopen.
   &[aria-selected='true'] {
-    color: #1a1f23;
+    color: var(--vw-ink);
   }
 
-  // Open beside the stage (or, on a phone, the sheet is up on this tab).
+  // Open beside the stage (or, on a phone, the sheet is up on this tab). The
+  // pressed rail icon wears the tint the Layers tab gives a lit layer, so one
+  // "lit" vocabulary runs through the whole instrument.
   &[aria-expanded='true'] {
-    color: #0c1a05;
-    background: $lit-bg;
-    box-shadow: inset 0 0 0 1px $lit-ring;
+    color: var(--vw-lit-ink);
+    background: var(--vw-lit-bg);
+    box-shadow: inset 0 0 0 1px var(--vw-lit-ring);
   }
 
   &[aria-disabled='true'] {
-    color: #8a9099;
+    color: var(--vw-ink-4);
     cursor: not-allowed;
   }
 }
@@ -123,7 +119,7 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   width: $drawer-w;
   min-width: 0;
   min-height: 0;
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--vw-drawer);
   border-right: 1px solid $hair;
   // Motion answers the click only: the drawer's content settles in from the
   // rail. Compositor properties; the WIDTH is not animated, because the
@@ -145,7 +141,7 @@ $lit-ring: rgba(55, 162, 13, 0.55);
 .drawerTitle {
   font-size: 0.86rem;
   font-weight: 600;
-  color: #1a1f23;
+  color: var(--vw-ink);
 }
 
 .drawerClose {
@@ -158,21 +154,17 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   padding: 0;
   font-size: 18px;
   line-height: 1;
-  color: #4b5158;
+  color: var(--vw-ink-2);
   background: transparent;
   border: 0;
   border-radius: 8px;
   cursor: pointer;
   @include tap-target(-6px);
+  @include vw-focus-ring;
 
   &:hover {
-    color: #1a1f23;
-    background: rgba(255, 255, 255, 0.7);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $executive-blue;
-    outline-offset: -2px;
+    color: var(--vw-ink);
+    background: var(--vw-hover);
   }
 }
 
@@ -206,6 +198,151 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   border: 0;
 }
 
+// ─── Sheets ───────────────────────────────────────────────────────────────
+// One row per schematic sheet: its picture (read from the file), its name,
+// the root marked, the one on screen lit. The picture is the sheet's own
+// paper at its own aspect; the strokes do not scale, so a wire is one crisp
+// pixel at any thumbnail size, and the paper stays pale in both modes — it is
+// a picture of a white sheet, on the desk by day and under the lamp by night.
+
+.sheets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sheetRow {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  min-height: 80px;
+  padding: 6px 8px 6px 6px;
+  text-align: left;
+  color: var(--vw-ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  @include vw-focus-ring;
+
+  &:hover:not([aria-disabled='true']) {
+    background: var(--vw-hover-soft);
+  }
+
+  &[aria-current='true'] {
+    background: var(--vw-lit-bg);
+    border-color: var(--vw-lit-ring);
+
+    // The lit tint takes the tertiary ink under 4.5:1 by night (measured
+    // 4.3:1); the current row's count line steps up one ink.
+    .sheetMeta {
+      color: var(--vw-ink-2);
+    }
+  }
+
+  &[aria-disabled='true'] {
+    opacity: 0.6;
+    border-style: dashed;
+    border-color: var(--vw-glass-border);
+    cursor: not-allowed;
+  }
+}
+
+.sheetPicture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 68px;
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--vw-swatch-rim), 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.thumbEmpty {
+  display: block;
+  width: 96px;
+  height: 68px;
+  border-radius: 3px;
+  background: var(--vw-surface);
+  box-shadow: 0 0 0 1px var(--vw-swatch-rim);
+}
+
+.thumbPaper {
+  fill: var(--vw-thumb-paper);
+}
+
+// KiCad's own ink for each thing, quietened: wires green, buses blue and
+// heavier, symbols the library maroon, sub-sheet boxes a blue wash.
+.thumbWires {
+  fill: none;
+  stroke: #1a7a3a;
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.thumbBuses {
+  fill: none;
+  stroke: #1f4fa0;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.thumbSymbols {
+  fill: none;
+  stroke: #8e2a2a;
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.thumbSheets {
+  fill: rgba(42, 93, 176, 0.12);
+  stroke: #2a5db0;
+  stroke-width: 1;
+}
+
+.thumbJunctions {
+  fill: #1a7a3a;
+}
+
+.sheetText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sheetName {
+  max-width: 100%;
+  font-family: $font-mono;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--vw-ink);
+  @include truncate;
+}
+
+.sheetTag {
+  padding: 1px 6px;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--vw-ink-2);
+  background: var(--vw-key-bg);
+  border: 1px solid var(--vw-glass-border);
+  border-radius: 4px;
+}
+
+.sheetMeta {
+  font-size: 0.76rem;
+  color: var(--vw-ink-3);
+}
+
 // ─── Search ───────────────────────────────────────────────────────────────
 
 .search {
@@ -220,24 +357,8 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   padding: 8px 40px 8px 12px;
   font-family: $font-mono;
   font-size: 0.88rem;
-  color: #1a1f23;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(26, 31, 35, 0.14);
   border-radius: 10px;
-  box-shadow: inset 0 1px 2px rgba(60, 50, 90, 0.08);
-  outline: none;
-
-  &::placeholder {
-    font-family: $font-body;
-    color: #8a9099;
-  }
-
-  &:focus-visible {
-    border-color: rgba(68, 189, 19, 0.7);
-    box-shadow:
-      inset 0 1px 2px rgba(60, 50, 90, 0.08),
-      0 0 0 3px rgba(68, 189, 19, 0.18);
-  }
+  @include vw-input;
 }
 
 .key {
@@ -250,9 +371,9 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   font-family: $font-mono;
   font-size: 0.68rem;
   line-height: 1;
-  color: #676c71;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(26, 31, 35, 0.14);
+  color: var(--vw-ink-3);
+  background: var(--vw-key-bg);
+  border: 1px solid var(--vw-surface-border);
   border-bottom-width: 2px;
   border-radius: 5px;
 }
@@ -278,7 +399,7 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   margin: 0;
   font-size: 0.88rem;
   line-height: 1.5;
-  color: #4b5158;
+  color: var(--vw-ink-2);
 }
 
 .hints {
@@ -287,7 +408,7 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   gap: 6px 8px;
   margin: 0;
   font-size: 0.78rem;
-  color: #676c71;
+  color: var(--vw-ink-3);
 
   .key + .key,
   .key {
@@ -313,7 +434,7 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.15;
-  color: $silk-ink;
+  color: var(--vw-silk-ink);
 }
 
 .value {
@@ -321,7 +442,7 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   font-size: 0.98rem;
   font-weight: 560;
   line-height: 1.3;
-  color: #1a1f23;
+  color: var(--vw-ink);
   overflow-wrap: anywhere;
 }
 
@@ -330,18 +451,18 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   font-family: $font-mono;
   font-size: 0.74rem;
   line-height: 1.4;
-  color: #676c71;
+  color: var(--vw-ink-3);
   overflow-wrap: anywhere;
 }
 
 .missing {
   margin: 4px 0 0;
   font-size: 0.86rem;
-  color: #4b5158;
+  color: var(--vw-ink-2);
 }
 
 .clear {
-  @include bom-glass-control;
+  @include vw-glass-control;
   position: absolute;
   top: 0;
   right: 0;
@@ -373,14 +494,14 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   }
 
   dt {
-    color: #676c71;
+    color: var(--vw-ink-3);
     white-space: nowrap;
   }
 
   dd {
     margin: 0;
     padding-left: 14px;
-    color: #1a1f23;
+    color: var(--vw-ink);
     text-align: right;
     overflow-wrap: anywhere;
   }
@@ -402,11 +523,11 @@ $lit-ring: rgba(55, 162, 13, 0.55);
 .note {
   margin: 0;
   font-size: 0.84rem;
-  color: #676c71;
+  color: var(--vw-ink-3);
 }
 
 .priceBtn {
-  @include bom-glass-control;
+  @include vw-glass-control;
   align-self: flex-start;
   padding: 9px 12px;
   font-size: 0.84rem;
@@ -427,6 +548,8 @@ $lit-ring: rgba(55, 162, 13, 0.55);
 
 // The BOM table's own badge textures: solid ink for exact, hatched for a
 // substitute, an outline for a live catch — confidence as texture, never hue.
+// The two pale chips (live, none) re-read the mode's surface, or by night they
+// would be a pale grey square with grey text on it.
 .match {
   display: inline-block;
   padding: 2px 7px;
@@ -445,17 +568,22 @@ $lit-ring: rgba(55, 162, 13, 0.55);
 
   &[data-match='live'] {
     @include bom-badge-none;
-    color: #1a1f23;
+    color: var(--vw-ink);
+    background: var(--vw-surface);
+    box-shadow: inset 0 0 0 1px var(--vw-surface-border);
   }
 
   &[data-match='none'] {
     @include bom-badge-none;
+    color: var(--vw-ink-3);
+    background: var(--vw-surface);
+    box-shadow: inset 0 0 0 1px var(--vw-surface-border);
   }
 }
 
 .lifecycle {
   font-size: 0.74rem;
-  color: #676c71;
+  color: var(--vw-ink-3);
 }
 
 .sku {
@@ -466,13 +594,13 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   overflow-wrap: anywhere;
 
   a {
-    color: #1a1f23;
+    color: var(--vw-ink);
     font-weight: 600;
     text-decoration: none;
-    border-bottom: 1px solid rgba(26, 31, 35, 0.3);
+    border-bottom: 1px solid var(--vw-surface-border);
 
     &:hover {
-      border-bottom-color: #1a1f23;
+      border-bottom-color: var(--vw-ink);
     }
   }
 }
@@ -481,14 +609,14 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   display: block;
   font-family: $font-body;
   font-size: 0.78rem;
-  color: #676c71;
+  color: var(--vw-ink-3);
 }
 
 .desc {
   margin: 0;
   font-size: 0.82rem;
   line-height: 1.45;
-  color: #4b5158;
+  color: var(--vw-ink-2);
   @include line-clamp(3);
 }
 
@@ -504,13 +632,13 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   font-size: 1.15rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: #1a1f23;
+  color: var(--vw-ink);
 }
 
 .priceMeta {
   font-size: 0.76rem;
   line-height: 1.4;
-  color: #676c71;
+  color: var(--vw-ink-3);
 }
 
 .partLink {
@@ -518,7 +646,7 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   margin-top: 2px;
   font-size: 0.84rem;
   font-weight: 600;
-  color: $executive-blue;
+  color: var(--vw-link);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -537,12 +665,12 @@ $lit-ring: rgba(55, 162, 13, 0.55);
 
 .showLabel {
   font-size: 0.78rem;
-  color: #676c71;
+  color: var(--vw-ink-3);
   margin-right: 2px;
 }
 
 .showBtn {
-  @include bom-glass-control;
+  @include vw-glass-control;
   position: relative;
   flex: 1 1 0;
   min-height: 36px;
@@ -572,20 +700,14 @@ $lit-ring: rgba(55, 162, 13, 0.55);
     flex-direction: column;
     max-height: 66dvh;
     border-radius: 16px 16px 0 0;
-    // OPAQUE: bom-card is 85-93% white, made for cards resting on the bench.
-    // Floating over the page, the footer and the 3D canvas showed through it,
-    // turned it grey and put the secondary ink under AA (a translucent veil
-    // over near-black reads grey — the navbar lesson). The same glass
-    // gradients, laid over a solid bench-coloured base.
-    background:
-      radial-gradient(115% 78% at 0% 0%, rgba(246, 242, 251, 0.8), transparent 56%),
-      radial-gradient(105% 72% at 100% 0%, rgba(159, 183, 232, 0.26), transparent 54%),
-      radial-gradient(95% 88% at 100% 100%, rgba(217, 161, 184, 0.2), transparent 56%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.93), rgba(255, 255, 255, 0.85)),
-      #f7f8fb;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.95),
-      0 -6px 24px -8px rgba(38, 32, 58, 0.28);
+    // OPAQUE: the card wash is made for cards resting on the bench. Floating
+    // over the page, the footer and the 3D canvas showed through it, turned it
+    // grey and put the secondary ink under AA (a translucent veil over
+    // near-black reads grey — the navbar lesson). The same washes, laid over
+    // a solid base in the mode's own colour.
+    background-image: var(--vw-card);
+    background-color: var(--vw-card-solid);
+    box-shadow: var(--vw-sheet-shadow);
   }
 
   // The handle row: the rail's icons at the left, the part peek beside them.
@@ -622,7 +744,7 @@ $lit-ring: rgba(55, 162, 13, 0.55);
   .peekEmpty {
     grid-column: 1 / 3;
     font-size: 0.84rem;
-    color: #4b5158;
+    color: var(--vw-ink-2);
     @include truncate;
   }
 
@@ -630,20 +752,20 @@ $lit-ring: rgba(55, 162, 13, 0.55);
     font-family: $font-mono;
     font-size: 1rem;
     font-weight: 600;
-    color: $silk-ink;
+    color: var(--vw-silk-ink);
   }
 
   .peekMeta {
     font-size: 0.82rem;
-    color: #4b5158;
+    color: var(--vw-ink-2);
     @include truncate;
   }
 
   .peekChevron {
     width: 10px;
     height: 10px;
-    border-right: 2px solid #676c71;
-    border-bottom: 2px solid #676c71;
+    border-right: 2px solid var(--vw-ink-3);
+    border-bottom: 2px solid var(--vw-ink-3);
     transform: rotate(-135deg) translate(-2px, -2px);
     transition: transform 0.18s ease;
   }

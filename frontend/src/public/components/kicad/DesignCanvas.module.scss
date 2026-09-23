@@ -86,7 +86,9 @@
   margin: 0;
   display: grid;
   place-items: center;
-  color: $text-secondary;
+  // The viewer's workspace hands its ink down (day or night); on /bom, where
+  // there is no workspace, the site's own greys.
+  color: var(--vw-ink-3, #{$text-secondary});
   font-size: 0.9rem;
   pointer-events: none;
 }
@@ -104,13 +106,13 @@
 .problemTitle {
   margin: 0;
   font-weight: 600;
-  color: $text-primary;
+  color: var(--vw-ink, #{$text-primary});
 }
 
 .problemBody {
   margin: 0;
   max-width: 44ch;
-  color: $text-secondary;
+  color: var(--vw-ink-3, #{$text-secondary});
   font-size: 0.9rem;
 }
 

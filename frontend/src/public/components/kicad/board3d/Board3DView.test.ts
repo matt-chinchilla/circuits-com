@@ -427,7 +427,7 @@ describe('the stylesheet the frame depends on', () => {
     expect(scss).toMatch(/min-height:\s*300px/);
   });
   it('keeps the caption at AA and the canvas focus ring on the dark canvas', () => {
-    expect(scss).toMatch(/\$footer-ink:\s*#676c71/);
+    expect(scss).toMatch(/\$footer-ink:\s*var\(--vw-ink-3, #676c71\)/);
     expect(scss).toMatch(/\.caption \{[^{}]*color:\s*\$footer-ink/);
     expect(scss).toMatch(/\.stats \{[^{}]*color:\s*\$footer-ink/);
     expect(scss).toMatch(/\.canvasHost \{[\s\S]*?&:focus-visible \{[^{}]*outline-offset:\s*-3px/);
