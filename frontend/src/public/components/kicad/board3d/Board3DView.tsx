@@ -235,12 +235,15 @@ export default function Board3DView({
    */
   const place = useCallback((at: AnchorScreen | null) => {
     const callout = calloutRef.current, leader = leaderRef.current, line = leaderLineRef.current, dot = leaderDotRef.current, host = hostRef.current;
-    if (callout == null || leader == null || line == null || dot == null || host == null) return;
-    if (at == null || !at.visible) {
-      callout.hidden = true;
-      leader.style.display = 'none';
+    // Hide FIRST: clearing the selection unmounts the plate before this runs,
+    // and an early return on the missing plate left the leader standing alone
+    // on the board.
+    if (at == null || !at.visible || callout == null) {
+      if (callout != null) callout.hidden = true;
+      if (leader != null) leader.style.display = 'none';
       return;
     }
+    if (leader == null || line == null || dot == null || host == null) return;
     callout.hidden = false;
     leader.style.display = '';
     const w = host.clientWidth, h = host.clientHeight;

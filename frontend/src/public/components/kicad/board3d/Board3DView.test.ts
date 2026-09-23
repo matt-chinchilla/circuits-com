@@ -375,6 +375,13 @@ describe('Board3DView — the callout on the selected part (owner, 2026-09-22: "
     await mount(r, null, null);
     expect(r.anchors.at(-1)).toBeNull();
     expect(callout()).toBeNull();
+    // Cleared WHILE shown: the plate unmounts first, and the leader must not
+    // stay behind on its own.
+    await mount(r, 'J5', J5);
+    act(() => { r.anchorMove?.({ x: 120, y: 90, visible: true }); });
+    expect(el.querySelector('svg')!.style.display).toBe('');
+    await mount(r, null, null);
+    expect(el.querySelector('svg')!.style.display).toBe('none');
     state.scene = scene([]);
   });
 
