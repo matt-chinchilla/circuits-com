@@ -74,7 +74,6 @@ def test_both_compose_files_pass_the_seed_switch_through():
             )
 
 
-
 def test_dev_default_mirrors_the_code_default():
     api = _service_block(DEV_COMPOSE, "api")
     assert "SEED_DEMO_CATALOG: ${SEED_DEMO_CATALOG:-true}" in api, (

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.services.data_versions import _TABLES, SCOPES, data_versions, write_counters
 
-from .pg_harness import postgres_engine
+from .pg_harness import postgres_engine, upgrade_in_transaction
 
 
 @pytest.fixture(scope="module")
@@ -21,6 +21,9 @@ def conn():
     connection = engine.connect()
     transaction = connection.begin()
     try:
+        # A branch's new tables join SCOPES before the shared local database is
+        # migrated; apply them inside this rolled-back transaction.
+        upgrade_in_transaction(connection)
         yield connection
     finally:
         transaction.rollback()
