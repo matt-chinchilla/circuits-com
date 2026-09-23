@@ -21,7 +21,7 @@ event subscriptions):
     customer.subscription.deleted    → "Expired" (+ its open invoices queued
                                        for voiding: a canceled subscription's
                                        open invoice can still be paid)
-    invoice.payment_failed           → no status write; stamps
+    invoice.payment_failed           → no status write; the mirror derives
                                        ``sponsor_billing.failing_since``. The
                                        hourly sweep (services/billing_sweep)
                                        releases the slot 14 days later (D4).
@@ -30,7 +30,10 @@ MIRROR BEFORE GATES (spec §8, LU-F4). For every lifecycle event with a
 subscription the billing mirror runs FIRST and commits on its own: the
 invoice → ``sponsor_payments`` (keyed by invoice id, sponsor resolved
 lazily), ``sponsor_billing`` (captured for a rep row the first time one of its
-subscriptions speaks), ``failing_since`` set/cleared, ``void_pending``. None
+subscriptions speaks), ``failing_since`` RECOMPUTED from the mirrored
+invoices (the oldest still-failed one, else NULL — never toggled by event
+type: a replayed older invoice.paid cannot clear a newer failure),
+``void_pending``. None
 of it writes the sponsor row, so the status gates below keep their meaning and
 their early returns cannot lose a payment.
 
@@ -70,7 +73,6 @@ import hmac
 import logging
 import time
 import uuid
-from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import func
@@ -88,6 +90,7 @@ from app.services import category_cache
 from app.services.billing_mirror import (
     attach_payments,
     audit,
+    recompute_failing_since,
     upsert_billing,
     upsert_payment_from_invoice,
 )
@@ -229,13 +232,6 @@ def _stripe_ref(value: object) -> str | None:
     if isinstance(value, dict):
         value = value.get("id")
     return value.strip() if isinstance(value, str) and value.strip() else None
-
-
-def _event_time(event: dict) -> datetime:
-    created = event.get("created")
-    if isinstance(created, int) and not isinstance(created, bool):
-        return datetime.fromtimestamp(created, UTC)
-    return datetime.now(UTC)
 
 
 def _safe_commit(db: Session, what: str) -> bool:
@@ -396,12 +392,14 @@ def _mirror(
         billing = _capture_billing(db, sponsor, subscription_id, obj)
         if payment is not None and payment.sponsor_id is None:
             payment.sponsor_id = sponsor.id
-        if event_type == "invoice.paid":
-            billing.failing_since = None
-        elif event_type == "invoice.payment_failed" and billing.failing_since is None:
-            billing.failing_since = _event_time(event)
-        elif event_type == "customer.subscription.deleted":
+        if event_type == "customer.subscription.deleted":
             billing.void_pending = True
+
+    # F2: failing_since is derived from the mirror (the oldest still-failed
+    # invoice), never toggled by the event type — a replayed invoice.paid for
+    # an older invoice must not clear a newer failure.
+    if payment is not None:
+        recompute_failing_since(db, subscription_id)
 
     _safe_commit(db, f"billing mirror for {event_type} on {subscription_id}")
 
@@ -816,7 +814,7 @@ def apply_stripe_event(db: Session, event: dict) -> str:
         # No status write: the 14-day sweep decides (D4). Loud enough to be
         # found when someone asks why a delinquent sponsor is still up.
         logger.warning(
-            "stripe: payment failed for sponsor_id=%s invoice=%s — failing_since stamped",
+            "stripe: payment failed for sponsor_id=%s invoice=%s — failing_since derived",
             raw_id,
             _dig(event, "data", "object", "id"),
         )

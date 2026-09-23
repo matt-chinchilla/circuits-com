@@ -8,6 +8,9 @@ caller (webhook, console route, sweep) owns the transaction.
   subscription under ``parent.subscription_details.subscription`` and carries no
   ``payment_intent``/``charge``; older payloads (a webhook endpoint follows its
   own API version) carry a top-level ``subscription``/``payment_intent``.
+* ``recompute_failing_since`` — ``sponsor_billing.failing_since`` DERIVED from
+  the mirror (the oldest still-failed invoice), run after every invoice
+  upsert by the webhook and the sweep.
 * ``attach_payments`` — gives rows mirrored before their sponsor existed (the
   first ``invoice.paid`` can beat ``checkout.session.completed``) their sponsor.
 """
@@ -190,6 +193,41 @@ def upsert_payment_from_invoice(db: Session, invoice: dict) -> SponsorPayment | 
 
     db.flush()
     return row
+
+
+def recompute_failing_since(db: Session, subscription_id: str) -> datetime | None:
+    """Derive ``sponsor_billing.failing_since`` for every billing row naming
+    ``subscription_id`` from the mirror: the ``invoice_created_at`` of the
+    OLDEST still-``failed`` invoice of that subscription, else NULL.
+
+    Never toggled by event type (F2): a replayed ``invoice.paid`` for an older
+    invoice cannot clear a newer failure, a failed invoice that is later paid
+    flips to ``paid`` here and drops out, and a new failure after a recovery
+    starts a fresh clock. Returns the value written."""
+    if not subscription_id:
+        return None
+    db.flush()
+    failed = (
+        db.query(SponsorPayment.invoice_created_at, SponsorPayment.updated_at)
+        .filter(
+            SponsorPayment.stripe_subscription_id == subscription_id,
+            SponsorPayment.status == FAILED,
+        )
+        .all()
+    )
+    # A failed invoice mirrored without a ``created`` still counts — from when
+    # we first recorded it — rather than silently reading as "not failing".
+    dates = [_aware(created or seen) for created, seen in failed if created or seen]
+    since = min(dates) if dates else None
+    for billing in db.query(SponsorBilling).filter(
+        SponsorBilling.stripe_subscription_id == subscription_id
+    ):
+        billing.failing_since = since
+    return since
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def attach_payments(db: Session, subscription_id: str, sponsor_id: uuid.UUID) -> int:
