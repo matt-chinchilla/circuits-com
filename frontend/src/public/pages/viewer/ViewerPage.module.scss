@@ -225,6 +225,9 @@
 @mixin topbar-button {
   position: relative;
   display: inline-flex;
+  // Never squeezed: as a plain flex item the 40px fullscreen glyph measured
+  // 20px wide on a 390px phone once the cluster ran out of room.
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   line-height: 1;
@@ -503,8 +506,36 @@
     display: none;
   }
 
+  // Its content, never less: the desktop `1 1 0` share left this cluster
+  // 91px wide with 185px of buttons in it (measured at 390), its buttons
+  // spilling leftward over the project's half. The project side is the one
+  // that gives — its name truncates.
   .topbarEnd {
+    flex: 0 0 auto;
     margin-left: auto;
+  }
+
+  .notes {
+    flex: 0 0 auto;
+  }
+
+  // The word folds into the accessible name: the bar's top row has 370px
+  // here, and with "Night" spelled out a project name was left 50px. The
+  // moon keeps its lit state and its 44px; a screen reader still hears
+  // "Night, toggle button, pressed".
+  .modeBtn {
+    gap: 0;
+    width: 40px;
+    padding: 0;
+  }
+
+  .modeLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
 
   .tabs {

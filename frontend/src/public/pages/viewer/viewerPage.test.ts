@@ -1832,6 +1832,16 @@ describe('the workspace stylesheet', () => {
     expect(rootBlock).not.toMatch(/transition|animation/);
     const reduced = scss.slice(scss.indexOf('@media (prefers-reduced-motion: reduce)'));
     expect(reduced).toMatch(/\.modeBtn[\s\S]*?transition:\s*none/);
+    // On a phone the end cluster is its content (measured at 390: the desktop
+    // share left it 91px wide with 185px of buttons in it), no button in it
+    // shrinks, and the word folds into the accessible name rather than
+    // leaving the project name 50px.
+    expect(scss).toMatch(/@mixin topbar-button \{[^{}]*flex:\s*0 0 auto/);
+    const phone = scss.slice(scss.indexOf('@include responsive($bp-mobile)'), scss.indexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(phone).toMatch(/\.topbarEnd \{[^{}]*flex:\s*0 0 auto/);
+    expect(phone).toMatch(/\.modeBtn \{[^{}]*width:\s*40px/);
+    expect(phone).toMatch(/\.modeLabel \{[^{}]*clip:\s*rect\(0, 0, 0, 0\)/);
+    expect(phone).not.toMatch(/\.modeLabel \{[^{}]*display:\s*none/);
   });
 
   it('the sheet rows are a finger tall, the picture is paper in the mode’s own white, and the lit row’s count line steps up an ink', () => {
