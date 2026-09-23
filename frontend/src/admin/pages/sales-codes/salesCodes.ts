@@ -3,7 +3,13 @@
 // link; this file only words them. No price is computed here.
 
 import { cancelsOn } from '@admin/pages/sponsors/form/billingFormat';
-import type { AttentionPayload, SalesCode } from '@admin/types/admin';
+import type {
+  AttentionPayload,
+  QuoteLadderTier,
+  SalesCode,
+  SalesCodeCreate,
+  SalesTier,
+} from '@admin/types/admin';
 
 export type ChipTone = 'ok' | 'info' | 'warn' | 'muted';
 
@@ -59,6 +65,80 @@ export function expiresLabel(expiresAt: string, now: Date = new Date()): string 
   const d = new Date(expiresAt);
   if (Number.isNaN(d.getTime())) return '—';
   return `${d.getTime() > now.getTime() ? 'Expires' : 'Expired'} ${shortDay(d)}`;
+}
+
+// ── New-code form ───────────────────────────────────────────────────────────
+
+export const MAX_CODE_POINTS = 15;
+export const MAX_USES_CAP = 100;
+/** The server's own 422 sentence for R7 — kept word for word. */
+export const BOUND_NEEDS_EMAIL = "A code tied to a company needs the customer's email.";
+
+export interface CodeFormState {
+  points: number;
+  tier: 'any' | SalesTier;
+  categoryId: string;
+  supplierId: string;
+  emailLock: string;
+  maxUses: string;
+  expiresInDays: number;
+  rep: string;
+  note: string;
+}
+
+export type CodeFormErrors = Partial<Record<'emailLock' | 'maxUses' | 'categoryId' | 'points', string>>;
+
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function codeFormErrors(f: CodeFormState): CodeFormErrors {
+  const errors: CodeFormErrors = {};
+  if (!Number.isInteger(f.points) || f.points < 1 || f.points > MAX_CODE_POINTS) {
+    errors.points = `Between 1 and ${MAX_CODE_POINTS} points.`;
+  }
+  const email = f.emailLock.trim();
+  if (f.supplierId && !email) errors.emailLock = BOUND_NEEDS_EMAIL;
+  else if (email && !EMAIL_SHAPE.test(email)) errors.emailLock = 'That does not look like an email address.';
+  const uses = f.maxUses.trim();
+  if (!/^\d+$/.test(uses) || Number(uses) < 1 || Number(uses) > MAX_USES_CAP) {
+    errors.maxUses = `Between 1 and ${MAX_USES_CAP} uses.`;
+  }
+  if (f.categoryId && f.tier === 'any') errors.categoryId = 'Pick Gold or Platinum to lock a placement.';
+  return errors;
+}
+
+/** The POST body — only the locks that are set, every string trimmed. */
+export function codeCreateBody(f: CodeFormState): SalesCodeCreate {
+  const body: SalesCodeCreate = { code_points: f.points };
+  if (f.tier !== 'any') body.tier = f.tier;
+  if (f.categoryId) body.category_id = f.categoryId;
+  if (f.supplierId) body.supplier_id = f.supplierId;
+  if (f.emailLock.trim()) body.email_lock = f.emailLock.trim();
+  body.max_uses = Number(f.maxUses.trim());
+  body.expires_in_days = f.expiresInDays;
+  if (f.rep.trim()) body.rep = f.rep.trim();
+  if (f.note.trim()) body.note = f.note.trim();
+  return body;
+}
+
+function usd(whole: number): string {
+  return `$${whole.toLocaleString('en-US')}`;
+}
+
+/** A points step, priced by the SERVER's ladder for the tiers it can buy. */
+export function pointsOptionLabel(
+  points: number,
+  tiers: Record<string, QuoteLadderTier> | null | undefined,
+  tier: 'any' | SalesTier,
+): string {
+  const priceOf = (t: SalesTier) => tiers?.[t]?.options.find((o) => o.code_points === points)?.price_usd;
+  if (tier !== 'any') {
+    const p = priceOf(tier);
+    return p != null ? `${points} ${points === 1 ? 'pt' : 'pts'} — ${usd(p)}/mo` : pointsLabel(points);
+  }
+  const gold = priceOf('gold');
+  const plat = priceOf('platinum');
+  if (gold == null || plat == null) return pointsLabel(points);
+  return `${points} ${points === 1 ? 'pt' : 'pts'} — Gold ${usd(gold)} · Platinum ${usd(plat)}`;
 }
 
 // ── Needs attention ─────────────────────────────────────────────────────────

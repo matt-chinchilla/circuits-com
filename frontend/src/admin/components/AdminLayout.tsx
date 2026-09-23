@@ -57,6 +57,10 @@ const CATALOG_LINKS: SidebarLink[] = [
   { to: '/admin/users', label: 'Users', icon: 'users-three' },
   { to: '/admin/categories', label: 'Categories', icon: 'squares-four', tour: 'side-categories' },
   { to: '/admin/sponsors', label: 'Sponsors', icon: 'star', tour: 'side-sponsors' },
+  // Rep discount codes for Gold/Platinum on /join + the Needs-attention
+  // queues (conflicts, holds, failing payments). Staff money — never offered
+  // to a customer login; a viewer sees the page's blocked state.
+  { to: '/admin/sales-codes', label: 'Sales codes', icon: 'ticket' },
   // Operating costs — the other half of the dashboard P&L. Internal finance,
   // never anything a customer login should see.
   { to: '/admin/expenses', label: 'Expenses', icon: 'receipt', tour: 'side-expenses' },
@@ -177,6 +181,9 @@ const TITLE_MAP: Record<string, string> = {
   '/admin/categories': 'Categories',
   '/admin/sponsors': 'Sponsors',
   '/admin/sponsors/new': 'New Sponsor',
+  // Hyphenated, so neither id-shaped regex below would title them.
+  '/admin/sales-codes': 'Sales codes',
+  '/admin/sales-codes/new': 'New sales code',
   '/admin/expenses': 'Expenses',
   '/admin/expenses/new': 'New Expense',
   '/admin/reports': 'Reports',

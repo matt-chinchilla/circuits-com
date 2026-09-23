@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   absoluteLink,
+  codeCreateBody,
+  codeFormErrors,
+  pointsOptionLabel,
+  type CodeFormState,
   codeStatusChip,
   expiresLabel,
   locksSummary,
@@ -81,6 +85,82 @@ describe('expiresLabel', () => {
   it('looks forward or back from now', () => {
     expect(expiresLabel('2026-10-07T12:00:00Z', now)).toBe('Expires Oct 7');
     expect(expiresLabel('2026-09-20T12:00:00Z', now)).toBe('Expired Sep 20');
+  });
+});
+
+describe('new-code form helpers', () => {
+  const blank: CodeFormState = {
+    points: 10,
+    tier: 'any',
+    categoryId: '',
+    supplierId: '',
+    emailLock: '',
+    maxUses: '1',
+    expiresInDays: 14,
+    rep: 'Daniel',
+    note: '',
+  };
+
+  it('accepts the simplest code', () => {
+    expect(codeFormErrors(blank)).toEqual({});
+    expect(codeCreateBody(blank)).toEqual({
+      code_points: 10,
+      max_uses: 1,
+      expires_in_days: 14,
+      rep: 'Daniel',
+    });
+  });
+
+  it('asks for the customer email when a company is bound (R7), in the server’s words', () => {
+    expect(codeFormErrors({ ...blank, supplierId: 's1' }).emailLock).toBe(
+      "A code tied to a company needs the customer's email.",
+    );
+    expect(codeFormErrors({ ...blank, emailLock: 'not-an-email' }).emailLock).toBeTruthy();
+  });
+
+  it('needs a tier before a placement can be locked', () => {
+    expect(codeFormErrors({ ...blank, categoryId: 'c1' }).categoryId).toBeTruthy();
+    expect(codeFormErrors({ ...blank, tier: 'gold', categoryId: 'c1' })).toEqual({});
+  });
+
+  it('bounds the use count', () => {
+    expect(codeFormErrors({ ...blank, maxUses: '0' }).maxUses).toBeTruthy();
+    expect(codeFormErrors({ ...blank, maxUses: '2.5' }).maxUses).toBeTruthy();
+    expect(codeFormErrors({ ...blank, maxUses: '101' }).maxUses).toBeTruthy();
+  });
+
+  it('sends every lock that is set, trimmed', () => {
+    expect(
+      codeCreateBody({
+        ...blank,
+        tier: 'platinum',
+        categoryId: 'c1',
+        supplierId: 's1',
+        emailLock: ' AP@Acme.test ',
+        maxUses: '3',
+        note: '  trade show  ',
+      }),
+    ).toEqual({
+      code_points: 10,
+      tier: 'platinum',
+      category_id: 'c1',
+      supplier_id: 's1',
+      email_lock: 'AP@Acme.test',
+      max_uses: 3,
+      expires_in_days: 14,
+      rep: 'Daniel',
+      note: 'trade show',
+    });
+  });
+
+  it('labels each points step with the server’s prices', () => {
+    const tiers = {
+      gold: { list: 2500, founder: 2100, floor: 1750, options: [{ code_points: 10, price_usd: 1850 }] },
+      platinum: { list: 10000, founder: 8500, floor: 7000, options: [{ code_points: 10, price_usd: 7500 }] },
+    };
+    expect(pointsOptionLabel(10, tiers, 'any')).toBe('10 pts — Gold $1,850 · Platinum $7,500');
+    expect(pointsOptionLabel(10, tiers, 'gold')).toBe('10 pts — $1,850/mo');
+    expect(pointsOptionLabel(1, null, 'any')).toBe('1 pt off list');
   });
 });
 
