@@ -62,7 +62,7 @@ describe('partAnchor — Glasgow', () => {
     });
     const scene: BoardScene = {
       bounds: { min: { x: -5, y: -5 }, max: { x: 5, y: 5 } }, thicknessMm: 1, warnings: [],
-      stats: { footprints: 1, pads: 1, vias: 0, tracks: 0, triangles: 4, buildMs: 0 },
+      stats: { footprints: 1, pads: 1, vias: 0, tracks: 0, triangles: 4, buildMs: 0, bodiesFromFab: 0 },
       groups: [
         { material: 'substrate', ...quad(1) },
         { material: 'substrate', ...quad(0) },

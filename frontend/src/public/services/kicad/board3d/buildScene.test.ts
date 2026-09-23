@@ -26,11 +26,15 @@ describe('buildScene — Glasgow', () => {
     expect(s.bounds.max.y - s.bounds.min.y).toBeCloseTo(49, 0);
     expect(s.stats).toMatchObject({ footprints: 272, pads: 1149, vias: 416, tracks: 4715 });
     expect(s.stats.triangles).toBeGreaterThan(20_000);
+    // A runaway guard, not the budget: alone this build is ~1.07 s (spec
+    // 2026-09-22 3D parts §3 holds it to 1.5 s), but under the full parallel
+    // suite the same build measures ~1.8 s, so the bound here stays loose and
+    // the budget the new pass adds is pinned by itself in leads.test.ts.
     expect(s.stats.buildMs).toBeLessThan(3000);
   });
   it('has one group per material/layer, at most a dozen', () => {
     const keys = s.groups.map((g) => `${g.material}/${g.layerName}`);
-    expect(keys).toEqual(expect.arrayContaining(['substrate/null', 'hole-wall/null', 'copper/F.Cu', 'copper/B.Cu', 'mask/F.Mask', 'mask/B.Mask', 'silk/F.SilkS', 'body/null']));
+    expect(keys).toEqual(expect.arrayContaining(['substrate/null', 'hole-wall/null', 'copper/F.Cu', 'copper/B.Cu', 'mask/F.Mask', 'mask/B.Mask', 'silk/F.SilkS', 'body/null', 'lead/null']));
     expect(s.groups.length).toBeLessThanOrEqual(12);
     for (const g of s.groups) {
       expect(g.positions.length % 3).toBe(0);
@@ -114,19 +118,117 @@ describe('buildScene — Glasgow', () => {
     // A through-hole part's pads are on BOTH copper layers; U30 (a BGA) is on one.
     expect(bcu.parts!.some((r) => r.ref === 'U30')).toBe(false);
     // No table on the groups nobody can pick.
-    for (const g of s.groups) if (g.material !== 'body' && g.material !== 'copper') expect(g.parts).toBeUndefined();
+    for (const g of s.groups) if (g.material !== 'body' && g.material !== 'copper' && g.material !== 'lead') expect(g.parts).toBeUndefined();
   });
-  it('reduced quality has no bodies and fewer triangles', () => {
+  it('reduced quality has no bodies, no leads and fewer triangles', () => {
     const r = load('glasgow-revC3/glasgow.kicad_pcb', 'reduced');
     expect(r.groups.find((g) => g.material === 'body')).toBeUndefined();
+    expect(r.groups.find((g) => g.material === 'lead')).toBeUndefined();
+    expect(r.stats.bodiesFromFab).toBe(0);
     expect(r.stats.triangles).toBeLessThan(s.stats.triangles);
     // …but a phone can still pick a part by its pads.
     // 172 of the 272 footprints have a pad on F.Cu; the rest are back-side parts.
     expect(r.groups.find((g) => g.material === 'copper' && g.layerName === 'F.Cu')!.parts).toHaveLength(172);
   });
-  it('transferList lists every buffer once, the bodies\' edges included', () => {
-    expect(transferList(s)).toHaveLength(s.groups.length * 3 + s.groups.filter((g) => g.edges != null).length);
+  it('transferList lists every buffer once, the bodies\' edges and uvs included', () => {
+    const extra = s.groups.filter((g) => g.edges != null).length + s.groups.filter((g) => g.uvs != null).length;
+    expect(transferList(s)).toHaveLength(s.groups.length * 3 + extra);
+    for (const g of s.groups) if (g.uvs != null) expect(transferList(s)).toContain(g.uvs.buffer);
     expect(new Set(transferList(s)).size).toBe(transferList(s).length);
+  });
+});
+
+describe('buildScene — parts that look like parts (spec 2026-09-22)', () => {
+  const s = load('glasgow-revC3/glasgow.kicad_pcb');
+  const body = s.groups.find((g) => g.material === 'body')!;
+  const lead = s.groups.find((g) => g.material === 'lead')!;
+  /** Glasgow before the Fab outlines and the leads, measured at 70ab247. */
+  const TRIANGLES_BEFORE = 294_094;
+
+  it('draws more than 200 of the 264 bodies from the package outline, and counts them', () => {
+    expect(body.parts).toHaveLength(264);
+    expect(s.stats.bodiesFromFab).toBeGreaterThan(200);
+    expect(s.stats.bodiesFromFab).toBeLessThanOrEqual(264);
+  });
+  it('one lead group: layer-less, pickable, uv-mapped, in range', () => {
+    expect(s.groups.filter((g) => g.material === 'lead')).toHaveLength(1);
+    expect(lead.layerName).toBeNull();
+    expect(lead.edges).toBeUndefined();
+    for (const g of [body, lead]) {
+      expect(g.uvs).toBeInstanceOf(Float32Array);
+      expect(g.uvs!.length).toBe((g.positions.length / 3) * 2);
+      let max = -1;
+      for (const i of g.indices) if (i > max) max = i;
+      expect(max).toBeLessThan(g.positions.length / 3);
+      for (const v of g.uvs!) if (!Number.isFinite(v)) throw new Error(`${g.material} uv not finite`);
+    }
+    // Only the body and lead groups carry uvs.
+    for (const g of s.groups) if (g.material !== 'body' && g.material !== 'lead') expect(g.uvs).toBeUndefined();
+  });
+  it('lead ranges tile the group, ascending, each stamped with its part’s family; passives with their kind', () => {
+    let cursor = 0;
+    for (const r of lead.parts!) {
+      expect(r.start).toBe(cursor);
+      expect(r.count % 3).toBe(0);
+      expect(r.family, r.ref).toBeDefined();
+      cursor += r.count;
+    }
+    expect(cursor).toBe(lead.indices.length);
+    // The same family order the bodies take, so both tables read alike.
+    const order = ['ic', 'passive', 'connector', 'led', 'other'];
+    const ranks = lead.parts!.map((p) => order.indexOf(p.family!));
+    for (let i = 1; i < ranks.length; i++) expect(ranks[i]).toBeGreaterThanOrEqual(ranks[i - 1]);
+    // A part's pins carry the same family and passive kind as its body.
+    const bodyOf = new Map(body.parts!.map((p) => [p.ref, p]));
+    for (const r of lead.parts!) {
+      expect(bodyOf.get(r.ref)?.family, r.ref).toBe(r.family);
+      expect(bodyOf.get(r.ref)?.passive, r.ref).toBe(r.passive);
+    }
+    expect(lead.parts!.map((r) => r.ref)).toEqual(expect.arrayContaining(['J5', 'U1']));
+    expect(lead.parts!.some((r) => r.ref === 'U30')).toBe(false);   // a BGA shows no pins
+    // Passive kinds: Glasgow's C refs are caps, its R refs resistors, its L an inductor.
+    for (const p of body.parts!) {
+      if (p.family !== 'passive') { expect(p.passive, p.ref).toBeUndefined(); continue; }
+      if (/^C\d/.test(p.ref)) expect(p.passive, p.ref).toBe('cap');
+      if (/^R\d/.test(p.ref)) expect(p.passive, p.ref).toBe('res');
+      if (/^L\d/.test(p.ref)) expect(p.passive, p.ref).toBe('ind');
+    }
+  });
+  it('J5’s 44 feet and 44 shoulders are its range: 12 triangles each', () => {
+    const j5 = lead.parts!.find((r) => r.ref === 'J5')!;
+    expect(j5.family).toBe('connector');
+    expect(j5.count / 3).toBe(44 * 12 * 2);
+  });
+  it('an IC with a pad 1 carries its pin-1 dimple in its body range; a passive none', () => {
+    const dimpled = (ref: string) => {
+      const r = body.parts!.find((p) => p.ref === ref)!;
+      for (let i = r.start; i < r.start + r.count; i++) {
+        const v = body.indices[i];
+        const nz = Math.abs(body.normals[3 * v + 2]);
+        if (nz > 0.1 && nz < 0.5) return true;
+      }
+      return false;
+    };
+    const us = body.parts!.filter((p) => /^U\d/.test(p.ref));
+    expect(us.length).toBeGreaterThan(20);
+    // Measured: every one of Glasgow's 33 U bodies is big enough to carry the
+    // mark (4 r ≤ its smaller side, r ≥ 0.15 mm), and each has a pin 1.
+    expect(us.filter((p) => !dimpled(p.ref)).map((p) => p.ref)).toEqual([]);
+    expect(dimpled('U30')).toBe(true);   // a BGA's pin 1 is ball A1
+    const c = body.parts!.find((p) => p.family === 'passive')!;
+    expect(dimpled(c.ref)).toBe(false);
+  });
+  it('the leads stand on the mask, on their part’s own side', () => {
+    const mask = s.groups.find((g) => g.material === 'mask' && g.layerName === 'F.Mask')!;
+    const back = s.groups.find((g) => g.material === 'mask' && g.layerName === 'B.Mask')!;
+    const zF = mask.positions[2], zB = back.positions[2];
+    for (let i = 2; i < lead.positions.length; i += 3) {
+      const z = lead.positions[i];
+      expect(z >= zF - 1e-6 || z <= zB + 1e-6).toBe(true);
+    }
+  });
+  it('costs at most 40 % more triangles than the courtyard boxes did', () => {
+    expect(s.stats.triangles).toBeLessThanOrEqual(TRIANGLES_BEFORE * 1.4);
   });
 });
 

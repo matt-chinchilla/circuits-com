@@ -8,18 +8,19 @@
 // (2) A group is one draw call, so geometry is merged per (material, layer) and
 // never per pad or per track.
 import type { BoardStackup, KicadReadErrorKind } from '../types';
-import { courtyards } from './courtyards';
+import { courtyardOf, type Courtyard } from './courtyards';
+import { leadsOf, pin1Mark } from './leads';
 import { bbox, place, type Box } from './geom';
 import { zLadder } from './layers';
 import { boardOutline, shapePolylines } from './outline';
 import { ringContains, ringsOverlap } from './overlap';
 import { drillRing, placedPadRing } from './pads';
-import { PART_FAMILIES, partFamily } from './partFamily';
+import { PART_FAMILIES, partFamily, passiveKind, type PartFamily, type PassiveKind } from './partFamily';
 import { circleRing, strokePolygon } from './strokes';
 import { readBoardModel } from './readBoardModel';
 import { MeshBuilder } from './tessellate';
 import {
-  TOL_MM, type BoardModel, type BoardScene, type BoardWarning, type ClassRange, type Material,
+  TOL_MM, type BoardModel, type BoardScene, type FootprintModel, type BoardWarning, type ClassRange, type Material,
   type MeshGroup, type NetRange, type PartRange, type Placement, type Quality, type Ring, type Shape, type Side, type Vec2,
 } from './types';
 
@@ -39,6 +40,9 @@ export type BuildReply =
 /** Mask sits this far off the outer copper, and silk this far off the mask. Not a
  *  measurement — a z-fighting separation, two orders under the thinnest real layer. */
 const LAYER_GAP_MM = 0.01;
+/** A pin-1 dimple sits this far off the body's top face: a z-fighting
+ *  separation, like LAYER_GAP_MM, not a depth. */
+const DIMPLE_GAP_MM = 0.003;
 /** `reduced` drops tracks finer than this: they are sub-pixel at any framing that
  *  fits a whole board on a phone, and they are the bulk of the stroke count. */
 const MIN_TRACK_MM = 0.2;
@@ -460,31 +464,66 @@ function buildSceneFromModel(
     emit(silk, 'silk', name);
   }
 
-  // Bodies are the one group `reduced` drops whole: they are the most triangles
-  // per pixel on the board, and a phone reads the copper long before it reads a
-  // 0402's 0.6 mm block. Skipping the courtyard pass there also skips its warning
-  // — nothing was simplified, because nothing was attempted.
+  // Bodies — and the pins and terminals drawn against them — are the groups
+  // `reduced` drops whole: they are the most triangles per pixel on the board,
+  // and a phone reads the copper long before it reads a 0402's 0.35 mm block.
+  // Skipping the outline pass there also skips its warning — nothing was
+  // simplified, because nothing was attempted.
+  let bodiesFromFab = 0;
   if (quality === 'full') {
-    const { bodies, missing } = courtyards(model, tol);
+    // One body per footprint that has an outline, kept beside its footprint:
+    // the leads and the pin-1 mark are laid out from the pads.
+    let missing = 0;
+    const tinted: { fp: FootprintModel; body: Courtyard; family: PartFamily; passive: PassiveKind | null }[] = [];
+    for (const fp of model.footprints) {
+      const body = courtyardOf(fp, tol);
+      if (body == null) { missing++; continue; }
+      const family = partFamily(body.lib, body.ref);
+      const passive = family === 'passive' ? passiveKind(body.lib, body.ref) : null;
+      tinted.push({ fp, body, family, passive });
+    }
     // Drawn in FAMILY order (stable, so a family keeps its file order): every
     // body of one family is then one contiguous run of the group's indices,
     // and the renderer, which draws the opaque families in one material and
     // the glass ones in another, gets two draw ranges rather than one per part.
+    // The leads follow the same order, so a part's pins and body sit at the
+    // same place in their two tables.
     const rank = new Map(PART_FAMILIES.map((f, i) => [f, i]));
-    const tinted = bodies.map((body) => ({ body, family: partFamily(body.lib, body.ref) }));
     tinted.sort((a, b) => (rank.get(a.family) ?? 0) - (rank.get(b.family) ?? 0));
-    const bodyMesh = builder();
+    const bodyMesh = new MeshBuilder(true, centre, true);
+    const leadMesh = new MeshBuilder(true, centre, true);
     const bodyParts: PartRange[] = [];
-    for (const { body, family } of tinted) {
+    const leadParts: PartRange[] = [];
+    const stamp = (range: PartRange | null, family: PartFamily, passive: PassiveKind | null) => {
+      if (range == null) return;
+      range.family = family;
+      if (passive != null) range.passive = passive;
+    };
+    for (const { body, family, passive, fp } of tinted) {
+      if (body.source === 'fab') bodiesFromFab++;
       const base = maskZ[body.side];
-      const outer = body.side === 'F' ? base + body.heightMm : base - body.heightMm;
-      const range = ranged(bodyMesh, bodyParts, body.ref, () => {
+      const sgn = body.side === 'F' ? 1 : -1;
+      const outer = base + sgn * body.heightMm;
+      const mark = pin1Mark(fp, body, family);
+      stamp(ranged(bodyMesh, bodyParts, body.ref, () => {
         bodyMesh.addPrism({ outer: body.ring, holes: [] }, base, outer);
         bodyMesh.addPrismEdges(body.ring, base, outer);
-      });
-      if (range != null) range.family = family;
+        if (mark != null) bodyMesh.addDimple(mark.c, mark.r, outer + sgn * DIMPLE_GAP_MM, body.side === 'F');
+      }), family, passive);
+      const solids = leadsOf(fp, body, family);
+      if (solids.length === 0) continue;
+      stamp(ranged(leadMesh, leadParts, body.ref, () => {
+        for (const solid of solids) {
+          if (solid.kind === 'shoulder') {
+            leadMesh.addHexahedron(solid.corners.map((c) => ({ x: c.x, y: c.y, z: base + sgn * c.level })));
+          } else {
+            leadMesh.addPrism({ outer: solid.ring, holes: [] }, base + sgn * solid.lo, base + sgn * solid.hi);
+          }
+        }
+      }), family, passive);
     }
     emit(bodyMesh, 'body', null, { parts: bodyParts });
+    emit(leadMesh, 'lead', null, { parts: leadParts });
     if (missing > 0) warnings.push({ kind: 'no-courtyard', count: missing });
   }
 
@@ -506,6 +545,7 @@ function buildSceneFromModel(
       tracks: model.tracks.length,
       triangles,
       buildMs: performance.now() - startedAt,
+      bodiesFromFab,
     },
     nets: model.nets,
   };
@@ -518,6 +558,7 @@ export function transferList(scene: BoardScene): ArrayBuffer[] {
   for (const g of scene.groups) {
     out.push(g.positions.buffer as ArrayBuffer, g.normals.buffer as ArrayBuffer, g.indices.buffer as ArrayBuffer);
     if (g.edges != null) out.push(g.edges.buffer as ArrayBuffer);
+    if (g.uvs != null) out.push(g.uvs.buffer as ArrayBuffer);
   }
   return out;
 }
