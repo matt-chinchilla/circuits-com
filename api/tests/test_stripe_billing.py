@@ -290,6 +290,48 @@ def test_list_invoices_filters_by_params(fake):
     }
 
 
+def test_list_overdue_send_invoice_invoices_is_one_filtered_paginated_list(fake):
+    """F14: the sweep's ONE call — open, send_invoice, due before the cutoff —
+    filtered by Stripe (the fake filters on the same query params), paginated
+    with starting_after."""
+    from datetime import UTC, datetime
+
+    cutoff = datetime(2026, 10, 1, tzinfo=UTC)
+    before, after = int(cutoff.timestamp()) - 86_400, int(cutoff.timestamp()) + 86_400
+    for n in range(105):
+        fake.add_open_invoice(
+            f"in_overdue{n:05d}",
+            sub=f"sub_overdue{n:05d}",
+            amount=210000,
+            created=1_000 + n,
+            due_date=before,
+            collection_method="send_invoice",
+        )
+    fake.add_open_invoice(
+        "in_notdueyet01",
+        sub="sub_notdueyet01",
+        amount=210000,
+        due_date=after,
+        collection_method="send_invoice",
+    )
+    fake.add_open_invoice("in_cardopen001", sub="sub_cardopen001", amount=210000)
+    paid = fake.add_paid_invoice("in_paidlate001", sub="sub_paidlate001", pi="pi_x1", amount=1)
+    paid.update(collection_method="send_invoice", due_date=before)
+
+    rows = run(lambda c: sb.list_overdue_send_invoice_invoices(c, cutoff), fake)
+    assert sorted(r["id"] for r in rows) == [f"in_overdue{n:05d}" for n in range(105)]
+
+    calls = fake.calls("GET", "/v1/invoices")
+    assert len(calls) == 2
+    assert calls[0].params == {
+        "status": "open",
+        "collection_method": "send_invoice",
+        "due_date[lt]": str(int(cutoff.timestamp())),
+        "limit": "100",
+    }
+    assert calls[1].params["starting_after"] == rows[99]["id"]
+
+
 def test_invoice_payment_intent_uses_invoice_payments(fake):
     fake.add_paid_invoice("in_000000001", sub=SUB, pi="pi_000000001", amount=210000)
     assert "payment_intent" not in fake.invoices["in_000000001"]  # the dahlia shape

@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -122,6 +123,29 @@ async def _all_invoices(client: httpx.AsyncClient, sub_id: str, status: str) -> 
     params: dict[str, Any] = {
         "subscription": checked_id("sub", sub_id),
         "status": status,
+        "limit": _PAGE,
+    }
+    while True:
+        listing = await _call(client, "GET", "/v1/invoices", params=params)
+        page = list(listing.get("data") or [])
+        rows.extend(page)
+        if not listing.get("has_more") or not page:
+            return rows
+        params = {**params, "starting_after": page[-1]["id"]}
+
+
+async def list_overdue_send_invoice_invoices(
+    client: httpx.AsyncClient, due_before: datetime
+) -> list[dict]:
+    """Every OPEN ``send_invoice`` invoice due before ``due_before``, across
+    the whole account — ONE paginated list (the sweep and Needs attention ask
+    once, not once per invoiced sponsor). The caller maps each invoice to its
+    subscription (``billing_mirror.invoice_subscription_id``)."""
+    rows: list[dict] = []
+    params: dict[str, Any] = {
+        "status": "open",
+        "collection_method": "send_invoice",
+        "due_date[lt]": int(due_before.timestamp()),
         "limit": _PAGE,
     }
     while True:

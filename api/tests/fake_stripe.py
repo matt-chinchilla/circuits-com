@@ -674,6 +674,22 @@ class FakeStripe:
                 rows = [i for i in rows if i.get("customer") == params["customer"]]
             if "status" in params:
                 rows = [i for i in rows if i["status"] == params["status"]]
+            if "collection_method" in params:
+                rows = [i for i in rows if i["collection_method"] == params["collection_method"]]
+            for op, keep in (
+                ("lt", lambda d, v: d < v),
+                ("lte", lambda d, v: d <= v),
+                ("gt", lambda d, v: d > v),
+                ("gte", lambda d, v: d >= v),
+            ):
+                if f"due_date[{op}]" in params:
+                    bound = int(params[f"due_date[{op}]"])
+                    # Stripe omits invoices with no due date from a due_date range.
+                    rows = [
+                        i
+                        for i in rows
+                        if i.get("due_date") is not None and keep(i["due_date"], bound)
+                    ]
             rows.sort(key=lambda i: i["created"], reverse=True)  # Stripe lists newest first
             return httpx.Response(200, json=self._page(rows, params))
         if len(parts) >= 2 and parts[0] == "invoices":
