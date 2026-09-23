@@ -20,6 +20,7 @@ from app.routes import (
     admin_messages,
     admin_presence,
     admin_quotes,
+    admin_sales_codes,
     admin_sponsors,
     admin_users,
     analytics,
@@ -96,6 +97,7 @@ app.include_router(calendar.router)
 app.include_router(sitemap.router)
 app.include_router(stripe_webhooks.router)
 app.include_router(admin_quotes.router)
+app.include_router(admin_sales_codes.router)
 app.include_router(feed_credentials.router)
 app.include_router(checkout.router)
 app.include_router(bom.router)
