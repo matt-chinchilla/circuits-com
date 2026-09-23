@@ -715,3 +715,114 @@ def test_route_schedules_nothing_for_plain_outcomes(client, db, seeded_db, monke
     resp = _signed(client, {"type": "charge.refunded", "data": {"object": {}}})
     assert resp.json()["outcome"] == "ignored_event_type"
     assert scheduled == []
+
+
+# ── F7: every bad_metadata refusal after payment is a refunded conflict ─────
+
+
+def _assert_bad_metadata_conflict(db, intent, event, outcome):
+    assert outcome == "checkout_conflict_refunding"
+    db.refresh(intent)
+    assert (intent.status, intent.conflict_reason) == ("conflict", "bad_metadata")
+    assert intent.resolved_at is None
+    audits = _audits(db, "sale_conflict")
+    assert len(audits) == 1 and audits[0].intent_id == intent.id
+    assert audits[0].detail.startswith("bad_metadata;")
+    assert followup_for(event, outcome) == ("conflict", str(intent.id))
+
+
+def test_a_paid_session_without_a_subscription_is_a_bad_metadata_conflict(db, gold_child):
+    intent = _intent(db, category=gold_child)
+    event = _completed(intent, sub=None)
+    _assert_bad_metadata_conflict(db, intent, event, apply_stripe_event(db, event))
+    assert db.query(Sponsor).filter(Sponsor.category_id == gold_child.id).count() == 0
+
+
+def test_a_bound_supplier_deleted_before_completion_is_a_bad_metadata_conflict(db, gold_child):
+    gone = Supplier(name="Deleted Before Completion Co")
+    db.add(gone)
+    db.commit()
+    intent = _intent(db, category=gold_child, supplier_id=gone.id, channel="rep_code")
+    db.delete(gone)
+    db.commit()
+    event = _completed(intent)
+    _assert_bad_metadata_conflict(db, intent, event, apply_stripe_event(db, event))
+    assert db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").count() == 0
+
+
+def test_an_intent_with_both_category_and_keyword_is_a_bad_metadata_conflict(db, gold_child):
+    intent = _intent(db, category=gold_child, keyword="both-set")
+    event = _completed(intent)
+    _assert_bad_metadata_conflict(db, intent, event, apply_stripe_event(db, event))
+    assert db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").count() == 0
+
+
+def test_an_intent_with_an_unknown_tier_is_a_bad_metadata_conflict(db, gold_child):
+    intent = _intent(db, category=gold_child)
+    intent.tier = "diamond"
+    db.commit()
+    event = _completed(intent)
+    _assert_bad_metadata_conflict(db, intent, event, apply_stripe_event(db, event))
+    assert db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").count() == 0
+
+
+# ── F9: InternalError on the status write and on the mirror commit ─────────
+
+
+def _commit_failing_on(db, monkeypatch, which: int) -> None:
+    """Make the ``which``-th commit (1-based) raise InternalError, as the
+    tier-matrix trigger does; every other commit is real."""
+    real_commit = db.commit
+    seen: list[int] = []
+
+    def commit():
+        seen.append(1)
+        if len(seen) == which:
+            raise InternalError("UPDATE sponsors", {}, Exception("trigger said no"))
+        return real_commit()
+
+    monkeypatch.setattr(db, "commit", commit)
+
+
+def _expired_billed_sponsor(db, gold_child) -> Sponsor:
+    intent = _intent(db, category=gold_child)
+    apply_stripe_event(db, _completed(intent))
+    sponsor = db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").one()
+    sponsor.status = "Expired"
+    db.commit()
+    return sponsor
+
+
+def test_an_internal_error_on_the_status_write_rolls_back_and_acks(
+    client, db, gold_child, monkeypatch
+):
+    monkeypatch.setattr(settings, "STRIPE_WEBHOOK_SECRET", SECRET)
+    monkeypatch.setattr(webhook_route, "run_followup", _noop_followup)
+    sponsor = _expired_billed_sponsor(db, gold_child)
+    # Commit 1 = the mirror (real), commit 2 = Expired → Active (raises).
+    _commit_failing_on(db, monkeypatch, 2)
+
+    resp = _signed(client, _invoice(invoice="in_reactivate01", created=_later(600)))
+    assert resp.status_code == 200
+    assert resp.json()["outcome"] == "slot_conflict"
+    db.refresh(sponsor)
+    assert sponsor.status == "Expired", "the failed status write was rolled back"
+    # The mirror had committed on its own before the gates.
+    assert db.query(SponsorPayment).filter_by(stripe_invoice_id="in_reactivate01").count() == 1
+
+
+def test_an_internal_error_on_the_mirror_commit_rolls_back_and_acks(
+    client, db, gold_child, monkeypatch
+):
+    monkeypatch.setattr(settings, "STRIPE_WEBHOOK_SECRET", SECRET)
+    monkeypatch.setattr(webhook_route, "run_followup", _noop_followup)
+    sponsor = _expired_billed_sponsor(db, gold_child)
+    # Commit 1 = the mirror (raises), commit 2 = the status write (real).
+    _commit_failing_on(db, monkeypatch, 1)
+
+    resp = _signed(client, _invoice(invoice="in_mirrorfail01", created=_later(600)))
+    assert resp.status_code == 200
+    assert resp.json()["outcome"] == "status_active"
+    assert db.query(SponsorPayment).filter_by(stripe_invoice_id="in_mirrorfail01").count() == 0
+    db.refresh(sponsor)
+    assert sponsor.status == "Active"
