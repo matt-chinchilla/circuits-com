@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fixtureText } from '../fixtures';
 import { courtyardOf } from './courtyards';
 import { bbox } from './geom';
-import { FOOT_MM, SHOULDER_SHARE, isChipPackage, isLeadless, leadsOf, localBodyBox, pin1Mark, type LeadSolid } from './leads';
+import { FOOT_MM, SHOULDER_SHARE, isChipPackage, isLeadless, leadsOf, localBodyBox, pin1Mark, type LeadSolid, TAIL_MM, pinRise } from './leads';
 import { placedPadRing } from './pads';
 import { partFamily } from './partFamily';
 import { readBoardModel } from './readBoardModel';
@@ -77,7 +77,7 @@ describe('leadsOf — Glasgow', () => {
     }
     expect(new Set(solids.map((s) => s.pad))).toEqual(new Set(['1', '2']));
   });
-  it('a BGA draws nothing under itself; the through-hole IDC header gets a post per pin, rising 2 mm past its body', () => {
+  it('a BGA draws nothing under itself; the shrouded IDC header gets a post per pin, inside its shroud, with a tail', () => {
     const u30 = fpOf('U30');
     expect(u30.lib).toContain('BGA');
     expect(leads(u30)).toEqual([]);
@@ -86,10 +86,39 @@ describe('leadsOf — Glasgow', () => {
     const tht = idc.pads.filter((p) => p.kind === 'thru_hole' && p.drill != null);
     expect(count(solids, 'post')).toBe(tht.length);
     const body = courtyardOf(idc, 0.01)!;
-    for (const s of solids) if (s.kind === 'post') expect(s.hi).toBeCloseTo(body.heightMm + 2, 9);
+    for (const s of solids) {
+      if (s.kind !== 'post') continue;
+      expect(s.hi).toBeCloseTo(body.heightMm - 0.8, 9);
+      expect(s.hi).toBeLessThan(body.heightMm);
+      expect(s.tail).toBe(TAIL_MM);
+    }
     const side = Math.max(0.3, 0.64 * tht[0].drill!.d);
     const pb = bbox((solids[0] as { ring: { pts: { x: number; y: number }[] } }).ring.pts);
     expect(Math.min(pb.max.x - pb.min.x, pb.max.y - pb.min.y)).toBeCloseTo(side, 6);
+  });
+  it('pins point the right way (owner: "some of those pins are upside-down"): only a vertical male header stands above its plastic', () => {
+    const posts = (ref: string) => leads(fpOf(ref)).filter((s) => s.kind === 'post') as { hi: number; tail?: number }[];
+    // J10 — Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical: male, pins up.
+    const j10 = fpOf('J10');
+    expect(j10.lib).toContain('PinHeader');
+    for (const p of posts('J10')) expect(p.hi).toBeCloseTo(courtyardOf(j10, 0.01)!.heightMm + 2, 9);
+    // J6 — a pin SOCKET, J1 — a USB-C shell's pegs, J4 — a right-angle Molex, SW1 — a switch's pegs:
+    // nothing above the board; the pins are the tails under it.
+    for (const ref of ['J6', 'J1', 'J4', 'SW1']) {
+      const ps = posts(ref);
+      expect(ps.length, ref).toBeGreaterThan(0);
+      for (const p of ps) {
+        expect(p.hi, ref).toBe(0);
+        expect(p.tail, ref).toBe(TAIL_MM);
+      }
+    }
+  });
+  it('pinRise: the connector kinds', () => {
+    expect(pinRise('Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical', 'connector', 2)).toBe(4);
+    expect(pinRise('Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Horizontal', 'connector', 2)).toBe(0);
+    expect(pinRise('Glasgow:PinSocket_1x08_P1.27mm_Vertical_DNP', 'connector', 2)).toBe(0);
+    expect(pinRise('Connector_IDC:IDC-Header_2x10_P2.54mm_Vertical', 'connector', 6.4)).toBeCloseTo(5.6, 9);
+    expect(pinRise('Package_DIP:DIP-8_W7.62mm', 'ic', 3)).toBe(0);
   });
   it('an LED and a test point draw no surface leads', () => {
     const led = glasgow.footprints.find((f) => f.lib.startsWith('LED_SMD:'))!;

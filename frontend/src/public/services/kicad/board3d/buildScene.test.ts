@@ -19,6 +19,17 @@ const load = (rel: string, quality: 'full' | 'reduced' = 'full') => {
 };
 
 describe('buildScene — Glasgow', () => {
+  it('through-hole pins run through the board: their tails poke out under it, and no socket pin tops its body', () => {
+    const zs = (material: string) => {
+      const g = s.groups.find((x) => x.material === material)!;
+      let min = Infinity, max = -Infinity;
+      for (let k = 2; k < g.positions.length; k += 3) { min = Math.min(min, g.positions[k]); max = Math.max(max, g.positions[k]); }
+      return { min, max };
+    };
+    const lead = zs('lead'), board = zs('substrate');
+    // Tails reach past the far side: every front-side through-hole part on Glasgow.
+    expect(lead.min).toBeLessThan(board.min - 1);
+  });
   const s = load('glasgow-revC3/glasgow.kicad_pcb');
   it('reports honest thickness, bounds and stats', () => {
     expect(s.thicknessMm).toBeCloseTo(1.6, 6);

@@ -517,7 +517,10 @@ function buildSceneFromModel(
           if (solid.kind === 'shoulder') {
             leadMesh.addHexahedron(solid.corners.map((c) => ({ x: c.x, y: c.y, z: base + sgn * c.level })));
           } else {
-            leadMesh.addPrism({ outer: solid.ring, holes: [] }, base + sgn * solid.lo, base + sgn * solid.hi);
+            // A through-hole pin runs through the board: from its tail past the
+            // FAR side's mask up to its top on the part's own side.
+            const far = solid.tail != null ? maskZ[body.side === 'F' ? 'B' : 'F'] - sgn * solid.tail : null;
+            leadMesh.addPrism({ outer: solid.ring, holes: [] }, far ?? base + sgn * solid.lo, base + sgn * solid.hi);
           }
         }
       }), family, passive);

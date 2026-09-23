@@ -23,7 +23,11 @@ export type LeadSolid =
   /** A vertical prism over `ring` (placed, closed, any winding) from level
    *  `lo` to level `hi`: a chip's end termination, a gull-wing's flat foot, a
    *  through-hole pin. */
-  | { kind: 'termination' | 'foot' | 'post'; ring: Ring; lo: number; hi: number; pad: string }
+  | { kind: 'termination' | 'foot' | 'post'; ring: Ring; lo: number; hi: number; pad: string;
+      /** Through-hole pins only: the pin also runs DOWN through the board and
+       *  pokes out this far past the far side (the solder side), whatever
+       *  stands above it. The caller knows the board's thickness; this does not. */
+      tail?: number }
   /** A sloped slab from a foot's inner end up to the body wall: eight
    *  corners, `corners[0..3]` the underside and `[4..7]` the top, in order. */
   | { kind: 'shoulder'; corners: LeadPoint[]; pad: string };
@@ -42,8 +46,13 @@ const LEAD_WIDTH_SHARE = 0.8;
  *  proud of its end and sides, so the metal and the body never share a face. */
 const TERMINATION_PROUD_MM = 0.005;
 /** A through-hole pin's square side is this share of the drill, at least the
- *  minimum; it rises past the body top by the connector or the plain rise. */
-const POST_SHARE = 0.64, POST_MIN_MM = 0.3, POST_RISE_CONNECTOR_MM = 2.0, POST_RISE_MM = 0.3;
+ *  minimum. Above the board only a vertical MALE header's pins stand clear of
+ *  the body (by `POST_RISE_CONNECTOR_MM`); a shrouded header's pins stop
+ *  `SHROUD_INSET_MM` under the shroud's rim. */
+const POST_SHARE = 0.64, POST_MIN_MM = 0.3, POST_RISE_CONNECTOR_MM = 2.0, SHROUD_INSET_MM = 0.8;
+/** How far a through-hole pin's tail pokes out past the far side of the board
+ *  — a clipped lead after wave or hand soldering, near enough (estimated). */
+export const TAIL_MM = 1.5;
 /** Shorter than this, a shoulder is not drawn: the foot already meets the wall. */
 const MIN_SHOULDER_MM = 0.02;
 const EPS = 1e-6;
@@ -159,21 +168,34 @@ function gullWing(pad: PadModel, fp: FootprintModel, body: Box, height: number, 
   return out;
 }
 
-/** A through-hole pin: a square post on the drill, from the mask up past the
- *  body's top — well past it on a connector, whose pins are what a mating
- *  part plugs onto. */
+/**
+ * How far a through-hole part's pins stand ABOVE its own side of the board
+ * (owner, 2026-09-22: "some of those pins are upside-down" — every connector's
+ * pins used to stick 2 mm out of the TOP of its body). Only a vertical male
+ * pin header shows pins above its plastic; a shrouded (IDC / box) header's pins
+ * stay inside the shroud; a socket, a USB shell's pegs, a right-angle header
+ * and every other part show nothing above the body — their pins are the tails
+ * under the board. 0 = no pin above the board.
+ */
+export function pinRise(lib: string, family: PartFamily, height: number): number {
+  if (family !== 'connector') return 0;
+  if (/(IDC|Box[_-]?Header|Shrouded)/i.test(lib)) return Math.max(0, height - SHROUD_INSET_MM);
+  if (/PinHeader/i.test(lib) && !/(Horizontal|Angled|Right)/i.test(lib)) return height + POST_RISE_CONNECTOR_MM;
+  return 0;
+}
+
+/** A through-hole pin: a square post on the drill, through the board to a
+ *  tail on the far side, and above the board only as far as `pinRise` says. */
 function post(pad: PadModel, fp: FootprintModel, body: Box, height: number, family: PartFamily): LeadSolid | null {
   if (pad.drill == null || !(pad.drill.d > 0)) return null;
   // A plated hole under a part that is not a connector is a thermal via in an
-  // exposed pad, or the hole of a mounting pad — no pin stands in it, and a
-  // post would poke a stud through the top of the package.
+  // exposed pad, or the hole of a mounting pad — no pin stands in it.
   if (family !== 'connector' && pad.at.x > body.min.x && pad.at.x < body.max.x && pad.at.y > body.min.y && pad.at.y < body.max.y) {
     return null;
   }
   const h = Math.max(POST_MIN_MM, POST_SHARE * pad.drill.d) / 2;
   const b: Box = { min: { x: pad.at.x - h, y: pad.at.y - h }, max: { x: pad.at.x + h, y: pad.at.y + h } };
-  const rise = family === 'connector' ? POST_RISE_CONNECTOR_MM : POST_RISE_MM;
-  return { kind: 'post', ring: placedBox(b, fp), lo: 0, hi: height + rise, pad: pad.number };
+  return { kind: 'post', ring: placedBox(b, fp), lo: 0, hi: pinRise(fp.lib, family, height), tail: TAIL_MM, pad: pad.number };
 }
 
 /**
