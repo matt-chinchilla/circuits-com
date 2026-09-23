@@ -824,18 +824,20 @@ export const adminApi = {
   // when the dialog opens and reused on a retry) so a double click or a
   // network retry can never act twice. No bustingAfter on codes: a code is
   // not public until a sale activates, and that path is the webhook's.
-  // All of these 404 when STRIPE_SECRET_KEY is unset server-side.
+  // All of these 404 when STRIPE_SECRET_KEY is unset server-side. Trailing
+  // slash on list/create matches the router's `@router.get("/")` (the
+  // expenses precedent) — without it FastAPI 307-redirects every call.
 
   listSalesCodes: () =>
     cachedRead(
       'sales-codes:list',
-      () => adminClient.get<{ codes: SalesCode[] }>('/admin/sales-codes').then((r) => r.data.codes),
+      () => adminClient.get<{ codes: SalesCode[] }>('/admin/sales-codes/').then((r) => r.data.codes),
       { scopes: ['sales'] },
     ),
 
   createSalesCode: (body: SalesCodeCreate, idempotencyKey: string) =>
     adminClient
-      .post<SalesCode>('/admin/sales-codes', body, withIdempotency(idempotencyKey))
+      .post<SalesCode>('/admin/sales-codes/', body, withIdempotency(idempotencyKey))
       .then((r) => r.data),
 
   updateSalesCode: (id: string, body: SalesCodeUpdate) =>
