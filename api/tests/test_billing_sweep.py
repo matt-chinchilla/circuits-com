@@ -5,9 +5,11 @@ clock, over the shared FakeStripe:
 2. post-activation follow-ups not yet done;
 3. unresolved conflicts (cancel → refund every paid invoice → resolved);
 4. dunning (D4): ``charge_automatically`` failing for more than 14 days AND
-   live ``past_due``/``unpaid`` → cancel + void + ``Expired``; ``send_invoice``
-   whose oldest open invoice is 14+ days past due → the same; live
-   ``canceled`` → void only;
+   live ``past_due``/``unpaid`` → cancel + void + ``Expired``; live
+   ``active`` → the latest invoice re-mirrored and ``failing_since``
+   recomputed (F5); ``send_invoice`` whose oldest open invoice is 14+ days past
+   due → the same, found by ONE account-wide list (F14); live ``canceled`` →
+   void only;
 5. queued voids from ``customer.subscription.deleted``.
 
 One bad row never stops the others, and an un-migrated schema is a warning.
@@ -246,6 +248,127 @@ def test_an_invoiced_customer_ten_days_overdue_is_left_alone(db, seeded_db, fake
         collection_method="send_invoice",
     )
     assert swept()["dunning_cancelled"] == 0
+    assert db.get(Sponsor, sponsor.id).status == "Active"
+
+
+def test_invoiced_customers_cost_one_list_call_not_two_per_row(db, seeded_db, fake, swept):
+    """F14: the send_invoice check is ONE account-wide list of overdue open
+    invoices; only a row that list names costs further calls (cancel + void)."""
+    ts = lambda days: int((NOW - timedelta(days=days)).timestamp())  # noqa: E731
+    overdue = _sponsor(
+        db, seeded_db, sub="sub_manyinv0001", keyword="many1", collection="send_invoice"
+    )
+    for n, (sub, due) in enumerate(
+        [("sub_manyinv0001", ts(15)), ("sub_manyinv0002", ts(10)), ("sub_manyinv0003", ts(-5))]
+    ):
+        if sub != "sub_manyinv0001":
+            _sponsor(db, seeded_db, sub=sub, keyword=f"many{n + 1}", collection="send_invoice")
+        fake.add_subscription(sub, customer="cus_sweep000001", collection_method="send_invoice")
+        fake.add_open_invoice(
+            f"in_manyinv000{n + 1}",
+            sub=sub,
+            amount=210000,
+            created=ts(45),
+            due_date=due,
+            collection_method="send_invoice",
+        )
+
+    assert swept()["dunning_cancelled"] == 1
+
+    lists = [r for r in fake.calls("GET", "/v1/invoices") if "subscription" not in r.params]
+    assert len(lists) == 1
+    assert lists[0].params == {
+        "status": "open",
+        "collection_method": "send_invoice",
+        "due_date[lt]": str(ts(14)),
+        "limit": "100",
+    }
+    assert fake.calls("GET", "/v1/subscriptions/sub_manyinv0001") == []
+    touched = {r.path for r in fake.tape} | {r.params.get("subscription") for r in fake.tape}
+    assert not any(
+        "sub_manyinv0002" in (t or "") or "sub_manyinv0003" in (t or "") for t in touched
+    )
+    assert fake.subscriptions["sub_manyinv0001"]["status"] == "canceled"
+    assert fake.subscriptions["sub_manyinv0002"]["status"] == "active"
+    assert db.get(Sponsor, overdue.id).status == "Expired"
+    assert (
+        db.query(Sponsor)
+        .filter(Sponsor.keyword.in_(["many2", "many3"]), Sponsor.status == "Active")
+        .count()
+        == 2
+    )
+
+
+def test_a_recovered_subscription_clears_failing_since_and_a_new_failure_starts_fresh(
+    db, seeded_db, fake, swept
+):
+    """F5: live ``active`` → the sweep re-mirrors the latest invoice (repairing
+    a lost invoice.paid) and recomputes failing_since. A later single failure
+    then starts a FRESH clock — never an instant cancel on the next sweep."""
+    from app.models.sales import SponsorPayment
+    from app.services.stripe_webhook import apply_stripe_event
+
+    sub = "sub_recover0002"
+    old = NOW - timedelta(days=20)
+    sponsor = _sponsor(db, seeded_db, sub=sub, keyword="recovered2", failing_days=20)
+    db.add(
+        SponsorPayment(
+            stripe_invoice_id="in_lostpaid0001",
+            stripe_subscription_id=sub,
+            sponsor_id=sponsor.id,
+            status="failed",
+            amount_due_cents=210000,
+            invoice_created_at=old,
+        )
+    )
+    db.commit()
+    fake.add_subscription(
+        sub, customer="cus_sweep000001", status="active", latest_invoice="in_lostpaid0001"
+    )
+    fake.add_paid_invoice(
+        "in_lostpaid0001", sub=sub, pi="pi_lostpaid01", amount=210000, created=int(old.timestamp())
+    )
+
+    assert swept()["dunning_cancelled"] == 0
+    assert fake.calls("DELETE", f"/v1/subscriptions/{sub}") == []
+    assert db.get(SponsorBilling, sponsor.id).failing_since is None
+    assert db.query(SponsorPayment).filter_by(stripe_invoice_id="in_lostpaid0001").one().status == (
+        "paid"
+    )
+
+    # One new failure a day before the next sweep.
+    new_created = int((NOW - timedelta(days=1)).timestamp())
+    apply_stripe_event(
+        db,
+        {
+            "type": "invoice.payment_failed",
+            "created": new_created + 60,
+            "data": {
+                "object": {
+                    "id": "in_newfail00001",
+                    "object": "invoice",
+                    "customer": "cus_sweep000001",
+                    "status": "open",
+                    "attempted": True,
+                    "amount_due": 210000,
+                    "amount_paid": 0,
+                    "created": new_created,
+                    "parent": {
+                        "type": "subscription_details",
+                        "subscription_details": {"subscription": sub, "metadata": {}},
+                    },
+                }
+            },
+        },
+    )
+    db.expire_all()
+    since = db.get(SponsorBilling, sponsor.id).failing_since
+    assert since is not None
+    assert (since if since.tzinfo else since.replace(tzinfo=UTC)).timestamp() == new_created
+
+    fake.subscriptions[sub]["status"] = "past_due"
+    assert swept(NOW + timedelta(hours=1))["dunning_cancelled"] == 0
+    assert fake.subscriptions[sub]["status"] == "past_due"
     assert db.get(Sponsor, sponsor.id).status == "Active"
 
 

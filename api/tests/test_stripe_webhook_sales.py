@@ -145,6 +145,7 @@ def _invoice(
     metadata=None,
     created=None,
     paid=True,
+    invoice_created=1_800_000_000,
 ) -> dict:
     obj = {
         "id": invoice,
@@ -155,7 +156,7 @@ def _invoice(
         "attempted": True,
         "amount_due": amount,
         "amount_paid": amount if paid else 0,
-        "created": 1_800_000_000,
+        "created": invoice_created,
         "hosted_invoice_url": f"https://invoice.stripe.com/i/{invoice}",
         "status_transitions": {"paid_at": 1_800_000_060 if paid else None},
         "parent": {
@@ -237,14 +238,19 @@ def test_payment_failed_stamps_failing_since_once(db, gold_child):
     apply_stripe_event(db, _completed(intent))
     sponsor = db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").one()
 
-    first = _invoice("invoice.payment_failed", invoice="in_fail0001", paid=False)
+    first = _invoice(
+        "invoice.payment_failed", invoice="in_fail0001", paid=False, invoice_created=1_899_000_000
+    )
     first["created"] = 1_900_000_000
     assert apply_stripe_event(db, first) == "logged_payment_failed"
     billing = db.get(SponsorBilling, sponsor.id)
     stamped = as_utc(billing.failing_since)
-    assert stamped == datetime.fromtimestamp(1_900_000_000, UTC)
+    # F2: derived from the failed INVOICE's date, not the event's.
+    assert stamped == datetime.fromtimestamp(1_899_000_000, UTC)
 
-    second = _invoice("invoice.payment_failed", invoice="in_fail0001", paid=False)
+    second = _invoice(
+        "invoice.payment_failed", invoice="in_fail0001", paid=False, invoice_created=1_899_000_000
+    )
     second["created"] = 1_900_500_000
     assert apply_stripe_event(db, second) == "logged_payment_failed"
     db.refresh(billing)
@@ -254,6 +260,68 @@ def test_payment_failed_stamps_failing_since_once(db, gold_child):
     assert db.query(SponsorPayment).filter_by(stripe_invoice_id="in_fail0001").one().status == (
         "failed"
     )
+
+
+# F2: failing_since is DERIVED from the mirror — the oldest still-failed
+# invoice of the subscription — never toggled by the event type.
+MONTH_1, MONTH_2, MONTH_3 = 1_800_000_000, 1_802_600_000, 1_805_200_000
+
+
+def _failing_since(db, sponsor):
+    db.expire_all()
+    return as_utc(db.get(SponsorBilling, sponsor.id).failing_since)
+
+
+def _activated(db, gold_child) -> Sponsor:
+    intent = _intent(db, category=gold_child)
+    apply_stripe_event(db, _completed(intent))
+    return db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").one()
+
+
+def _paid(invoice: str, month: int) -> dict:
+    return _invoice(invoice=invoice, invoice_created=month)
+
+
+def _failed(invoice: str, month: int) -> dict:
+    return _invoice("invoice.payment_failed", invoice=invoice, paid=False, invoice_created=month)
+
+
+def test_a_replayed_older_paid_invoice_does_not_clear_a_newer_failure(db, gold_child):
+    sponsor = _activated(db, gold_child)
+    apply_stripe_event(db, _paid("in_month0001", MONTH_1))
+    apply_stripe_event(db, _failed("in_month0002", MONTH_2))
+    assert _failing_since(db, sponsor) == datetime.fromtimestamp(MONTH_2, UTC)
+
+    # Month 1's invoice.paid delivered again (a Resend, a retry).
+    apply_stripe_event(db, _paid("in_month0001", MONTH_1))
+    assert _failing_since(db, sponsor) == datetime.fromtimestamp(MONTH_2, UTC)
+
+
+def test_paying_the_failed_invoice_clears_failing_since(db, gold_child):
+    sponsor = _activated(db, gold_child)
+    apply_stripe_event(db, _failed("in_month0002", MONTH_2))
+    assert _failing_since(db, sponsor) == datetime.fromtimestamp(MONTH_2, UTC)
+    apply_stripe_event(db, _paid("in_month0002", MONTH_2))
+    assert _failing_since(db, sponsor) is None
+
+
+def test_a_new_failure_after_a_recovery_starts_a_fresh_clock(db, gold_child):
+    sponsor = _activated(db, gold_child)
+    apply_stripe_event(db, _failed("in_month0002", MONTH_2))
+    apply_stripe_event(db, _paid("in_month0002", MONTH_2))
+    apply_stripe_event(db, _failed("in_month0003", MONTH_3))
+    assert _failing_since(db, sponsor) == datetime.fromtimestamp(MONTH_3, UTC)
+
+
+def test_paid_delivered_before_failed_for_the_same_invoice_ends_clear(db, gold_child):
+    """Delivery is unordered: the invoice's final state is paid, and the
+    mirror never downgrades a settled row to failed."""
+    sponsor = _activated(db, gold_child)
+    apply_stripe_event(db, _paid("in_month0002", MONTH_2))
+    apply_stripe_event(db, _failed("in_month0002", MONTH_2))
+    assert _failing_since(db, sponsor) is None
+    status = db.query(SponsorPayment).filter_by(stripe_invoice_id="in_month0002").one().status
+    assert status == "paid"
 
 
 def test_mirroring_never_writes_the_sponsor_row(db, gold_child):
@@ -715,3 +783,114 @@ def test_route_schedules_nothing_for_plain_outcomes(client, db, seeded_db, monke
     resp = _signed(client, {"type": "charge.refunded", "data": {"object": {}}})
     assert resp.json()["outcome"] == "ignored_event_type"
     assert scheduled == []
+
+
+# ── F7: every bad_metadata refusal after payment is a refunded conflict ─────
+
+
+def _assert_bad_metadata_conflict(db, intent, event, outcome):
+    assert outcome == "checkout_conflict_refunding"
+    db.refresh(intent)
+    assert (intent.status, intent.conflict_reason) == ("conflict", "bad_metadata")
+    assert intent.resolved_at is None
+    audits = _audits(db, "sale_conflict")
+    assert len(audits) == 1 and audits[0].intent_id == intent.id
+    assert audits[0].detail.startswith("bad_metadata;")
+    assert followup_for(event, outcome) == ("conflict", str(intent.id))
+
+
+def test_a_paid_session_without_a_subscription_is_a_bad_metadata_conflict(db, gold_child):
+    intent = _intent(db, category=gold_child)
+    event = _completed(intent, sub=None)
+    _assert_bad_metadata_conflict(db, intent, event, apply_stripe_event(db, event))
+    assert db.query(Sponsor).filter(Sponsor.category_id == gold_child.id).count() == 0
+
+
+def test_a_bound_supplier_deleted_before_completion_is_a_bad_metadata_conflict(db, gold_child):
+    gone = Supplier(name="Deleted Before Completion Co")
+    db.add(gone)
+    db.commit()
+    intent = _intent(db, category=gold_child, supplier_id=gone.id, channel="rep_code")
+    db.delete(gone)
+    db.commit()
+    event = _completed(intent)
+    _assert_bad_metadata_conflict(db, intent, event, apply_stripe_event(db, event))
+    assert db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").count() == 0
+
+
+def test_an_intent_with_both_category_and_keyword_is_a_bad_metadata_conflict(db, gold_child):
+    intent = _intent(db, category=gold_child, keyword="both-set")
+    event = _completed(intent)
+    _assert_bad_metadata_conflict(db, intent, event, apply_stripe_event(db, event))
+    assert db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").count() == 0
+
+
+def test_an_intent_with_an_unknown_tier_is_a_bad_metadata_conflict(db, gold_child):
+    intent = _intent(db, category=gold_child)
+    intent.tier = "diamond"
+    db.commit()
+    event = _completed(intent)
+    _assert_bad_metadata_conflict(db, intent, event, apply_stripe_event(db, event))
+    assert db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").count() == 0
+
+
+# ── F9: InternalError on the status write and on the mirror commit ─────────
+
+
+def _commit_failing_on(db, monkeypatch, which: int) -> None:
+    """Make the ``which``-th commit (1-based) raise InternalError, as the
+    tier-matrix trigger does; every other commit is real."""
+    real_commit = db.commit
+    seen: list[int] = []
+
+    def commit():
+        seen.append(1)
+        if len(seen) == which:
+            raise InternalError("UPDATE sponsors", {}, Exception("trigger said no"))
+        return real_commit()
+
+    monkeypatch.setattr(db, "commit", commit)
+
+
+def _expired_billed_sponsor(db, gold_child) -> Sponsor:
+    intent = _intent(db, category=gold_child)
+    apply_stripe_event(db, _completed(intent))
+    sponsor = db.query(Sponsor).filter(Sponsor.stripe_subscription_id == "sub_A").one()
+    sponsor.status = "Expired"
+    db.commit()
+    return sponsor
+
+
+def test_an_internal_error_on_the_status_write_rolls_back_and_acks(
+    client, db, gold_child, monkeypatch
+):
+    monkeypatch.setattr(settings, "STRIPE_WEBHOOK_SECRET", SECRET)
+    monkeypatch.setattr(webhook_route, "run_followup", _noop_followup)
+    sponsor = _expired_billed_sponsor(db, gold_child)
+    # Commit 1 = the mirror (real), commit 2 = Expired → Active (raises).
+    _commit_failing_on(db, monkeypatch, 2)
+
+    resp = _signed(client, _invoice(invoice="in_reactivate01", created=_later(600)))
+    assert resp.status_code == 200
+    assert resp.json()["outcome"] == "slot_conflict"
+    db.refresh(sponsor)
+    assert sponsor.status == "Expired", "the failed status write was rolled back"
+    # The mirror had committed on its own before the gates.
+    assert db.query(SponsorPayment).filter_by(stripe_invoice_id="in_reactivate01").count() == 1
+
+
+def test_an_internal_error_on_the_mirror_commit_rolls_back_and_acks(
+    client, db, gold_child, monkeypatch
+):
+    monkeypatch.setattr(settings, "STRIPE_WEBHOOK_SECRET", SECRET)
+    monkeypatch.setattr(webhook_route, "run_followup", _noop_followup)
+    sponsor = _expired_billed_sponsor(db, gold_child)
+    # Commit 1 = the mirror (raises), commit 2 = the status write (real).
+    _commit_failing_on(db, monkeypatch, 1)
+
+    resp = _signed(client, _invoice(invoice="in_mirrorfail01", created=_later(600)))
+    assert resp.status_code == 200
+    assert resp.json()["outcome"] == "status_active"
+    assert db.query(SponsorPayment).filter_by(stripe_invoice_id="in_mirrorfail01").count() == 0
+    db.refresh(sponsor)
+    assert sponsor.status == "Active"
