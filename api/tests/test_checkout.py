@@ -10,16 +10,19 @@ import hashlib
 import hmac
 import json
 import time
+import uuid
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-import httpx
 import pytest
 
 from app.config import settings
 from app.models import Expense, Sponsor, Supplier  # noqa: F401 — Expense keeps fixtures importable
+from app.models.sales import CheckoutIntent
 from app.services import stripe_checkout, stripe_quotes
 from app.services.stripe_checkout import create_silver_checkout_session
 from app.services.stripe_webhook import apply_stripe_event
+from tests.fake_stripe import FakeStripe
 
 SECRET = "whsec_checkout_test"
 URL = "/api/checkout/silver"
@@ -84,8 +87,15 @@ def test_routes_404_without_a_key(client):
 
 
 def test_info_serves_the_ladder_price(client, stripe_key):
+    """``monthly_total`` stays LIST for cached pre-Founder bundles (LU-F11);
+    ``price_usd`` is what Stripe charges — the Founder's Deal."""
     body = client.get(URL).json()
-    assert body == {"monthly_total": 250, "tax_included": True}
+    assert body == {
+        "monthly_total": 250,
+        "price_usd": 210,
+        "founder_usd": 210,
+        "tax_included": True,
+    }
 
 
 def test_placement_xor_is_enforced(client, stripe_key, seeded_db):
@@ -111,14 +121,24 @@ def test_unknown_and_malformed_category_ids_are_404(client, stripe_key, seeded_d
         assert resp.status_code == 404, bad
 
 
-def test_create_builds_the_session_from_the_placement(client, stripe_key, seeded_db, monkeypatch):
-    seen = {}
+def _fake_create_into(seen: dict):
+    """A stand-in session builder that records what the route handed it and
+    returns a UNIQUE session id per call (the intent stores it, and
+    ``checkout_intents.stripe_session_id`` is unique)."""
+    counter = iter(range(1, 1000))
 
     async def fake_create(client_, **kwargs):
         seen.update(kwargs)
-        return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
+        n = next(counter)
+        sid = f"cs_test_{n:024d}"
+        return {"session_id": sid, "url": f"https://checkout.stripe.com/c/pay/{sid}"}
 
-    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+    return fake_create
+
+
+def test_create_builds_the_session_from_the_placement(client, stripe_key, seeded_db, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", _fake_create_into(seen))
     child, parent = seeded_db["child"], seeded_db["parent"]
     resp = client.post(
         URL,
@@ -127,23 +147,84 @@ def test_create_builds_the_session_from_the_placement(client, stripe_key, seeded
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["url"].startswith("https://checkout.stripe.com/")
-    assert seen["category_id"] == str(child.id)
-    assert seen["keyword"] is None
-    assert seen["company_name"] == "Acme Components"  # trimmed
+    intent = seen["intent"]
+    assert intent.category_id == child.id
+    assert intent.keyword is None
+    assert intent.company_name == "Acme Components"  # trimmed
+    assert intent.website == "acme.example"
     assert seen["placement_label"] == child.name
     assert seen["return_path"] == f"/category/{parent.slug}/{child.slug}"
+
+
+def test_silver_records_a_non_blocking_intent(client, stripe_key, db, seeded_db, monkeypatch):
+    """Spec §7: every Silver session is an intent (priced by the server, found
+    by the webhook through ``intent_id``) — but never a hold: a second buyer on
+    the same board is not blocked."""
+    seen = {}
+    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", _fake_create_into(seen))
+    child = seeded_db["child"]
+    for n in range(2):
+        resp = client.post(
+            URL,
+            json={"company_name": f"Buyer {n}", "category_id": str(child.id),
+                  "email": f"b{n}@acme.example"},
+        )
+        assert resp.status_code == 200, resp.text
+    db.expire_all()
+    rows = db.query(CheckoutIntent).order_by(CheckoutIntent.created_at).all()
+    assert [r.status for r in rows] == ["open", "open"]
+    first = rows[0]
+    assert (first.tier, first.list_usd, first.founder_usd, first.price_usd) == (
+        "silver", 250, 210, 210,
+    )
+    assert first.channel == "self_serve"
+    assert first.email == "b0@acme.example"
+    assert first.stripe_session_id.startswith("cs_test_")
+
+
+def test_silver_stripe_failure_expires_the_intent(client, stripe_key, db, seeded_db, monkeypatch):
+    fake = FakeStripe()
+    fake.session_create_status = 502
+    monkeypatch.setattr(stripe_quotes, "make_client", fake.make_client)
+    resp = client.post(
+        URL, json={"company_name": "Acme", "category_id": str(seeded_db["child"].id)}
+    )
+    assert resp.status_code == 502
+    db.expire_all()
+    (intent,) = db.query(CheckoutIntent).all()
+    assert intent.status == "expired"
+
+
+def test_silver_route_mints_the_founders_deal(client, stripe_key, db, seeded_db, monkeypatch):
+    """End to end over the shared FakeStripe: Silver is CHARGED its Founder's
+    Deal ($210) through one amount-off coupon, card only (R10)."""
+    monkeypatch.setattr(settings, "APP_BASE_URL", "https://circuitcenter.ai")
+    fake = FakeStripe()
+    monkeypatch.setattr(stripe_quotes, "make_client", fake.make_client)
+    resp = client.post(
+        URL,
+        json={"company_name": "Acme", "category_id": str(seeded_db["child"].id),
+              "email": "ap@acme.example"},
+    )
+    assert resp.status_code == 200, resp.text
+    db.expire_all()
+    (intent,) = db.query(CheckoutIntent).all()
+    req = fake.last("POST", "/v1/checkout/sessions")
+    assert req.headers["Idempotency-Key"] == f"checkout:{intent.id}"
+    assert req.form["discounts[0][coupon]"] == "SILVER-AT-210"
+    assert req.form["payment_method_types[0]"] == "card"
+    assert req.form["metadata[intent_id]"] == str(intent.id)
+    assert req.form["subscription_data[metadata][intent_id]"] == str(intent.id)
+    assert fake.coupons["SILVER-AT-210"]["amount_off"] == 4000
+    assert fake.coupons["SILVER-AT-210"]["name"] == "Silver Founder's Deal — $210/mo"
+    assert intent.stripe_session_id in fake.sessions
 
 
 def test_buyer_email_is_forwarded_and_validated(client, stripe_key, seeded_db, monkeypatch):
     """The confirm panel's second field crosses the boundary; a malformed one
     is refused here rather than becoming a Stripe 400 the buyer sees."""
     seen = {}
-
-    async def fake_create(client_, **kwargs):
-        seen.update(kwargs)
-        return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
-
-    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", _fake_create_into(seen))
     child = seeded_db["child"]
     resp = client.post(
         URL,
@@ -154,7 +235,7 @@ def test_buyer_email_is_forwarded_and_validated(client, stripe_key, seeded_db, m
         },
     )
     assert resp.status_code == 200, resp.text
-    assert seen["email"] == "buyer@acme.example"
+    assert seen["intent"].email == "buyer@acme.example"
 
     assert (
         client.post(
@@ -167,101 +248,107 @@ def test_buyer_email_is_forwarded_and_validated(client, stripe_key, seeded_db, m
 
 def test_email_stays_optional_for_older_clients(client, stripe_key, monkeypatch):
     """A cached pre-redesign bundle omits the field entirely — the session
-    must still mint, with no email threaded through."""
+    must still mint, with no email threaded through (the intent's NOT NULL
+    column holds an empty string, which the builder never sends)."""
     seen = {}
-
-    async def fake_create(client_, **kwargs):
-        seen.update(kwargs)
-        return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
-
-    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", _fake_create_into(seen))
     resp = client.post(URL, json={"company_name": "Acme", "keyword": "fets"})
     assert resp.status_code == 200
-    assert seen["email"] is None
+    assert seen["intent"].email == ""
 
 
 def test_keyword_placement_builds_its_return_path(client, stripe_key, monkeypatch):
     seen = {}
-
-    async def fake_create(client_, **kwargs):
-        seen.update(kwargs)
-        return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
-
-    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", _fake_create_into(seen))
     resp = client.post(URL, json={"company_name": "Acme", "keyword": "mosfets"})
     assert resp.status_code == 200
-    assert seen["keyword"] == "mosfets"
+    assert seen["intent"].keyword == "mosfets"
     assert seen["return_path"] == "/keyword/mosfets"
 
 
 def test_session_minting_is_rate_limited_per_ip(client, stripe_key, monkeypatch):
-    async def fake_create(client_, **kwargs):
-        return {"session_id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x"}
-
-    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", fake_create)
+    monkeypatch.setattr(stripe_checkout, "create_silver_checkout_session", _fake_create_into({}))
     payload = {"company_name": "Acme", "keyword": "fets"}
     codes = [client.post(URL, json=payload).status_code for _ in range(9)]
     assert codes[:8] == [200] * 8
     assert codes[8] == 429
 
 
-# ── The session builder (real httpx, scripted Stripe) ───────────────────────
+# ── The session builder (real httpx, the shared FakeStripe) ─────────────────
 
 
-def _mint_session(**overrides):
-    """Run the real builder against a scripted Stripe; return (result, tape).
-
-    ``tape`` is the POSTed form body parsed back out — the same parse Stripe
-    performs, so a value that would arrive mangled (a ``+`` in a
-    plus-addressed email decoded as a space) shows up here as mangled.
-    """
-    import asyncio
-    from urllib.parse import parse_qsl
-
-    tape = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/v1/prices":
-            keys = request.url.params.get_list("lookup_keys[]")
-            return httpx.Response(
-                200, json={"data": [{"id": f"price_{k}", "lookup_key": k} for k in keys]}
-            )
-        tape.update(dict(parse_qsl(request.content.decode())))
-        return httpx.Response(200, json={"id": "cs_live", "url": "https://checkout.stripe.com/x"})
-
-    kwargs = {
-        "category_id": "cat-1",
+def _silver_intent(**overrides) -> CheckoutIntent:
+    fields = {
+        "id": uuid.uuid4(),
+        "tier": "silver",
+        "category_id": uuid.uuid4(),
         "keyword": None,
-        "placement_label": "Clock and Timing",
+        "list_usd": 250,
+        "founder_usd": 210,
+        "price_usd": 210,
+        "channel": "self_serve",
         "company_name": "Acme Components",
+        "email": "",
         "website": "acme.example",
-        "return_path": "/category/ics/clock-and-timing",
+        "status": "open",
+        "expires_at": datetime.now(UTC) + timedelta(minutes=45),
     }
-    kwargs.update(overrides)
+    fields.update(overrides)
+    return CheckoutIntent(**fields)
+
+
+def _mint_session(**intent_overrides):
+    """Run the real builder against the shared FakeStripe; return
+    (result, form, request, intent). The fake parses the POSTed body the way
+    Stripe does, so a value that would arrive mangled (a ``+`` in a
+    plus-addressed email decoded as a space) shows up here as mangled."""
+    import asyncio
+
+    fake = FakeStripe()
+    intent = _silver_intent(**intent_overrides)
 
     async def go():
-        async with stripe_quotes.make_client(
-            "sk_test_x", transport=httpx.MockTransport(handler)
-        ) as client:
-            return await create_silver_checkout_session(client, **kwargs)
+        async with fake.client() as client:
+            return await create_silver_checkout_session(
+                client,
+                intent=intent,
+                placement_label="Clock and Timing",
+                return_path="/category/ics/clock-and-timing",
+            )
 
-    return asyncio.run(go()), tape
+    result = asyncio.run(go())
+    req = fake.last("POST", "/v1/checkout/sessions")
+    return result, req.form, req, intent
 
 
 def test_session_carries_the_contract(monkeypatch):
     monkeypatch.setattr(settings, "APP_BASE_URL", "https://circuitcenter.ai")
-    result, tape = _mint_session()
-    assert result["url"] == "https://checkout.stripe.com/x"
+    before = datetime.now(UTC)
+    result, tape, req, intent = _mint_session()
+    assert result["url"].startswith("https://checkout.stripe.com/")
     assert tape["mode"] == "subscription"
     assert tape["automatic_tax[enabled]"] == "true"
     assert tape["billing_address_collection"] == "required"
     assert tape["line_items[0][price]"] == "price_silver_advertising_monthly"
     assert tape["line_items[1][price]"] == "price_silver_platform_monthly"
-    assert tape["metadata[self_serve]"] == "silver"
-    assert tape["metadata[company_name]"] == "Acme Components"
-    # The subscription mirrors the metadata — later invoice events resolve
-    # the sponsor row through it (no sponsor_id exists at mint time).
-    assert tape["subscription_data[metadata][self_serve]"] == "silver"
+    # R10: card only — ACH would complete days later into nothing.
+    assert tape["payment_method_types[0]"] == "card"
+    assert "payment_method_types[1]" not in tape
+    # D8: Silver is charged its Founder's Deal through ONE amount-off coupon.
+    assert tape["discounts[0][coupon]"] == "SILVER-AT-210"
+    assert "allow_promotion_codes" not in tape
+    # The webhook finds the intent (and so the price it must see) by id; the
+    # legacy placement keys stay for a readable Stripe dashboard.
+    for prefix in ("metadata", "subscription_data[metadata]"):
+        assert tape[f"{prefix}[intent_id]"] == str(intent.id)
+        assert tape[f"{prefix}[tier]"] == "silver"
+        assert tape[f"{prefix}[managed_by]"] == "circuits-com"
+        assert tape[f"{prefix}[self_serve]"] == "silver"
+        assert tape[f"{prefix}[company_name]"] == "Acme Components"
+        assert tape[f"{prefix}[category_id]"] == str(intent.category_id)
+    assert req.headers["Idempotency-Key"] == f"checkout:{intent.id}"
+    stripe_expiry = datetime.fromtimestamp(int(tape["expires_at"]), UTC)
+    assert timedelta(minutes=34) < stripe_expiry - before < timedelta(minutes=36)
     assert (
         tape["success_url"]
         == "https://circuitcenter.ai/category/ics/clock-and-timing?welcome=silver"
@@ -282,7 +369,7 @@ def test_buyer_email_reaches_stripe_intact(monkeypatch):
     duplicate customer, an invoice nobody receives.
     """
     monkeypatch.setattr(settings, "APP_BASE_URL", "https://circuitcenter.ai")
-    _, tape = _mint_session(email="billing+ads@acme.example")
+    _, tape, _, _ = _mint_session(email="billing+ads@acme.example")
     assert tape["customer_email"] == "billing+ads@acme.example"
 
 
@@ -496,6 +583,8 @@ class TestSilverBoards:
     def test_lists_subcategories_with_open_slots(self, client, stripe_key, seeded_db):
         body = client.get("/api/checkout/silver/boards").json()
         assert body["monthly_total"] == 250
+        assert body["price_usd"] == 210
+        assert body["founder_usd"] == 210
         child = seeded_db["child"]
         board = next(b for b in body["boards"] if b["category_id"] == str(child.id))
         assert board["name"] == child.name

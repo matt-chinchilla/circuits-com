@@ -116,6 +116,13 @@ PUBLIC_ROUTES = {
     ("GET", "/api/checkout/silver"),
     ("POST", "/api/checkout/silver"),
     ("GET", "/api/checkout/silver/boards"),
+    # Gold & Platinum self-serve (spec §7): the open-slot list, the server's
+    # price for a tier/slot/code, the hold + session mint, and the buyer's own
+    # "back" (a release token, never an account). Prices are server-computed.
+    ("GET", "/api/checkout/exclusive/slots"),
+    ("POST", "/api/checkout/quote"),
+    ("POST", "/api/checkout/exclusive"),
+    ("POST", "/api/checkout/exclusive/release"),
     # The BOM tool is explicitly no-login, share links included.
     ("POST", "/api/bom/match"),
     ("POST", "/api/bom/resolve"),
