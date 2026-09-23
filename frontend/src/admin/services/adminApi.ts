@@ -34,6 +34,14 @@ import type {
   SalesRepsResponse,
   FeedCredentialStatus,
   FeedSettings,
+  AttentionPayload,
+  BillingCancelWhen,
+  CardLinkResult,
+  QuoteLadderTier,
+  SalesCode,
+  SalesCodeCreate,
+  SalesCodeUpdate,
+  SponsorBillingView,
 } from '@admin/types/admin';
 import type {
   Message,
@@ -89,11 +97,13 @@ export interface PartListingCreate {
   currency?: string;
 }
 
-// GET /api/admin/quote-ladder — the fixed all-in price ladder (tax-inclusive
-// monthly totals in whole DOLLARS; first step is the list price). Single home
-// is the backend's QUOTE_LADDER; the UI never hardcodes a step.
+// GET /api/admin/quote-ladder — R12 (2026-09-23): quotes are priced by the
+// ONE server rule (sales_pricing.py). Per tier: list, the Founder's Deal, the
+// 30% floor, and every code-point step 0..15 with the price the server will
+// charge for it (tax-inclusive monthly totals in whole DOLLARS). The UI never
+// computes a step.
 export interface QuoteLadderResponse {
-  tiers: Record<string, { list: number; steps: number[] }>;
+  tiers: Record<string, QuoteLadderTier>;
 }
 
 // One row of GET /api/admin/sponsors/{id}/quotes. `amount_total` is CENTS.
@@ -109,7 +119,8 @@ export interface SponsorQuote {
 // a per-quote override would create quotes the sponsor's list view (keyed on
 // that same email) could never find or accept. Fix the supplier record.
 export interface QuoteCreateBody {
-  monthly_total: number;
+  /** 0 = the Founder's Deal; each point takes 1% of list off, floored at 70%. */
+  code_points: number;
   address: {
     line1: string;
     line2?: string;
@@ -326,6 +337,24 @@ async function bustingAfter<T>(mutation: Promise<T>): Promise<T> {
   const value = await mutation;
   await bustSponsorCaches();
   return value;
+}
+
+/** The `Idempotency-Key` header of a money action (spec §9). The key is the
+ *  confirm dialog's own — see `newIdempotencyKey`. */
+function withIdempotency(key: string) {
+  return { headers: { 'Idempotency-Key': key } };
+}
+
+/** One key per confirm dialog: minted when it OPENS, reused for every retry
+ *  inside it, so Stripe answers a repeat with the first result. */
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Non-secure contexts (plain-http LAN testing) lack randomUUID.
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export const adminApi = {
@@ -787,6 +816,124 @@ export const adminApi = {
   downloadQuotePdf: (quoteId: string) =>
     adminClient
       .get<Blob>(`/admin/quotes/${quoteId}/pdf`, { responseType: 'blob' })
+      .then((r) => r.data),
+
+  // ── Sales codes + Needs attention (routes/admin_sales_codes.py,
+  //    routes/admin_checkout_intents.py; spec §9) ─────────────────────────
+  // Every POST carries the confirm dialog's `Idempotency-Key` (minted ONCE
+  // when the dialog opens and reused on a retry) so a double click or a
+  // network retry can never act twice. No bustingAfter on codes: a code is
+  // not public until a sale activates, and that path is the webhook's.
+  // All of these 404 when STRIPE_SECRET_KEY is unset server-side.
+
+  listSalesCodes: () =>
+    cachedRead(
+      'sales-codes:list',
+      () => adminClient.get<{ codes: SalesCode[] }>('/admin/sales-codes').then((r) => r.data.codes),
+      { scopes: ['sales'] },
+    ),
+
+  createSalesCode: (body: SalesCodeCreate, idempotencyKey: string) =>
+    adminClient
+      .post<SalesCode>('/admin/sales-codes', body, withIdempotency(idempotencyKey))
+      .then((r) => r.data),
+
+  updateSalesCode: (id: string, body: SalesCodeUpdate) =>
+    adminClient.patch<SalesCode>(`/admin/sales-codes/${id}`, body).then((r) => r.data),
+
+  // Failing payments live on sponsor_billing (scope `sponsors`), conflicts and
+  // holds on checkout_intents (scope `sales`) — declare both or a new failure
+  // would never revalidate the strip.
+  getAttention: () =>
+    cachedRead(
+      'sales-codes:attention',
+      () => adminClient.get<AttentionPayload>('/admin/checkout-intents/attention').then((r) => r.data),
+      { scopes: ['sales', 'sponsors'], maxAge: 60 * 1000 },
+    ),
+
+  resolveIntent: (intentId: string, idempotencyKey: string) =>
+    adminClient
+      .post<{ resolved: boolean }>(
+        `/admin/checkout-intents/${intentId}/resolve`,
+        {},
+        withIdempotency(idempotencyKey),
+      )
+      .then((r) => r.data),
+
+  // Releasing a hold reopens a slot on the public /join picker — bust the
+  // public SW caches like any other change to what a buyer can see.
+  releaseIntent: (intentId: string, idempotencyKey: string) =>
+    bustingAfter(
+      adminClient
+        .post<{ released: boolean }>(
+          `/admin/checkout-intents/${intentId}/release`,
+          {},
+          withIdempotency(idempotencyKey),
+        )
+        .then((r) => r.data),
+    ),
+
+  // ── Sponsor billing console (routes/admin_billing.py; spec §9) ───────────
+  // Live from Stripe plus our mirror. Short max-age: the card or the invoice
+  // list can move in Stripe without any table of ours changing.
+  getSponsorBilling: (sponsorId: string) =>
+    cachedRead(
+      `billing:${sponsorId}`,
+      () => adminClient.get<SponsorBillingView>(`/admin/sponsors/${sponsorId}/billing`).then((r) => r.data),
+      { scopes: ['money', 'sponsors'], maxAge: 60 * 1000 },
+    ),
+
+  // `now` expires the sponsor row server-side (and clears the category
+  // cache), so the public boards change — bust the SW caches for that one.
+  cancelBilling: (sponsorId: string, when: BillingCancelWhen, idempotencyKey: string) => {
+    const request = adminClient
+      .post<Record<string, unknown>>(
+        `/admin/sponsors/${sponsorId}/billing/cancel`,
+        { when },
+        withIdempotency(idempotencyKey),
+      )
+      .then((r) => r.data);
+    return when === 'now' ? bustingAfter(request) : request;
+  },
+
+  refundInvoice: (
+    sponsorId: string,
+    body: { invoice_id: string; amount_cents?: number },
+    idempotencyKey: string,
+  ) =>
+    adminClient
+      .post<Record<string, unknown>>(
+        `/admin/sponsors/${sponsorId}/billing/refund`,
+        body,
+        withIdempotency(idempotencyKey),
+      )
+      .then((r) => r.data),
+
+  changeDiscount: (sponsorId: string, codePoints: number, idempotencyKey: string) =>
+    adminClient
+      .post<Record<string, unknown>>(
+        `/admin/sponsors/${sponsorId}/billing/discount`,
+        { code_points: codePoints },
+        withIdempotency(idempotencyKey),
+      )
+      .then((r) => r.data),
+
+  retryPayment: (sponsorId: string, idempotencyKey: string) =>
+    adminClient
+      .post<Record<string, unknown>>(
+        `/admin/sponsors/${sponsorId}/billing/retry-payment`,
+        {},
+        withIdempotency(idempotencyKey),
+      )
+      .then((r) => r.data),
+
+  createCardLink: (sponsorId: string, idempotencyKey: string) =>
+    adminClient
+      .post<CardLinkResult>(
+        `/admin/sponsors/${sponsorId}/billing/card-link`,
+        {},
+        withIdempotency(idempotencyKey),
+      )
       .then((r) => r.data),
 
   // ── Distributor feed keys (routes/feed_credentials.py) ──────────────────

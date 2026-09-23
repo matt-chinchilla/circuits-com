@@ -53,6 +53,25 @@ const CODE_MESSAGES: Record<string, string> = {
  *  - `detail` is not a string. A 422 detail is an ARRAY of error objects that
  *    would crash if rendered as a React child, so only a plain string is surfaced.
  */
+/** The RAW string `detail` (the machine code itself, unmapped) and the HTTP
+ *  status — for callers that branch on a code rather than print it. */
+export function apiErrorCode(err: unknown): { status: number | undefined; code: string | undefined } {
+  if (!axios.isAxiosError(err)) return { status: undefined, code: undefined };
+  const detail = (err.response?.data as { detail?: unknown } | undefined)?.detail;
+  return {
+    status: err.response?.status,
+    code: typeof detail === 'string' && detail.trim() ? detail : undefined,
+  };
+}
+
+/** R6 — billing, codes and quote reads refuse a view-only account. */
+export const NO_BILLING_ACCESS_DETAIL = 'no_billing_access';
+
+export function isNoBillingAccess(err: unknown): boolean {
+  const { status, code } = apiErrorCode(err);
+  return status === 403 && code === NO_BILLING_ACCESS_DETAIL;
+}
+
 export function apiErrorDetail(err: unknown): string | undefined {
   if (!axios.isAxiosError(err)) return undefined;
   const detail = (err.response?.data as { detail?: unknown } | undefined)?.detail;

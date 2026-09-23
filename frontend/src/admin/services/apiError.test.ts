@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { apiErrorDetail } from './apiError';
+import { apiErrorCode, apiErrorDetail, isNoBillingAccess } from './apiError';
 
 // axios.isAxiosError only checks the `isAxiosError` flag, so a plain object
 // stands in for a rejected request.
@@ -17,6 +17,19 @@ const SALES_CODES = [
   'idempotency_key_required',
   'hold_limit',
 ];
+
+describe('apiErrorCode / isNoBillingAccess', () => {
+  it('hands back the raw code and status', () => {
+    expect(apiErrorCode(httpError(409, 'billing_active'))).toEqual({ status: 409, code: 'billing_active' });
+    expect(apiErrorCode(new Error('x'))).toEqual({ status: undefined, code: undefined });
+  });
+
+  it('recognises the viewer refusal only on a 403', () => {
+    expect(isNoBillingAccess(httpError(403, 'no_billing_access'))).toBe(true);
+    expect(isNoBillingAccess(httpError(403, 'read_only'))).toBe(false);
+    expect(isNoBillingAccess(httpError(404, 'no_billing_access'))).toBe(false);
+  });
+});
 
 describe('apiErrorDetail — sales + billing machine codes', () => {
   it.each(SALES_CODES)('turns %s into a sentence', (code) => {

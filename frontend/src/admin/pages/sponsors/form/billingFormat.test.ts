@@ -3,6 +3,7 @@ import {
   billingStatusLabel,
   billingTone,
   cancelsOn,
+  cardLinkMailto,
   cents,
   formatDay,
   invoiceStatusLabel,
@@ -134,6 +135,25 @@ describe('refundableCents', () => {
     expect(refundableCents({ amount_paid_cents: 210000, amount_refunded_cents: 210000 })).toBe(0);
     expect(refundableCents({ amount_paid_cents: 0, amount_refunded_cents: 0 })).toBe(0);
     expect(refundableCents({ amount_paid_cents: 100, amount_refunded_cents: 400 })).toBe(0);
+  });
+});
+
+describe('cardLinkMailto', () => {
+  it('prefills the billing address, the subject and the link', () => {
+    const href = cardLinkMailto(
+      'ap+cc@acme.test',
+      'https://circuitcenter.ai/api/billing/card/abc.def',
+      '2026-09-30T00:00:00Z',
+    );
+    expect(href.startsWith('mailto:ap%2Bcc@acme.test?subject=')).toBe(true);
+    const query = new URLSearchParams(href.split('?')[1]);
+    expect(query.get('subject')).toBe('Update the card for your Circuit Center sponsorship');
+    expect(query.get('body')).toContain('https://circuitcenter.ai/api/billing/card/abc.def');
+    expect(query.get('body')).toContain('Sep 30, 2026');
+  });
+
+  it('opens a blank draft when the supplier has no billing email', () => {
+    expect(cardLinkMailto(null, 'https://x.test/c', null).startsWith('mailto:?subject=')).toBe(true);
   });
 });
 

@@ -137,6 +137,20 @@ export function refundableCents(inv: Pick<InvoiceMoney, 'amount_paid_cents' | 'a
   return Math.max(0, (inv.amount_paid_cents || 0) - (inv.amount_refunded_cents || 0));
 }
 
+export const CARD_LINK_SUBJECT = 'Update the card for your Circuit Center sponsorship';
+
+/** `mailto:` for the card link, prefilled to the supplier's billing email.
+ *  Our server never sends it (spec §15) — the rep's own mail client does. */
+export function cardLinkMailto(email: string | null, url: string, expiresAt: string | null): string {
+  const body =
+    'Hi,\n\nYou can update the card we charge for your Circuit Center sponsorship here:\n\n' +
+    `${url}\n\n` +
+    (expiresAt ? `The link works until ${formatDay(expiresAt, { year: true })}.\n\n` : '') +
+    'Thank you!';
+  const params = `subject=${encodeURIComponent(CARD_LINK_SUBJECT)}&body=${encodeURIComponent(body)}`;
+  return `mailto:${email ? encodeURIComponent(email).replace(/%40/g, '@') : ''}?${params}`;
+}
+
 /** A typed dollar amount ("50", "1,250.5", "$20.00") -> integer cents, or
  *  null when it is not a positive amount. The refund dialog's partial field. */
 export function parseDollarsToCents(raw: string): number | null {
