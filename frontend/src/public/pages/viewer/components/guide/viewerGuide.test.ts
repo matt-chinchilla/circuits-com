@@ -329,6 +329,25 @@ describe('Guide.module.scss', () => {
   it('puts the buttons first on a phone, and the folder listing last', () => {
     const phone = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));
     expect(phone).toMatch(/\.folderCol \.actions\s*\{\s*order: 2;/);
+    expect(phone).toMatch(/\.specs\s*\{\s*order: 3;/);
     expect(phone).toMatch(/\.tree\s*\{\s*order: 6;/);
+  });
+
+  it('draws the pulse with no filter (a drop-shadow under a moving dash offset re-rasterises every frame)', () => {
+    expect(scss).not.toMatch(/\bfilter:/);
+  });
+
+  it('stands the ratings beside the buttons ONLY in the compact card, and only where the traces would draw', () => {
+    // The two-column compact layout is gated on the closed state AND on the
+    // width above $bp-traces; below it the compact card is the same single
+    // stack the open sheet uses, and the open sheet never takes it.
+    const start = scss.indexOf('@media (min-width: #{$bp-traces + 1px})');
+    expect(start).toBeGreaterThan(-1);
+    const block = scss.slice(start, scss.indexOf('\n}\n', start));
+    expect(block).toMatch(/\.sheet\[data-guide='closed'\] \.folderCol\s*\{\s*display: grid;/);
+    expect(block).toContain("'actions specs'");
+    // Nowhere else does the folder column become a grid.
+    const outside = scss.slice(0, start) + scss.slice(start + block.length);
+    expect(outside).not.toMatch(/\.folderCol\s*\{[^}]*display: grid/);
   });
 });

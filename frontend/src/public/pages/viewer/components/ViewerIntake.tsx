@@ -192,19 +192,23 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
                 Try the example project
               </button>
             </div>
-            <p className={styles.caps}>
-              <span>
-                KiCad {CAPS.minKicad} or newer <NoteRef n={2} />
-              </span>
-              <span>
-                Up to {CAPS.files} files, {CAPS.totalMb} MB <NoteRef n={4} />
-              </span>
-            </p>
-            <p className={styles.privacyLine}>
-              <Icon name="shield-check" className={styles.privacyLineGlyph} />
-              {PRIVACY_SENTENCE}
-            </p>
-            <p className={styles.credit}>{EXAMPLE_CREDIT}</p>
+            {/* The sheet's ratings: the caps, the binding sentence, the credit.
+                One block, so the compact card can stand it beside the buttons. */}
+            <div className={styles.specs}>
+              <p className={styles.caps}>
+                <span>
+                  KiCad {CAPS.minKicad} or newer <NoteRef n={2} />
+                </span>
+                <span>
+                  Up to {CAPS.files} files, {CAPS.totalMb} MB <NoteRef n={4} />
+                </span>
+              </p>
+              <p className={styles.privacyLine}>
+                <Icon name="shield-check" className={styles.privacyLineGlyph} />
+                {PRIVACY_SENTENCE}
+              </p>
+              <p className={styles.credit}>{EXAMPLE_CREDIT}</p>
+            </div>
           </div>
 
           <OutputList id={GUIDE_IDS.outputs} hidden={!open} hot={hot} />

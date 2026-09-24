@@ -14,7 +14,7 @@
 
 $ink: #1a1f23;
 $ink-2: #565d66; // 6.66:1 on white
-$ink-3: #8a929b; // supplementary only (the "left out" rows; their summary carries the meaning)
+$ink-3: #7b838c; // ~4:1 on white: the "left out" rows stay grey but legible (their summary carries the meaning)
 $rule: #dde2e8;
 $pcb: $executive-blue;
 $trace-rest: #7fb96a;
@@ -32,6 +32,9 @@ $bp-traces: 1100px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  // Room for the toggle between the band and the sheet: 34px of control with
+  // air on both sides (it sat 1px under the band before).
+  margin-top: 14px;
 }
 
 // `hidden` is the UA's display:none, and every folded region below sets its
@@ -60,7 +63,7 @@ $bp-traces: 1100px;
 // costs the sheet no height (the buttons have to clear the fold at 1440×900).
 .toggleRow {
   position: absolute;
-  top: -36px;
+  top: -44px;
   right: 0;
   display: flex;
   justify-content: flex-end;
@@ -136,6 +139,52 @@ $bp-traces: 1100px;
   // Folded: the compact drop card.
   &[data-guide='closed'] {
     grid-template-columns: 1fr;
+  }
+}
+
+// The compact card, wide: the call to action on the left, the ratings on the
+// right, both standing on the buttons' baseline. Below $bp-traces the card is
+// one column again — the same stack the open sheet uses.
+@media (min-width: #{$bp-traces + 1px}) {
+  .sheet[data-guide='closed'] .folderCol {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title specs'
+      'sub specs'
+      'actions specs';
+    column-gap: 48px;
+    align-items: end;
+  }
+
+  .sheet[data-guide='closed'] {
+    .dropTitle {
+      grid-area: title;
+    }
+
+    .dropSub {
+      grid-area: sub;
+    }
+
+    .folderCol .actions {
+      grid-area: actions;
+      margin-bottom: 0;
+    }
+
+    .specs {
+      grid-area: specs;
+      align-items: flex-end;
+      text-align: right;
+      padding-bottom: 2px;
+    }
+
+    .caps {
+      justify-content: flex-end;
+    }
+
+    .privacyLine {
+      flex-direction: row-reverse;
+    }
   }
 }
 
@@ -221,10 +270,12 @@ $bp-traces: 1100px;
   min-width: 0;
 }
 
+// The page's call to action: the largest heading below the band, so the
+// sheet outranks the notes and the tour that footnote it.
 .dropTitle {
   margin: 0 0 6px;
   font-family: $font-heading;
-  font-size: 1.4rem;
+  font-size: 1.55rem;
   line-height: 1.25;
   letter-spacing: -0.015em;
   color: $ink;
@@ -393,6 +444,16 @@ $bp-traces: 1100px;
   }
 }
 
+// The caps, the binding sentence and the credit: the sheet's own ratings
+// block. Folded, on a wide screen, it becomes the compact card's right-hand
+// column (below), so the drop target keeps its width without the card reading
+// as six lines against an empty box.
+.specs {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 // The binding sentence ON the drop card, in both states.
 .privacyLine {
   display: flex;
@@ -428,9 +489,9 @@ $bp-traces: 1100px;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 4px 0 14px;
+  margin: 2px 0 14px;
   font-family: $font-heading;
-  font-size: 1.06rem;
+  font-size: 1.15rem;
   letter-spacing: -0.01em;
   color: $ink;
 }
@@ -539,14 +600,15 @@ $bp-traces: 1100px;
   stroke-width: 2;
 }
 
-// A static glow on the pulse stroke; only its dash offset ever moves.
+// The signal that runs each trace once: a brighter, wider stroke over the
+// copper. No filter on it — a drop-shadow under a moving dash offset is
+// re-rasterised every frame, and loops for as long as a drag lasts.
 .pulse {
   fill: none;
   stroke: $nav-blue;
-  stroke-width: 3;
+  stroke-width: 3.2;
   stroke-linecap: round;
   opacity: 0;
-  filter: drop-shadow(0 0 3px rgba(68, 189, 19, 0.8));
 }
 
 .netLabel {
@@ -895,8 +957,8 @@ $bp-traces: 1100px;
 .tourTitle {
   margin: 0 0 6px;
   font-family: $font-heading;
-  font-size: 1.6rem;
-  letter-spacing: -0.018em;
+  font-size: 1.4rem;
+  letter-spacing: -0.015em;
   color: #fff;
 }
 
@@ -1126,16 +1188,8 @@ $bp-traces: 1100px;
     }
   }
 
-  .caps {
+  .specs {
     order: 3;
-  }
-
-  .privacyLine {
-    order: 4;
-  }
-
-  .credit {
-    order: 5;
   }
 
   .tree {
