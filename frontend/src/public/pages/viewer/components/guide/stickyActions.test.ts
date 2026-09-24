@@ -237,8 +237,8 @@ describe('StickyActions.module.scss', () => {
     expect(scss).not.toMatch(/infinite/);
   });
 
-  it('keeps a refusal that scrolls itself into view clear of the docked bar', () => {
-    expect(scss).toMatch(/\.clearOfBar \{\s*scroll-margin-bottom: 120px;/);
+  it('keeps a refusal that scrolls itself into view clear of the docked bar and the navbar', () => {
+    expect(scss).toMatch(/\.clearOfBar \{\s*scroll-margin-top: 100px;\s*scroll-margin-bottom: 120px;/);
     const host = readFileSync(join(__dirname, '..', 'ViewerIntake.tsx'), 'utf8');
     expect(host).toMatch(/role="alert"/);
     expect(host).toMatch(/stickyStyles\.clearOfBar/);

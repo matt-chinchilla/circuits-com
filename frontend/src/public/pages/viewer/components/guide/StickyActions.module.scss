@@ -198,7 +198,9 @@ $crop: #9aa6b2;
 }
 
 // A refusal scrolls itself into view (nearest); it must stop short of the
-// docked bar rather than land underneath it.
+// docked bar at the bottom, and of the sticky navbar at the top (scrolled to
+// from below it landed at y=0, its first line under the navbar — measured).
 .clearOfBar {
+  scroll-margin-top: 100px;
   scroll-margin-bottom: 120px;
 }
