@@ -880,7 +880,7 @@ export default function ViewerPage() {
           <PageHeaderBand
             page="viewer"
             title="Design Viewer"
-            subtitle="Read a KiCad project right here: its schematic, board, stackup and 3D view, with every line of the BOM priced across our distributor catalog."
+            subtitle="Read a KiCad project right here: its schematic, board, stackup and 3D view, with its BOM matched and priced against our distributor catalog."
           />
           {/* The intake IS the guide: the project sheet (the drop zone), its
               notes, what happens to the files and a short tour — all of which
