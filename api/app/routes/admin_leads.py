@@ -15,11 +15,12 @@ want to sell to — it is not our roster, and it must not appear in it.
 
 from __future__ import annotations
 
+import unicodedata
 import uuid as uuid_mod
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -262,11 +263,35 @@ class LeadCreate(BaseModel):
         tidy: dict[str, Any] = {}
         for key, value in data.items():
             if isinstance(value, str):
+                # NUL is refused, never stripped: Postgres cannot store it (a
+                # 500 at the probe), and a silent strip could move the key.
+                if "\x00" in value:
+                    raise ValueError(f"{key} must not contain NUL characters")
+                # Invisible format characters (zero-width space, BOM, ...)
+                # pasted from a web page survive strip/NFKC/casefold, so
+                # "Acme<ZWSP>" would key apart from "Acme" and dodge the 409.
+                # Dropped HERE, not in canon(): the seed's stored keys stay
+                # byte-identical (leads.csv carries none).
+                value = "".join(ch for ch in value if unicodedata.category(ch) != "Cf")
                 value = value.strip() or None
                 if value is not None and key == "state":
                     value = value.upper()
             tidy[key] = value
         return tidy
+
+    @field_validator("contact_name")
+    @classmethod
+    def _contact_names_someone(cls, value: str | None, info: ValidationInfo) -> str | None:
+        """A contact that canon folds away ('.', '-', '- Inc') would take the
+        company-only key and yet be stored as a person — refuse it here."""
+        company = info.data.get("company_name")
+        if value is None or company is None:
+            return value
+        if not any(ch.isalnum() for ch in value) or lead_source_key(
+            company, value
+        ) == lead_source_key(company, None):
+            raise ValueError("Enter the person's name, or leave it blank for the company alone.")
+        return value
 
 
 def _find_by_source_key(db: Session, source_key: str) -> Lead | None:

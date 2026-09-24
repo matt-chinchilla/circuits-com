@@ -218,6 +218,17 @@ class TestDuplicates:
         resp = _post(client, h, company_name="Powell (West)", contact_name="Bob Smith")
         assert resp.status_code == 201, resp.text
 
+    def test_invisible_characters_do_not_fork_the_key(self, client, db, seeded_db, auth_header):
+        h = auth_header()
+        first = _post(client, h, company_name="Acme").json()
+        for pasted in ("Acme\u200b", "\ufeffAcme", "Ac\u200dme"):
+            resp = _post(client, h, company_name=pasted)
+            assert resp.status_code == 409, (pasted, resp.text)
+            assert resp.json()["detail"]["lead_id"] == first["id"]
+        stored = _post(client, h, company_name="Zero\u200bWidth Co").json()
+        assert stored["company_name"] == "ZeroWidth Co"
+        assert db.query(Lead).count() == 2
+
     def test_seed_then_api_is_one_row(self, client, db, seeded_db, auth_header, tmp_path):
         seed_leads(
             db, csv_path=_write_csv(tmp_path, [{"Company": "Lumissil", "Contact Name": "Kim Ray"}])
@@ -387,6 +398,31 @@ class TestValidation:
         ],
     )
     def test_422(self, client, db, seeded_db, auth_header, body):
+        resp = client.post(URL, json=body, headers=auth_header())
+        assert resp.status_code == 422, resp.text
+        assert db.query(Lead).count() == 0
+
+    @pytest.mark.parametrize("contact", [".", "-", "...", " - Inc", "\u200b"])
+    def test_a_contact_that_reads_as_no_one_is_422(
+        self, client, db, seeded_db, auth_header, contact
+    ):
+        """A contact that folds to nothing would take the company-only key
+        and be stored as a real person — refuse it on the contact field."""
+        resp = _post(client, auth_header(), company_name="ZZReview Widgets", contact_name=contact)
+        if contact == "\u200b":
+            # only an invisible character: that is no contact at all
+            assert resp.status_code == 201, resp.text
+            assert resp.json()["contact_name"] is None
+            return
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"][0]["loc"][-1] == "contact_name"
+        assert db.query(Lead).count() == 0
+
+    @pytest.mark.parametrize("field", ["company_name", "contact_name", "notes", "website"])
+    def test_nul_is_a_422_not_a_500(self, client, db, seeded_db, auth_header, field):
+        # SQLite stores NUL happily; Postgres refuses it at the SELECT/INSERT
+        # and the route 500s — so the 422 is asserted directly.
+        body = {"company_name": "Acme", field: "Acme\u0000X"}
         resp = client.post(URL, json=body, headers=auth_header())
         assert resp.status_code == 422, resp.text
         assert db.query(Lead).count() == 0
