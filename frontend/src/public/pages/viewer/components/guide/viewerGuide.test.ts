@@ -410,7 +410,12 @@ describe('the tour’s way in', () => {
   it('ends on "See U30 on the example", not on a copy of the docked pair', async () => {
     await mount();
     expect(TOUR_REF).toBe('U30');
+    // The legend's four rows (full screen only), then the tour's one way in.
     expect([...tour().querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
+      '3D',
+      'Schematic',
+      'Board',
+      'Part panel',
       `See ${TOUR_REF} on the example`,
     ]);
     expect(tour().textContent).not.toContain('Try the example project');
@@ -423,6 +428,33 @@ describe('the tour’s way in', () => {
     expect(
       [...container.querySelectorAll('button')].filter((b) => b.textContent?.trim() === 'Try the example project'),
     ).toHaveLength(1);
+  });
+
+  it('lights a picture from its legend row, and a press moves focus to that picture', async () => {
+    await mount();
+    const row = (label: string) =>
+      [...tour().querySelectorAll<HTMLButtonElement>('li button')].find((b) => b.textContent?.trim() === label)!;
+    const shot = (view: string) => document.getElementById(`viewer-guide-tour-${view}`)!;
+    const grid = () => shot('brd').parentElement!;
+    expect(grid().hasAttribute('data-lit')).toBe(false);
+
+    await act(async () => {
+      row('Board').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    });
+    expect(shot('brd').hasAttribute('data-lit')).toBe(true);
+    expect(shot('sch').hasAttribute('data-lit')).toBe(false);
+    expect(grid().getAttribute('data-lit')).toBe('brd');
+    await act(async () => {
+      row('Board').dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+    });
+    expect(grid().hasAttribute('data-lit')).toBe(false);
+
+    await act(async () => row('Schematic').focus());
+    expect(shot('sch').hasAttribute('data-lit')).toBe(true);
+    await act(async () => row('Schematic').click());
+    expect(document.activeElement).toBe(shot('sch'));
+    expect(shot('sch').tagName).toBe('FIGURE');
+    expect(grid().hasAttribute('data-lit')).toBe(false);
   });
 
   // The page owns the URL: it focuses the part and mirrors it into the hash

@@ -107,6 +107,37 @@ describe('PartTour.module.scss', () => {
     expect(IMAGES.tour3d.width / 1.3).toBeGreaterThanOrEqual(2 * 642);
   });
 
+  it('on a full screen, puts the words beside the grid at $tour-max and centres the row, by the tour’s own width', () => {
+    expect(scss).toMatch(/\.tour\s*\{[^}]*container-type: inline-size;/);
+    expect(scss).toMatch(/\$tour-row-min: \$words-min \+ \$words-gap \+ \$tour-max;/);
+    expect(scss).toMatch(/\$words-min:\s*280px/);
+    const wide = scss.slice(scss.indexOf('@container (min-width: #{$tour-row-min})'), scss.indexOf('// Tablet:'));
+    expect(wide.length).toBeGreaterThan(0);
+    expect(wide).toMatch(
+      /\.tourRow\s*\{[^}]*display: grid;[^}]*grid-template-columns: minmax\(\$words-min, \$words-max\) \$tour-max;[^}]*'head grid'\s*'foot grid';[^}]*justify-content: center;/,
+    );
+    expect(wide).toMatch(/\.tourGrid\s*\{\s*grid-area: grid;\s*align-self: start;/);
+    expect(wide).toMatch(/\.legend\s*\{\s*display: block;/);
+    expect(wide).toMatch(/\.caption \.enig\s*\{\s*@include swatch;/);
+    expect(wide).toMatch(/\.tourGrid\[data-lit\] \.shot:not\(\[data-lit\]\)\s*\{\s*opacity: 0\.45;/);
+  });
+
+  it('draws no legend below that width, so every narrower layout is the one it was', () => {
+    const before = scss.slice(0, scss.indexOf('@container'));
+    expect(before).toMatch(/\.legend\s*\{\s*display: none;/);
+    for (const rule of ['.tourRow', '.tourHead', '.tourFoot', '.legendTitle', '.legendList']) {
+      expect(before, rule).not.toContain(`${rule} {`);
+    }
+  });
+
+  it('gives each view the swatch colour that view draws with', () => {
+    const swatch = (view: string) => scss.match(new RegExp(`&\\[data-view='${view}'\\] \\{\\s*--swatch: ([^;]+);`))?.[1];
+    expect(swatch('three')).toBe('#4fc3f7'); // the 3D selection glow, board3dTheme HIGHLIGHT
+    expect(swatch('sch')).toBe('#ffffc2'); // KiCanvas kicad theme: component_body
+    expect(swatch('brd')).toBe('#c83434'); // KiCanvas kicad theme: copper.f
+    expect(swatch('panel')).toBe('#{$enig}'); // the tour's ENIG pad
+  });
+
   it('never crops the part panel: it keeps its own aspect', () => {
     const block = scss.slice(scss.indexOf('.framePanel {'), scss.indexOf('.caption {'));
     expect(block).toMatch(/height: auto;/);
