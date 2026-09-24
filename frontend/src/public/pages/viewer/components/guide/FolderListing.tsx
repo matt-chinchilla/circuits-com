@@ -1,4 +1,4 @@
-// The left of the project sheet: a KiCad project folder — the example's own
+// The left of the project sheet: a KiCad project folder — a generic project's
 // files, then what else a folder usually holds, none of which is read.
 import { useState } from 'react';
 import { EXAMPLE_FILES, EXAMPLE_FOLDER, LEFT_OUT, type Net } from './guideCopy';
@@ -23,7 +23,7 @@ function startsOpen(): boolean {
 export default function FolderListing({ id, hidden, hot }: { id: string; hidden: boolean; hot: Net | null }) {
   const [leftOutOpen] = useState(startsOpen);
   return (
-    <ul id={id} hidden={hidden} className={styles.tree} aria-label="A KiCad project folder: the example project’s files" data-trace-left="">
+    <ul id={id} hidden={hidden} className={styles.tree} aria-label="A KiCad project folder: the files that are read, then the ones left out" data-trace-left="">
       <li className={styles.dir}>
         <FolderGlyph />
         <span className={styles.name}>{EXAMPLE_FOLDER}</span>

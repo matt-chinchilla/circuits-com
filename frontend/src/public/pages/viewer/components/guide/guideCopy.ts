@@ -1,8 +1,8 @@
 // The /viewer guide's facts, as data. Every number, file type and refusal the
 // guide prints is READ from the code that enforces it (INTAKE_CAPS, the
 // extension lists, MIN_KICAD_VERSION, the reader's own refusal sentences), so
-// a change to a rule changes the page. Tests pin the rest: the example folder
-// against the example zip, the "left out" rows against the reader's filter, and
+// a change to a rule changes the page. Tests pin the rest: the folder's roles
+// against the reader itself, the "left out" rows against the reader's filter, and
 // the pricing disclosure against the request the BOM tool really sends.
 import type { MatchLineIn } from '@public/services/bom/types';
 import { INTAKE_MESSAGES } from '@public/services/kicad/project';
@@ -38,15 +38,24 @@ export interface FolderFile {
   net: Net;
 }
 
-export const EXAMPLE_FOLDER = 'glasgow/';
+/**
+ * The folder the sheet draws: an ILLUSTRATIVE KiCad project, named generically
+ * so a visitor reads it as their own (owner, 2026-09-24) — not the example the
+ * "Try the example project" button loads, which the credit line names. KiCad
+ * names the root sheet, the board and the local settings after the project,
+ * and so does this. A test builds a project from these names with the real
+ * reader and proves every role it labels.
+ */
+export const PROJECT_NAME = 'my-board';
 
-/** The example project's KiCad files, exactly as the committed zip holds them. */
+export const EXAMPLE_FOLDER = `${PROJECT_NAME}/`;
+
 export const EXAMPLE_FILES: readonly FolderFile[] = [
-  { name: 'glasgow.kicad_pro', role: 'project', net: 'pro' },
-  { name: 'glasgow.kicad_sch', role: 'root sheet', net: 'sch' },
-  { name: 'io_banks.kicad_sch', role: 'sub-sheet', net: 'sch' },
-  { name: 'io_buffer.kicad_sch', role: 'sub-sheet', net: 'sch' },
-  { name: 'glasgow.kicad_pcb', role: 'board', net: 'pcb' },
+  { name: `${PROJECT_NAME}.kicad_pro`, role: 'project', net: 'pro' },
+  { name: `${PROJECT_NAME}.kicad_sch`, role: 'root sheet', net: 'sch' },
+  { name: 'power.kicad_sch', role: 'sub-sheet', net: 'sch' },
+  { name: 'usb.kicad_sch', role: 'sub-sheet', net: 'sch' },
+  { name: `${PROJECT_NAME}.kicad_pcb`, role: 'board', net: 'pcb' },
 ];
 
 export interface LeftOutEntry {
@@ -60,12 +69,18 @@ export interface LeftOutEntry {
 
 /** What else a KiCad project folder usually holds, none of which is read. */
 export const LEFT_OUT: readonly LeftOutEntry[] = [
-  { name: 'glasgow.kicad_prl', role: 'your local settings', folder: false, probe: 'glasgow/glasgow.kicad_prl' },
-  { name: 'fp-info-cache', role: 'library cache', folder: false, probe: 'glasgow/fp-info-cache' },
-  { name: 'glasgow-backups/', role: 'KiCad backups', folder: true, probe: 'glasgow/glasgow-backups/glasgow-2026-09-12_195300.zip' },
-  { name: 'gerbers/', role: 'manufacturing outputs', folder: true, probe: 'glasgow/gerbers/glasgow-F_Cu.gbr' },
-  { name: 'glasgow.step', role: '3D model', folder: false, probe: 'glasgow/glasgow.step' },
-  { name: 'LICENSE', role: 'not a KiCad file', folder: false, probe: 'glasgow/LICENSE' },
+  { name: `${PROJECT_NAME}.kicad_prl`, role: 'your local settings', folder: false, probe: `${EXAMPLE_FOLDER}${PROJECT_NAME}.kicad_prl` },
+  { name: 'fp-info-cache', role: 'library cache', folder: false, probe: `${EXAMPLE_FOLDER}fp-info-cache` },
+  {
+    name: `${PROJECT_NAME}-backups/`,
+    role: 'KiCad backups',
+    folder: true,
+    // KiCad's own backup name: <project>-YYYY-MM-DD_HHMMSS.zip.
+    probe: `${EXAMPLE_FOLDER}${PROJECT_NAME}-backups/${PROJECT_NAME}-2026-09-12_195300.zip`,
+  },
+  { name: 'gerbers/', role: 'manufacturing outputs', folder: true, probe: `${EXAMPLE_FOLDER}gerbers/${PROJECT_NAME}-F_Cu.gbr` },
+  { name: `${PROJECT_NAME}.step`, role: '3D model', folder: false, probe: `${EXAMPLE_FOLDER}${PROJECT_NAME}.step` },
+  { name: 'LICENSE', role: 'not a KiCad file', folder: false, probe: `${EXAMPLE_FOLDER}LICENSE` },
 ];
 
 export interface GuideImage {
@@ -178,10 +193,10 @@ const MB = 1024 * 1024;
  * to meet, printed from the reader's OWN sentences — never retyped here.
  */
 export const REFUSALS: readonly { what: string; message: string }[] = [
-  { what: 'A Gerber file on its own', message: rejectionCopy('glasgow-F_Cu.gbr') },
-  { what: 'A 3D model on its own', message: rejectionCopy('glasgow.step') },
+  { what: 'A Gerber file on its own', message: rejectionCopy(`${PROJECT_NAME}-F_Cu.gbr`) },
+  { what: 'A 3D model on its own', message: rejectionCopy(`${PROJECT_NAME}.step`) },
   { what: 'A zip of Gerbers or other outputs', message: INTAKE_MESSAGES.empty },
   { what: `A KiCad ${MIN_KICAD_VERSION - 1} project`, message: KICAD5_MESSAGE },
   { what: 'Too many KiCad files', message: INTAKE_MESSAGES.tooManyFiles(INTAKE_CAPS.files + 8) },
-  { what: 'A board over the size limit', message: INTAKE_MESSAGES.fileTooLarge('glasgow.kicad_pcb', INTAKE_CAPS.perFileBytes + 1.4 * MB) },
+  { what: 'A board over the size limit', message: INTAKE_MESSAGES.fileTooLarge(`${PROJECT_NAME}.kicad_pcb`, INTAKE_CAPS.perFileBytes + 1.4 * MB) },
 ];

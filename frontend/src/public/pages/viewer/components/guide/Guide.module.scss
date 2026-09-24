@@ -333,7 +333,7 @@ $bp-traces: 1100px;
   color: $ink;
   white-space: nowrap;
   @include truncate;
-  // The filename never gives way to its role: 'glasgow.kicad_p…' under "left
+  // The filename never gives way to its role: 'my-board.kicad_p…' under "left
   // out" read as the project file the listing says IS read (769–830px).
   flex-shrink: 0;
 }

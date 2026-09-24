@@ -18,10 +18,10 @@ import type { BomRow, MatchLineIn } from '@public/services/bom/types';
 import type { ParseResult } from '@public/services/bom/parseBom';
 import { INTAKE_MESSAGES } from '@public/services/kicad/project';
 import { INTAKE_CAPS, KICAD5_MESSAGE, MIN_KICAD_VERSION } from '@public/services/kicad/types';
-import { rejectionCopy } from '../../intakeCopy';
+import { EXAMPLE_CREDIT, rejectionCopy } from '../../intakeCopy';
 import { VIEW_LABEL, VIEW_ORDER, viewsFor } from '../../viewLabels';
 import ViewerIntake from '../ViewerIntake';
-import { CAPS, PRICING_FIELDS, PRIVACY_SENTENCE, proseMb } from './guideCopy';
+import { CAPS, PRICING_FIELDS, PRIVACY_SENTENCE, PROJECT_NAME, proseMb } from './guideCopy';
 import { GUIDE_KEY } from './guideState';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -327,10 +327,25 @@ describe('the copy', () => {
     const shown = [...container.querySelectorAll('details li')].map((li) => li.textContent ?? '');
     const all = shown.join('\n');
     expect(all).toContain(KICAD5_MESSAGE);
-    expect(all).toContain(rejectionCopy('glasgow-F_Cu.gbr'));
-    expect(all).toContain(rejectionCopy('glasgow.step'));
+    expect(all).toContain(rejectionCopy(`${PROJECT_NAME}-F_Cu.gbr`));
+    expect(all).toContain(rejectionCopy(`${PROJECT_NAME}.step`));
     expect(all).toContain(INTAKE_MESSAGES.empty);
     expect(all).toContain(INTAKE_MESSAGES.tooManyFiles(INTAKE_CAPS.files + 8));
+  });
+
+  // Owner, 2026-09-24: the file names the guide shows are generic. The example
+  // is named once, by its credit line, because that is what the button loads.
+  it('names the example project only in its credit line', async () => {
+    await mount();
+    const seen = [
+      text().split(EXAMPLE_CREDIT).join(''),
+      ...[...container.querySelectorAll('[alt], [aria-label], [title]')].map((el) =>
+        ['alt', 'aria-label', 'title'].map((a) => el.getAttribute(a) ?? '').join(' '),
+      ),
+    ].join('\n');
+    expect(text()).toContain(EXAMPLE_CREDIT);
+    expect(seen).not.toMatch(/glasgow|io_banks|io_buffer/i);
+    expect(text()).toContain(`${PROJECT_NAME}/`);
   });
 
   it('states what each kind of drop opens with the SAME rule the workspace uses', async () => {
