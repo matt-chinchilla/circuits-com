@@ -306,4 +306,10 @@ $footer-ink: var(--vw-ink-3, #676c71);
   font-variant-numeric: tabular-nums;
   color: $footer-ink;
   white-space: nowrap;
+
+  // One unbreakable line is ~50 mono characters — wider than a 390px phone,
+  // where it clipped mid-word ("built in 786 m"). Wrap at the dots there.
+  @include responsive($bp-mobile) {
+    white-space: normal;
+  }
 }

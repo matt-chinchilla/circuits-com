@@ -905,7 +905,7 @@ were wrong in the same direction:
 
 Exactly one setting, `'full' | 'reduced'`, decided ONCE at mount by
 `currentQuality({ webgl2, innerWidth, devicePixelRatio })` —
-`webgl2 && innerWidth >= 900` (the `devicePixelRatio <= 2` gate was REMOVED 2026-09-22 — the owner's 2.24×/2.52× desktop monitors, on an RTX 4070 Ti, landed on the reduced tier and he saw a blurred board with no component bodies; the pixel cost is capped by `setPixelRatio(min(dpr, 2))` in the renderer, not by the tier), overridable with
+`webgl2 ? 'full' : 'reduced'` — **the width gate `innerWidth >= 900` was REMOVED 2026-09-23** (the owner on a phone: "there arent even the renderings of the 3D objects like the mosfets"; every phone got a 1× backing store, no MSAA and no bodies, on a guess about phone GPUs nobody measured — and the phone canvas is the SMALL one: 370×414 CSS px → 740×828 at the 2× cap, ~0.6 MP; Glasgow at 390×844×3 now draws 308,634 triangles / 12 calls, built in 786 ms, in Playwright's software WebGL — chrome-devtools-mcp's browser has NO WebGL at all here, use Playwright for 3D checks); so `reduced` is reachable only through the override or without WebGL2 (which renders nothing). History: (the `devicePixelRatio <= 2` gate was REMOVED 2026-09-22 — the owner's 2.24×/2.52× desktop monitors, on an RTX 4070 Ti, landed on the reduced tier and he saw a blurred board with no component bodies; the pixel cost is capped by `setPixelRatio(min(dpr, 2))` in the renderer, not by the tier), overridable with
 `setQualityOverride`. Nothing else in the subsystem branches on device. `reduced`
 drops tracks under 0.2 mm, halves the arc caps, coarsens the tolerance
 (`TOL_MM`), pins `setPixelRatio(1)`, turns MSAA off and **skips component bodies
