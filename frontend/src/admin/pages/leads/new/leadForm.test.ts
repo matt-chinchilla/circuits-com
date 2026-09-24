@@ -95,9 +95,9 @@ describe('validateLeadForm', () => {
 
   it('upper-cases the state before the two-letter rule', () => {
     expect(validateLeadForm(form({ company_name: 'A', state: 'ny' })).state).toBeUndefined();
-    expect(validateLeadForm(form({ company_name: 'A', state: 'N' })).state).toMatch(/two-letter/i);
-    expect(validateLeadForm(form({ company_name: 'A', state: 'N1' })).state).toMatch(/two-letter/i);
-    expect(validateLeadForm(form({ company_name: 'A', state: 'NYC' })).state).toMatch(/two-letter/i);
+    expect(validateLeadForm(form({ company_name: 'A', state: 'N' })).state).toMatch(/two letters/i);
+    expect(validateLeadForm(form({ company_name: 'A', state: 'N1' })).state).toMatch(/two letters/i);
+    expect(validateLeadForm(form({ company_name: 'A', state: 'NYC' })).state).toMatch(/two letters/i);
   });
 
   it('takes a 5-digit ZIP or ZIP+4 and nothing else', () => {

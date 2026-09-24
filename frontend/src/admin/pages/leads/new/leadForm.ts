@@ -114,7 +114,7 @@ export function validateLeadForm(form: LeadFormState): LeadFormErrors {
 
   const state = clean('state', form.state);
   if (state && !STATE_RE.test(state)) {
-    errors.state = 'Use the two-letter state code, like NY.';
+    errors.state = 'Use two letters, like NY.';
   }
 
   const zip = clean('postal_code', form.postal_code);

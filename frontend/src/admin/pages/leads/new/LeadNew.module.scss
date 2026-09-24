@@ -1,0 +1,586 @@
+@use '@shared/styles/variables' as *;
+@use '@admin/styles/variables' as *;
+@use '../../glass' as *;
+
+// Add a lead — the console's form language (porcelain glass panes, recessed
+// wells, the PCB-green primary) with ONE loud element: the match rail under
+// Company name, drawn as a trace dropping from the field to the leads already
+// on the list. Everything else stays quiet on the --a-* tokens, so light and
+// dark follow for free.
+
+.page {
+  max-width: 1120px;
+}
+
+// ─── Head ───────────────────────────────────────────────────────────────────
+
+.head {
+  margin: 4px 0 20px;
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--a-fg1);
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--a-fg3);
+}
+
+// "Added …" after Add and start another — a receipt, not an alert.
+.addedBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--a-fg1);
+  background: color-mix(in srgb, var(--a-primary) 8%, var(--a-card));
+  border: 1px solid color-mix(in srgb, var(--a-primary) 26%, transparent);
+}
+
+.addedOpen {
+  font-weight: 600;
+  color: var(--a-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-radius: 4px;
+    box-shadow: var(--a-focus-ring);
+  }
+}
+
+// ─── Layout ─────────────────────────────────────────────────────────────────
+//
+// What a call yields (main) beside what can wait (side). Two columns only when
+// the content box is wide enough for both to hold two-up field rows; below the
+// desktop breakpoint the side column simply follows the main one, in the same
+// order as the tab sequence.
+
+.form {
+  display: flex;
+  flex-direction: column;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+
+  @media (max-width: $bp-desktop) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.panel {
+  @include a-glass-pane;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px 20px 20px;
+  border-radius: var(--a-radius);
+
+  @media (max-width: $bp-admin-compact) {
+    padding: 16px 14px 18px;
+  }
+}
+
+.mainPanel {
+  gap: 18px;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--a-fg1);
+}
+
+// Two-up field rows in the main panel; one column on a phone.
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 16px;
+
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.stateZip {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+}
+
+// ─── Field primitive ────────────────────────────────────────────────────────
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-fg2);
+}
+
+.req {
+  color: var(--a-danger);
+}
+
+.hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--a-fg3);
+}
+
+.counter {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.fieldError {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--a-danger);
+}
+
+.input,
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 14px;
+  color: var(--a-fg1);
+  @include a-glass-well;
+  border-radius: 8px;
+  outline: none;
+  transition: box-shadow 150ms ease, border-color 150ms ease;
+
+  &::placeholder {
+    color: var(--a-fg4);
+  }
+
+  &:focus {
+    @include a-well-focus;
+  }
+
+  &[data-invalid] {
+    border-color: var(--a-danger);
+
+    &:focus {
+      box-shadow: var(--a-glass-well-shadow), 0 0 0 3px rgba(192, 57, 43, 0.16);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.input {
+  height: 40px;
+  padding: 0 12px;
+}
+
+// Company name is the field the whole page hangs from: a step taller.
+.companyField .input {
+  height: 46px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.mono {
+  font-family: $admin-font-mono;
+  font-size: 13px;
+}
+
+.textarea {
+  min-height: 104px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+// ─── The match rail (the page's one bold element) ──────────────────────────
+//
+// A trace drops from Company name to the leads already on the list and lands
+// on a via — the board's own grammar for "this connects to that". The trace is
+// a pseudo on the rail itself, so it only exists when there is something to
+// connect to. Green when it is a hint from the list search; amber when the
+// server refused the save (data-refused), because then the rep's work did not
+// land and the rail is where it says why.
+
+.rail {
+  --rail-ink: var(--a-primary);
+
+  position: relative;
+  margin: 6px 0 0 22px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--rail-ink) 6%, var(--a-card));
+  border: 1px solid color-mix(in srgb, var(--rail-ink) 24%, transparent);
+  animation: rail-in 160ms ease-out;
+  outline: none;
+
+  // The trace: from the field's bottom edge down to the rail's first row.
+  &::before {
+    content: '';
+    position: absolute;
+    left: -14px;
+    top: -7px;
+    width: 12px;
+    height: 24px;
+    border-left: 1.5px solid var(--rail-ink);
+    border-bottom: 1.5px solid var(--rail-ink);
+    border-bottom-left-radius: 6px;
+  }
+
+  // The via, where the trace meets the rail.
+  &::after {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 13px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--a-card);
+    border: 1.5px solid var(--rail-ink);
+  }
+
+  &[data-exact] {
+    border-color: color-mix(in srgb, var(--rail-ink) 45%, transparent);
+  }
+
+  &[data-refused] {
+    --rail-ink: var(--a-warn);
+  }
+
+  &:focus-visible {
+    box-shadow: var(--a-focus-ring);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes rail-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+.railHead {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--a-fg2);
+
+  .rail[data-exact] &,
+  .rail[data-refused] & {
+    font-size: 13.5px;
+    color: var(--a-fg1);
+  }
+}
+
+.railBody {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--a-fg2);
+}
+
+.railCta {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  @include a-glass-ctl;
+}
+
+.railList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.railRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border-radius: 7px;
+
+  &[data-exact] {
+    background: color-mix(in srgb, var(--rail-ink) 10%, transparent);
+  }
+}
+
+.railText {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.railName,
+.railSub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.railName {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--a-fg1);
+}
+
+.railSub {
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+.railOpen {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--a-primary);
+  text-decoration: none;
+
+  // 44px touch target around a compact link.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -6px -4px;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--a-primary) 10%, transparent);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--a-focus-ring);
+  }
+}
+
+.railMore {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+// ─── Actions ────────────────────────────────────────────────────────────────
+//
+// Sticky to the viewport bottom: on a phone the form is several screens tall
+// and the rep must be able to save from wherever the call left them. It floats
+// over the fields scrolling beneath it, so it is the one surface here that
+// earns the real glass filter (a-glass-float drops it on mobile).
+//
+// The right margin is the help button's notch: the wizard FAB is fixed at the
+// viewport's bottom-right (Wizard.module.scss .fab — 28px inset, 60px wide;
+// 16px/52px on a phone), exactly where a full-width bar puts "Add lead".
+
+.actions {
+  position: sticky;
+  bottom: 12px;
+  margin-right: 64px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  @include a-glass-float;
+  box-shadow: var(--a-glass-hi), var(--a-glass-shadow-hover);
+
+  @media (max-width: $bp-admin-mobile) {
+    bottom: 8px;
+  }
+}
+
+.actionsStatus {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.actionsError {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--a-danger);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--a-focus-ring);
+  }
+}
+
+.btnPrimary {
+  color: #ffffff;
+  background: var(--a-primary);
+  transition: background-color 150ms ease;
+
+  &:hover:not(:disabled) {
+    background: var(--a-primary-hover);
+  }
+}
+
+.btnGhost {
+  @include a-glass-ctl;
+}
+
+.btnQuiet {
+  color: var(--a-fg2);
+  background: transparent;
+
+  &:hover {
+    color: var(--a-fg1);
+    background: var(--a-hover);
+  }
+}
+
+// On a phone the bar stays ONE row of two buttons so it never buries the form:
+// the status line (when there is one) above, "Add another" + "Add lead" side by
+// side, and no Cancel — the breadcrumb above the form is the way back there.
+.labelShort {
+  display: none;
+}
+
+@media (max-width: $bp-admin-compact) {
+  .actions {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .actions .btn {
+    flex: 1 1 0;
+    padding: 0 12px;
+  }
+
+  .actionsStatus {
+    flex-basis: 100%;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .btnCancel {
+    display: none;
+  }
+
+  .labelLong {
+    display: none;
+  }
+
+  .labelShort {
+    display: inline;
+  }
+}
+
+// ─── Refusal states (customer / view-only) ──────────────────────────────────
+
+.notice {
+  @include a-glass-pane;
+  max-width: 560px;
+  margin-top: 8px;
+  padding: 24px;
+  border-radius: var(--a-radius);
+}
+
+.noticeTitle {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--a-fg1);
+}
+
+.noticeBody {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--a-fg2);
+}
