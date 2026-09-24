@@ -137,7 +137,8 @@
         const h = clamp((1 - settle) * 0.85 + settle * ((0.3 + 0.1 * pulse) * Math.min(1, 0.5 + 0.5 * o.coalGlow) + flare * Math.min(1.4, o.coalGlow + 0.4)), 0, 1);
         const G = o.coalGlow;
         const cx = ax + dx * c.f + nx * c.n * S, cy = ay + dy * c.f + ny * c.n * S;
-        const P = c.verts.map(([vx, vy]) => [cx + (ux * vx + nx * vy) * S, cy + (uy * vx + ny * vy) * S]);
+        const pv = this._pv || (this._pv = []), P = pv[c.verts.length] || (pv[c.verts.length] = c.verts.map(() => [0, 0]));
+        for (let i = 0; i < P.length; i++) { const vx = c.verts[i][0], vy = c.verts[i][1]; P[i][0] = cx + (ux * vx + nx * vy) * S; P[i][1] = cy + (uy * vx + ny * vy) * S; } /* PATCHED — one reused vertex buffer, not ~7 new arrays per coal per frame (2026-09-24). See PROVENANCE.md */
         // soft ambient glow under the coal (skipped once settled and dim — the rim + crack carry the read)
         if (G > 0 && (h > 0.5 || G > 1)) { ctx.globalCompositeOperation = add ? 'lighter' : 'source-over'; ctx.globalAlpha = o.opacity * clamp((h - 0.5 + 0.35 * Math.max(0, G - 1)) * 0.5 * G, 0, 1);
         ctx.drawImage(glowSprite(rampHex(h * 0.72)), cx - 0.9 * S * G, cy - 0.9 * S * G, 1.8 * S * G, 1.8 * S * G); }
@@ -230,17 +231,7 @@
       ctx.setTransform(this._dpr, 0, 0, this._dpr, P * this._dpr, P * this._dpr);
       ctx.clearRect(-P, -P, W + 2 * P, H + 2 * P);
       // Coals render every frame (the throttled-layer approach read as visible stepping in the glow).
-      if (this._coals) {
-        if (true) {
-          if (!this._cc) { this._cc = document.createElement('canvas'); }
-          if (this._cc.width !== this._c.width || this._cc.height !== this._c.height) { this._cc.width = this._c.width; this._cc.height = this._c.height; }
-          const cc = this._cc.getContext('2d'); cc.setTransform(1, 0, 0, 1, 0, 0); cc.clearRect(0, 0, this._cc.width, this._cc.height);
-          cc.setTransform(this._dpr, 0, 0, this._dpr, P * this._dpr, P * this._dpr);
-          this._drawCoals(cc, eu, t, o); this._coalAt = t;
-        }
-        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.drawImage(this._cc, 0, 0);
-        ctx.setTransform(this._dpr, 0, 0, this._dpr, P * this._dpr, P * this._dpr);
-      }
+      if (this._coals) { this._drawCoals(ctx, eu, t, o); this._coalAt = t; } /* PATCHED — straight onto the just-cleared canvas: same pixels, no per-frame offscreen flush + blit (2026-09-24). See PROVENANCE.md */
       // smoke first (always source-over, cool gray-brown, rises slower + widens)
       ctx.globalCompositeOperation = 'source-over';
       let K = this._k, q = 0;
