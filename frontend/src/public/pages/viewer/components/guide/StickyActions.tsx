@@ -15,7 +15,9 @@
 // onto it lands in the same react-dropzone root (desktop says so; a phone,
 // which has no drag and drop, shows only the buttons, full width, clear of the
 // home indicator). A spacer at the end of the document gives the page back the
-// height the bar covers, so the footer's last line can still scroll clear.
+// height the bar covers, so the footer's last line can still scroll clear, and
+// the root's scroll-padding-bottom reserves the same strip, so a control Tab
+// scrolls into view lands above the bar, never under it (WCAG 2.4.11).
 //
 // The workspace replaces the whole intake when a project opens, so the bar is
 // unmounted with it and can never show over the workspace.
@@ -46,6 +48,39 @@ export function stickyTopInset(): number {
     if (pos === 'sticky' || pos === 'fixed') return Math.max(0, Math.round(el.getBoundingClientRect().bottom));
   }
   return 0;
+}
+
+/**
+ * How much of the viewport's bottom the docked row covers: its height plus its
+ * `bottom` inset — both LAYOUT values. The row's box is not: for the dock's
+ * first 0.2s the dockIn animation holds it translateY(10px) low, and a box read
+ * then came out 10px short for the whole dock.
+ */
+export function barCover(row: HTMLElement): number {
+  const bottom = Number.parseFloat(getComputedStyle(row).bottom);
+  return Math.max(0, Math.ceil(row.offsetHeight + (Number.isFinite(bottom) ? bottom : 0)));
+}
+
+/** Room left above the bar for a focused control's outline. */
+export const FOCUS_CLEARANCE = 8;
+
+/**
+ * The height the row would have back in the flow at the slot's CURRENT width —
+ * read off a hidden, undocked copy laid out inside the slot, so the real row
+ * never leaves the dock (which would replay its entrance) to be measured.
+ */
+function inFlowHeight(slot: HTMLElement, row: HTMLElement): number {
+  const probe = row.cloneNode(true) as HTMLElement;
+  probe.removeAttribute('data-docked');
+  probe.removeAttribute('data-drag');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.setAttribute('inert', '');
+  // The slot's own width: its positioned ancestor is the whole sheet.
+  probe.style.cssText = `position:absolute;width:${slot.clientWidth}px;visibility:hidden;pointer-events:none;`;
+  slot.append(probe);
+  const height = probe.offsetHeight;
+  probe.remove();
+  return height;
 }
 
 export default function StickyActions({ className, busy, dragActive, onChoose, onExample }: Props) {
@@ -90,29 +125,49 @@ export default function StickyActions({ className, busy, dragActive, onChoose, o
       io.observe(slot);
     };
 
+    // The navbar is taller on a phone, and a width change (a rotation, a
+    // resized window) re-wraps the buttons: while docked, the place held on the
+    // card follows the height the row WOULD have there now, or the card would
+    // shift when it undocks (and a stale, shorter place could undock a row
+    // that no longer fits, which then docks again).
+    const onResize = () => {
+      observe();
+      const row = rowRef.current;
+      if (dockedRef.current && row != null) slot.style.height = `${inFlowHeight(slot, row)}px`;
+    };
+
     observe();
-    // The navbar is taller on a phone: re-measure when the viewport changes.
-    window.addEventListener('resize', observe);
+    window.addEventListener('resize', onResize);
     return () => {
-      window.removeEventListener('resize', observe);
+      window.removeEventListener('resize', onResize);
       io?.disconnect();
       slot.style.height = '';
     };
   }, []);
 
-  // The document grows by exactly what the docked bar covers.
+  // While docked, the page reserves the strip the bar covers: the document
+  // grows by exactly that much (the spacer), and the root's scroll padding
+  // keeps whatever the browser scrolls into view — a Tab, a find-in-page —
+  // above the bar. Both go when it undocks or the intake unmounts.
   useLayoutEffect(() => {
     if (!docked) {
       setSpacer(0);
       return;
     }
+    const root = document.documentElement;
     const measure = () => {
       const row = rowRef.current;
-      if (row != null) setSpacer(Math.max(0, Math.ceil(window.innerHeight - row.getBoundingClientRect().top)));
+      if (row == null) return;
+      const cover = barCover(row);
+      setSpacer(cover);
+      root.style.scrollPaddingBottom = `${cover + FOCUS_CLEARANCE}px`;
     };
     measure();
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      root.style.scrollPaddingBottom = '';
+    };
   }, [docked]);
 
   return (

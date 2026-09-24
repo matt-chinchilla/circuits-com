@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EXAMPLE_URL } from '../../intakeCopy';
 import ViewerIntake from '../ViewerIntake';
-import { FULLY_IN_VIEW, stickyTopInset } from './StickyActions';
+import { FOCUS_CLEARANCE, FULLY_IN_VIEW, barCover, stickyTopInset } from './StickyActions';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -57,6 +57,8 @@ async function report(inView: boolean, ratio = inView ? 1 : 0) {
 
 let container: HTMLDivElement;
 let root: Root;
+/** happy-dom lays nothing out: every element answers this as its height. */
+let layoutHeight = 44;
 
 const PAIR = ['Choose files', 'Try the example project'];
 /** The drop card's pair — the tour's own "See U30 on the example" link is not part of it. */
@@ -68,6 +70,8 @@ const row = () => pair()[0].parentElement!;
 const spacers = () => document.body.querySelectorAll(':scope > [aria-hidden="true"][style*="height"]');
 
 beforeEach(async () => {
+  layoutHeight = 44;
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(() => layoutHeight);
   FakeIO.all = [];
   vi.stubGlobal('IntersectionObserver', FakeIO);
   try {
@@ -209,6 +213,88 @@ describe('the drop card’s buttons stay on screen', () => {
       header.remove();
     }
   });
+
+  // The helper alone proved nothing about the wiring: a dropped rootMargin, or
+  // one with its sign flipped, passed every other test here.
+  it('builds its observer with the navbar’s height cut off the top, and rebuilds it when that changes', async () => {
+    const header = document.createElement('header');
+    header.style.position = 'sticky';
+    let bottom = 48;
+    vi.spyOn(header, 'getBoundingClientRect').mockImplementation(() => ({ bottom }) as DOMRect);
+    document.body.prepend(header);
+    try {
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      FakeIO.all = [];
+      await act(async () => root.render(createElement(ViewerIntake, { onProject: () => {} })));
+      const first = live().at(-1)!;
+      expect(first.opts.rootMargin).toBe('-48px 0px 0px 0px');
+
+      // A rotation: the phone's navbar is a different height.
+      bottom = 56;
+      await act(async () => window.dispatchEvent(new Event('resize')));
+      expect(first.disconnected).toBe(true);
+      expect(live()).toHaveLength(1);
+      expect(live()[0].opts.rootMargin).toBe('-56px 0px 0px 0px');
+    } finally {
+      header.remove();
+    }
+  });
+
+  // WCAG 2.2 SC 2.4.11: Tab scrolls a control below the fold to the bottom
+  // edge — under the bar, unless the root reserves that strip.
+  it('reserves the strip the docked bar covers as the root’s scroll padding, and gives it back', async () => {
+    const rootStyle = document.documentElement.style;
+    expect(rootStyle.scrollPaddingBottom).toBe('');
+    await report(false);
+    expect(rootStyle.scrollPaddingBottom).toBe(`${barCover(row()) + FOCUS_CLEARANCE}px`);
+    expect(Number.parseFloat(rootStyle.scrollPaddingBottom)).toBeGreaterThan(FOCUS_CLEARANCE);
+    await report(true);
+    expect(rootStyle.scrollPaddingBottom).toBe('');
+
+    await report(false);
+    expect(rootStyle.scrollPaddingBottom).not.toBe('');
+    await act(async () => root.unmount());
+    expect(rootStyle.scrollPaddingBottom).toBe('');
+    root = createRoot(container);
+  });
+
+  // The dockIn entrance holds the row translateY(10px) low for 0.2s; a box read
+  // in the dock's first frame came out 10px short for the whole dock.
+  it('measures what the bar covers from layout, not from the box its entrance is still moving', async () => {
+    const target = row();
+    const real = window.getComputedStyle.bind(window);
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((el: Element, pseudo?: string | null) =>
+      el === target ? ({ bottom: '16px', position: 'fixed' } as CSSStyleDeclaration) : real(el, pseudo),
+    );
+    vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
+      top: window.innerHeight - 50,
+      bottom: window.innerHeight + 10,
+      height: 60,
+    } as DOMRect);
+    await report(false);
+    expect(barCover(target)).toBe(44 + 16);
+    const spacer = spacers()[0] as HTMLElement;
+    expect(spacer.style.height).toBe('60px');
+    expect(document.documentElement.style.scrollPaddingBottom).toBe(`${60 + FOCUS_CLEARANCE}px`);
+  });
+
+  it('keeps the place it holds on the card the height the row would have there NOW', async () => {
+    const slot = live().at(-1)!.targets[0] as HTMLElement;
+    await report(false);
+    expect(slot.style.height).toBe('44px');
+
+    // Desktop to phone while docked: the in-flow pair wraps onto two lines.
+    layoutHeight = 98;
+    await act(async () => window.dispatchEvent(new Event('resize')));
+    expect(slot.style.height).toBe('98px');
+    // Measured on a copy: the real row never left the dock, and the copy is gone.
+    expect(row().getAttribute('data-docked')).toBe('true');
+    expect(slot.querySelectorAll('button')).toHaveLength(2);
+
+    await report(true);
+    expect(slot.style.height).toBe('');
+  });
 });
 
 // ─── The layout rules vitest cannot see ─────────────────────────────────────
@@ -242,6 +328,11 @@ describe('StickyActions.module.scss', () => {
     const host = readFileSync(join(__dirname, '..', 'ViewerIntake.tsx'), 'utf8');
     expect(host).toMatch(/role="alert"/);
     expect(host).toMatch(/stickyStyles\.clearOfBar/);
+  });
+
+  it('never reads what the bar covers off the row’s (animated) box', () => {
+    expect(tsx).not.toMatch(/row\.getBoundingClientRect\(\)/);
+    expect(tsx.slice(tsx.indexOf('export function barCover'))).toMatch(/row\.offsetHeight/);
   });
 
   it('holds the slot’s height BEFORE the row leaves the flow', () => {
