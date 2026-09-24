@@ -22,6 +22,7 @@ import type { KicadProject } from '@public/services/kicad/types';
 import { clearDesignSession, getDesignSession, openDesign, type DesignSession } from '@public/services/designSession';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import ViewerIntake from './components/ViewerIntake';
+import { VIEW_LABEL, viewsFor, type ViewId } from './viewLabels';
 import BoardPanel, { type BoardPanelHandle, type SheetRow, type ShowOn } from './components/BoardPanel';
 import { readSheetThumbnail, type SheetThumbnail } from '@public/services/kicad/sheetThumbnail';
 import { knownRefs, partFacts, resolveRef } from './partFacts';
@@ -51,10 +52,7 @@ const Board3DView = lazy(() => import('@public/components/kicad/board3d/Board3DV
  *  browser never goes idle. */
 const PLACEMENTS_IDLE_TIMEOUT_MS = 2000;
 
-type Tab = 'schematic' | 'board' | 'stackup' | 'board3d' | 'bom';
-
-export const POSITIONING =
-  'Open your KiCad project in the browser and get every line of the BOM priced across our whole distributor catalog — read straight out of your schematic, with no CSV export, no account, and nobody trying to win your board order.';
+type Tab = ViewId;
 
 /** Why a chip is inert, in the two places that have to say it: the hover title
  *  and the toast a click raises. The renderer addresses its files by BASENAME,
@@ -614,20 +612,12 @@ export default function ViewerPage() {
     return () => clearTimeout(id);
   }, [toast]);
 
+  // The order, the names and which half of a project each view needs live in
+  // viewLabels.ts — the /viewer guide's "what each file adds" table reads the
+  // same rule, so it can never promise a tab this list does not offer.
   const tabs = useMemo<{ id: Tab; label: string }[]>(() => {
     if (session == null) return [];
-    const out: { id: Tab; label: string }[] = [];
-    if (session.project.root != null) out.push({ id: 'schematic', label: 'Schematic' });
-    if (session.project.board != null) out.push({ id: 'board', label: 'Board' });
-    // Offered for any project with a board, INCLUDING one whose board this
-    // reader cannot parse — the panel then says why, which is a better answer
-    // than a tab that quietly is not there.
-    if (session.project.board != null) out.push({ id: 'stackup', label: 'Stackup' });
-    // Same rule as Stackup: offered for any project with a board, because the
-    // panel itself is where an unreadable one gets its explanation.
-    if (session.project.board != null) out.push({ id: 'board3d', label: '3D' });
-    if (session.project.root != null) out.push({ id: 'bom', label: 'BOM' });
-    return out;
+    return viewsFor(session.project.root != null, session.project.board != null).map((id) => ({ id, label: VIEW_LABEL[id] }));
   }, [session]);
 
   /**
@@ -877,16 +867,13 @@ export default function ViewerPage() {
           <PageHeaderBand
             page="viewer"
             title="Design Viewer"
-            subtitle={
-              <>
-                Open a KiCad project. See the schematic and board, and price the BOM read straight from your{' '}
-                <strong>schematic</strong>.
-              </>
-            }
+            subtitle="Read a KiCad project right here: its schematic, board, stackup and 3D view, with every line of the BOM priced across our distributor catalog."
           />
+          {/* The intake IS the guide: the project sheet (the drop zone), its
+              notes, what happens to the files and a short tour — all of which
+              the workspace below replaces, unchanged, once a project opens. */}
           <div className={styles.page}>
             <div className={styles.stack}>
-              <p className={styles.intro}>{POSITIONING} Your design files never leave your browser.</p>
               <ViewerIntake onProject={handleProject} />
             </div>
           </div>

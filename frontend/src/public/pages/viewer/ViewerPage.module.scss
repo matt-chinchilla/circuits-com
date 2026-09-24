@@ -17,19 +17,6 @@
 // the same rules draw the day bench and the night instrument.
 @include drop-frame-intake;
 
-.credit {
-  margin: 6px 0 0;
-  font-size: 0.75rem;
-  color: $text-secondary;
-}
-
-.intro {
-  margin: 0 0 18px;
-  max-width: 72ch;
-  color: $text-secondary;
-  font-size: 0.95rem;
-}
-
 // ─── Workspace ────────────────────────────────────────────────────────────
 // Exactly the viewport below the navbar, never more: the stage is bounded and
 // scrolls on its own (the BOM table), so the drawing gets everything the three

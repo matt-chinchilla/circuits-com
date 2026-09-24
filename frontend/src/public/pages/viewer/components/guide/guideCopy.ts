@@ -1,0 +1,188 @@
+// The /viewer guide's facts, as data. Every number, file type and refusal the
+// guide prints is READ from the code that enforces it (INTAKE_CAPS, the
+// extension lists, MIN_KICAD_VERSION, the reader's own refusal sentences), so
+// a change to a rule changes the page. Tests pin the rest: the example folder
+// against the example zip, the "left out" rows against the reader's filter, and
+// the pricing disclosure against the request the BOM tool really sends.
+import type { MatchLineIn } from '@public/services/bom/types';
+import { INTAKE_MESSAGES } from '@public/services/kicad/project';
+import { ARCHIVE_GUARD, INTAKE_CAPS, KICAD5_MESSAGE, MIN_KICAD_VERSION, formatMb } from '@public/services/kicad/types';
+import { KICAD_FILES_PROSE, rejectionCopy } from '../../intakeCopy';
+import { VIEW_LABEL, type ViewId } from '../../viewLabels';
+
+/** The binding sentence (owner, CLAUDE.md). Verbatim, everywhere it appears. */
+export const PRIVACY_SENTENCE = 'Your design files never leave your browser.';
+
+/**
+ * What the BOM's pricing call sends per line, in the order the guide says it.
+ * Keyed by the request's own field names, so a field added to MatchLineIn is a
+ * type error here until the disclosure names it (and a test compares the keys
+ * of a REAL request body against this list).
+ */
+export const PRICING_FIELDS: Record<Exclude<keyof MatchLineIn, 'index'>, string> = {
+  mpn: 'part number',
+  manufacturer: 'manufacturer',
+  value: 'value',
+  footprint: 'footprint',
+  description: 'description',
+};
+
+/** The three wires on the sheet: which files feed which outputs. */
+export type Net = 'pro' | 'sch' | 'pcb';
+
+export const NET_LABEL: Record<Net, string> = { pro: 'project', sch: 'sheets', pcb: 'board' };
+
+export interface FolderFile {
+  name: string;
+  role: string;
+  net: Net;
+}
+
+export const EXAMPLE_FOLDER = 'glasgow/';
+
+/** The example project's KiCad files, exactly as the committed zip holds them. */
+export const EXAMPLE_FILES: readonly FolderFile[] = [
+  { name: 'glasgow.kicad_pro', role: 'project', net: 'pro' },
+  { name: 'glasgow.kicad_sch', role: 'root sheet', net: 'sch' },
+  { name: 'io_banks.kicad_sch', role: 'sub-sheet', net: 'sch' },
+  { name: 'io_buffer.kicad_sch', role: 'sub-sheet', net: 'sch' },
+  { name: 'glasgow.kicad_pcb', role: 'board', net: 'pcb' },
+];
+
+export interface LeftOutEntry {
+  name: string;
+  role: string;
+  folder: boolean;
+  /** A path inside a zip of the folder that stands for this row — the reader's
+   *  own filter must refuse it (pinned by a test). */
+  probe: string;
+}
+
+/** What else a KiCad project folder usually holds, none of which is read. */
+export const LEFT_OUT: readonly LeftOutEntry[] = [
+  { name: 'glasgow.kicad_prl', role: 'your local settings', folder: false, probe: 'glasgow/glasgow.kicad_prl' },
+  { name: 'fp-info-cache', role: 'library cache', folder: false, probe: 'glasgow/fp-info-cache' },
+  { name: 'glasgow-backups/', role: 'KiCad backups', folder: true, probe: 'glasgow/glasgow-backups/glasgow-2026-09-12_195300.zip' },
+  { name: 'gerbers/', role: 'manufacturing outputs', folder: true, probe: 'glasgow/gerbers/glasgow-F_Cu.gbr' },
+  { name: 'glasgow.step', role: '3D model', folder: false, probe: 'glasgow/glasgow.step' },
+  { name: 'LICENSE', role: 'not a KiCad file', folder: false, probe: 'glasgow/LICENSE' },
+];
+
+export interface GuideImage {
+  src: string;
+  /** The file's own pixel size — the box is reserved before it loads. */
+  width: number;
+  height: number;
+  alt: string;
+}
+
+/** Real captures of this viewer on the example, from production — see
+ *  frontend/scripts/viewer-guide/README.md for how they are re-taken. */
+export const IMAGES = {
+  schematic: { src: '/viewer-guide/schematic.webp', width: 360, height: 242, alt: 'The example project’s root schematic sheet, open in the viewer' },
+  bom: { src: '/viewer-guide/bom.webp', width: 420, height: 232, alt: 'Lines of the example project’s BOM with their catalog matches and distributor offers' },
+  board: { src: '/viewer-guide/board-u30.webp', width: 600, height: 415, alt: 'The example board’s copper and silkscreen around the FPGA, U30' },
+  stackup: { src: '/viewer-guide/stackup.webp', width: 360, height: 155, alt: 'The example board’s four-layer stackup, drawn to scale beside its layer table' },
+  board3d: { src: '/viewer-guide/board-3d-u30.webp', width: 820, height: 581, alt: 'The example board in 3D, with U30 lit in cyan and labelled with its part number' },
+  schematicU30: { src: '/viewer-guide/schematic-u30.webp', width: 560, height: 340, alt: 'U30’s unit on the root schematic, shaded as the selected part' },
+  panel: {
+    src: '/viewer-guide/part-panel-u30.webp',
+    width: 560,
+    height: 1012,
+    alt: 'The part panel for U30: its sheet, side, position and rotation from the board file, then its exact catalog match from Lattice',
+  },
+} satisfies Record<string, GuideImage>;
+
+export interface Output {
+  key: string;
+  net: Net;
+  title: string;
+  body?: string;
+  from: string;
+  image?: GuideImage;
+}
+
+const title = (id: ViewId): string => VIEW_LABEL[id];
+
+/** "What each file becomes" — titles are the workspace's own tab names. */
+export const OUTPUTS: readonly Output[] = [
+  { key: 'project', net: 'pro', title: 'The project’s name and its sheet names', from: 'from .kicad_pro' },
+  {
+    key: 'schematic',
+    net: 'sch',
+    title: title('schematic'),
+    body: 'Every sheet, pannable and zoomable, with a picture of each sheet to jump between them.',
+    from: 'from each .kicad_sch',
+    image: IMAGES.schematic,
+  },
+  {
+    key: 'bom',
+    net: 'sch',
+    title: title('bom'),
+    body: 'One line per part, matched against our distributor catalog. DNP parts stay out of the totals.',
+    from: 'from each .kicad_sch',
+    image: IMAGES.bom,
+  },
+  {
+    key: 'board',
+    net: 'pcb',
+    title: title('board'),
+    body: 'Copper, silkscreen and every other layer, drawn the way KiCad draws them.',
+    from: 'from .kicad_pcb',
+    image: IMAGES.board,
+  },
+  {
+    key: 'stackup',
+    net: 'pcb',
+    title: title('stackup'),
+    body: 'Layers, materials and thicknesses, drawn to scale.',
+    from: 'from .kicad_pcb',
+    image: IMAGES.stackup,
+  },
+  {
+    key: 'board3d',
+    net: 'pcb',
+    title: title('board3d'),
+    body: 'The assembled board you can turn over. Body heights are estimated from the footprints.',
+    from: 'from .kicad_pcb',
+    image: IMAGES.board3d,
+  },
+];
+
+/** formatMb's figure without a trailing ".0" — "8 MB", not "8.0 MB", in prose. */
+export function proseMb(bytes: number): string {
+  return formatMb(bytes).replace(/\.0$/, '');
+}
+
+/** The caps line and note 4, in the reader's own units. */
+export const CAPS = {
+  files: INTAKE_CAPS.files,
+  perFileMb: proseMb(INTAKE_CAPS.perFileBytes),
+  totalMb: proseMb(INTAKE_CAPS.totalBytes),
+  archiveMb: proseMb(ARCHIVE_GUARD.archiveBytes),
+  minKicad: MIN_KICAD_VERSION,
+};
+
+export { KICAD_FILES_PROSE };
+
+/** The truth table's rows: what a drop holds → which views open. */
+export const DROP_KINDS: readonly { label: string; schematic: boolean; board: boolean }[] = [
+  { label: 'Schematic sheets only', schematic: true, board: false },
+  { label: 'A board only', schematic: false, board: true },
+  { label: 'Both, or a zip of the folder', schematic: true, board: true },
+];
+
+const MB = 1024 * 1024;
+
+/**
+ * "What a turned-away file looks like": the refusals a visitor is most likely
+ * to meet, printed from the reader's OWN sentences — never retyped here.
+ */
+export const REFUSALS: readonly { what: string; message: string }[] = [
+  { what: 'A Gerber file on its own', message: rejectionCopy('glasgow-F_Cu.gbr') },
+  { what: 'A 3D model on its own', message: rejectionCopy('glasgow.step') },
+  { what: 'A zip of Gerbers or other outputs', message: INTAKE_MESSAGES.empty },
+  { what: `A KiCad ${MIN_KICAD_VERSION - 1} project`, message: KICAD5_MESSAGE },
+  { what: 'Too many KiCad files', message: INTAKE_MESSAGES.tooManyFiles(INTAKE_CAPS.files + 8) },
+  { what: 'A board over the size limit', message: INTAKE_MESSAGES.fileTooLarge('glasgow.kicad_pcb', INTAKE_CAPS.perFileBytes + 1.4 * MB) },
+];
