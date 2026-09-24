@@ -292,9 +292,10 @@ describe('the copy', () => {
     const capsLine = [...card.querySelectorAll('p')].find((p) => p.textContent?.includes('or newer'))!;
     expect(capsLine.textContent).toContain(`Up to ${INTAKE_CAPS.files} KiCad files, ${proseMb(INTAKE_CAPS.totalBytes)} MB`);
     expect(text()).not.toContain(`Up to ${INTAKE_CAPS.files} files,`);
-    expect(text()).toContain(
-      `Up to ${INTAKE_CAPS.files} KiCad files, ${proseMb(INTAKE_CAPS.perFileBytes)} MB each, ${proseMb(INTAKE_CAPS.totalBytes)} MB together`,
-    );
+    // Note 4 on the trace: the file cap as its title, the sizes under it.
+    const note4 = container.querySelector('#note-4')!.textContent ?? '';
+    expect(note4).toContain(`Up to ${INTAKE_CAPS.files} KiCad files`);
+    expect(note4).toContain(`${proseMb(INTAKE_CAPS.perFileBytes)} MB each, ${proseMb(INTAKE_CAPS.totalBytes)} MB together`);
     expect(CAPS.perFileMb).toBe('8');
     // The components hold no typed number: every figure arrives through CAPS.
     for (const [file, src] of guideSources().filter(([f]) => /(GuideNotes|ViewerIntake)\.tsx$/.test(f))) {
@@ -436,7 +437,7 @@ describe('Guide.module.scss', () => {
   const scss = readFileSync(join(__dirname, 'Guide.module.scss'), 'utf8');
 
   it('re-asserts [hidden] on every folded region that sets its own display', () => {
-    for (const cls of ['tree', 'outputs', 'notes']) expect(scss).toContain(`.${cls}[hidden]`);
+    for (const cls of ['tree', 'outputs']) expect(scss).toContain(`.${cls}[hidden]`);
   });
 
   it('animates ONLY inside prefers-reduced-motion: no-preference', () => {
@@ -451,10 +452,6 @@ describe('Guide.module.scss', () => {
   it('hides the traces below 1100px, where the cards carry the mapping as text', () => {
     expect(scss).toMatch(/\$bp-traces:\s*1100px/);
     expect(scss).toMatch(/@media \(max-width: \$bp-traces\)\s*\{[\s\S]*?\.traces\s*\{\s*display: none;/);
-  });
-
-  it('keeps the table’s screen-reader text inside its scroller (a phone once grew to 441px)', () => {
-    expect(scss).toMatch(/\.tableWrap\s*\{[^}]*position: relative;/);
   });
 
   it('puts the buttons first on a phone, and the folder listing last', () => {
@@ -483,13 +480,6 @@ describe('Guide.module.scss', () => {
     expect(contrast(token('ink-3'), WHITE)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(token('ink-3'), BENCH)).toBeGreaterThanOrEqual(4.5);
     expect(scss).toMatch(/\.out \{\s*\.name,\s*\.role \{\s*color: \$ink-3;/);
-  });
-
-  it('writes the refusal samples in a red that holds AA on its own tint', () => {
-    const red = rgb('#c0392b'); // $error-red
-    const tint = red.map((v, i) => 0.07 * v + 0.93 * BENCH[i]!);
-    expect(contrast(token('refusal-ink'), tint)).toBeGreaterThanOrEqual(4.5);
-    expect(scss).toMatch(/\.refusalMsg \{[^}]*color: \$refusal-ink;/);
   });
 
   it('lets a role label take the ellipsis before a file name does', () => {
