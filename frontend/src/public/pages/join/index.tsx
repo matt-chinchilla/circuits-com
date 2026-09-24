@@ -896,13 +896,7 @@ export default function JoinPage() {
                           setTier(t.id);
                         }}
                       >
-                        {tier === t.id ? (
-                          <>&#10003; Selected</>
-                        ) : t.id === "silver" ? (
-                          `Select ${t.name}`
-                        ) : (
-                          `Buy ${t.name}`
-                        )}
+                        {tier === t.id ? <>&#10003; Selected</> : `Select ${t.name}`}
                       </button>
                       <span className={styles.featLabel}>FEATURES</span>
                       <p className={styles.featLead}>{t.lead}</p>
