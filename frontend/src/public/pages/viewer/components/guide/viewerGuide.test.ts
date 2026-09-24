@@ -436,7 +436,7 @@ describe('Guide.module.scss', () => {
   const scss = readFileSync(join(__dirname, 'Guide.module.scss'), 'utf8');
 
   it('re-asserts [hidden] on every folded region that sets its own display', () => {
-    for (const cls of ['tree', 'outputs', 'notes', 'tour']) expect(scss).toContain(`.${cls}[hidden]`);
+    for (const cls of ['tree', 'outputs', 'notes']) expect(scss).toContain(`.${cls}[hidden]`);
   });
 
   it('animates ONLY inside prefers-reduced-motion: no-preference', () => {

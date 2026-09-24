@@ -99,12 +99,31 @@ export const IMAGES = {
   board: { src: '/viewer-guide/board-u30.webp', width: 600, height: 415, alt: 'The example board’s copper and silkscreen around the FPGA, U30' },
   stackup: { src: '/viewer-guide/stackup.webp', width: 360, height: 155, alt: 'The example board’s four-layer stackup, drawn to scale beside its layer table' },
   board3d: { src: '/viewer-guide/board-3d-u30.webp', width: 820, height: 581, alt: 'The example board in 3D, with U30 lit in cyan and labelled with its part number' },
-  schematicU30: { src: '/viewer-guide/schematic-u30.webp', width: 560, height: 340, alt: 'U30’s unit on the root schematic, shaded as the selected part' },
-  panel: {
-    src: '/viewer-guide/part-panel-u30.webp',
-    width: 560,
-    height: 1012,
-    alt: 'The part panel for U30: its sheet, side, position and rotation from the board file, then its exact catalog match from Lattice',
+  // The tour: U30 followed across the views (tour-*). Sized for the tour's
+  // largest frame at 2x; viewerGuide.test.ts holds the frame sizes.
+  tour3d: {
+    src: '/viewer-guide/tour-3d-u30.webp',
+    width: 1680,
+    height: 1120,
+    alt: 'The example board in 3D, close in on the FPGA U30: its body lit in cyan and labelled with its part number',
+  },
+  tourSchematic: {
+    src: '/viewer-guide/tour-schematic-u30.webp',
+    width: 1280,
+    height: 800,
+    alt: 'U30’s unit on the schematic, shaded as the selected part, with its designator and part number',
+  },
+  tourBoard: {
+    src: '/viewer-guide/tour-board-u30.webp',
+    width: 1280,
+    height: 800,
+    alt: 'The board view centred on U30’s ball-grid footprint, highlighted',
+  },
+  tourPanel: {
+    src: '/viewer-guide/tour-panel-u30.webp',
+    width: 1005,
+    height: 1689,
+    alt: 'The part panel for U30: side, position and rotation from the board file, then its exact catalog match from Lattice',
   },
 } satisfies Record<string, GuideImage>;
 

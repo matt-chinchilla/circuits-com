@@ -4,7 +4,8 @@
 
 // The /viewer guide: "the project sheet" — a datasheet drawing of a KiCad
 // project folder that is also the drop zone, its numbered notes, what happens
-// to the files, and a short tour on a soldermask-green panel.
+// to the files. The tour on its soldermask-green panel has its own sheet,
+// PartTour.module.scss.
 //
 // The vocabulary is the site's own: crop marks, the 24px PCB grid, copper pads
 // and chamfered traces, designator-style circled refs, the native font stack.
@@ -26,7 +27,6 @@ $trace-rest: #7fb96a;
 $trace-hot: #2e9a0c;
 $copper: #b8912f;
 $steel: #0e1113;
-$mask: #0b3d24; // soldermask green, the tour's panel
 
 // The sheet's two layouts meet here: below it the traces are not drawn and the
 // cards' "from …" lines carry the file → view mapping as text.
@@ -46,8 +46,7 @@ $bp-traces: 1100px;
 // own display — so the attribute has to be re-asserted or the fold is a no-op.
 .tree[hidden],
 .outputs[hidden],
-.notes[hidden],
-.tour[hidden] {
+.notes[hidden] {
   display: none;
 }
 
@@ -972,180 +971,6 @@ $bp-traces: 1100px;
   color: rgba(233, 236, 239, 0.78);
 }
 
-// ─── The tour, on soldermask ──────────────────────────────────────────────
-.tour {
-  position: relative;
-  margin-top: 16px;
-  padding: 32px 32px 28px;
-  color: #e7f1ea;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(160deg, #0f4a2b, $mask 60%, #09331e);
-  background-size: 24px 24px, 24px 24px, auto;
-  border-radius: 14px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-
-.tourTitle {
-  margin: 0 0 6px;
-  font-family: $font-heading;
-  font-size: 1.4rem;
-  letter-spacing: -0.015em;
-  color: #fff;
-}
-
-.tourLead {
-  max-width: 70ch;
-  margin: 0 0 22px;
-  line-height: 1.55;
-  color: rgba(231, 241, 234, 0.84);
-}
-
-.tourGrid {
-  display: grid;
-  grid-template-columns: 1.75fr 1fr 272px;
-  grid-template-areas:
-    'three sch panel'
-    'three brd panel';
-  gap: 16px;
-  align-items: start;
-}
-
-.shot {
-  margin: 0;
-  min-width: 0;
-}
-
-.shot3d {
-  grid-area: three;
-}
-
-.shotSch {
-  grid-area: sch;
-}
-
-.shotBrd {
-  grid-area: brd;
-}
-
-.shotPanel {
-  grid-area: panel;
-}
-
-.frame {
-  overflow: hidden;
-  background: #101418;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
-
-  img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .shot3d & {
-    height: 452px;
-  }
-
-  .shotSch &,
-  .shotBrd & {
-    height: 182px;
-  }
-
-  .shotPanel & {
-    height: auto;
-    background: #fff;
-
-    img {
-      height: auto;
-    }
-  }
-}
-
-.caption {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-top: 8px;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  color: rgba(231, 241, 234, 0.84);
-
-  b {
-    font-weight: 600;
-    color: #fff;
-  }
-}
-
-// An ENIG test pad: the caption's marker.
-.enig {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  margin-top: 3px;
-  background: radial-gradient(circle at 35% 35%, #f6e39b, #d1ac47 55%, #8f6f1f);
-  border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
-}
-
-.keys {
-  margin: 22px 0 0;
-  font-size: 0.88rem;
-  color: rgba(231, 241, 234, 0.84);
-
-  kbd {
-    padding: 1px 6px;
-    font: 0.78rem $font-mono;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    border-bottom-width: 2px;
-    border-radius: 4px;
-  }
-}
-
-.tourTry {
-  margin: 14px 0 0;
-}
-
-.tryLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 16px;
-  font-family: $font-body;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-
-  &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.12);
-  }
-
-  &:focus-visible {
-    outline: 2px solid #9be27a;
-    outline-offset: 2px;
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: progress;
-  }
-}
-
-.tryGlyph {
-  font-size: 1rem;
-}
-
 // ─── Narrower sheets ──────────────────────────────────────────────────────
 @media (max-width: $bp-traces) {
   .sheet {
@@ -1164,14 +989,6 @@ $bp-traces: 1100px;
   // One column of notes, so the table in note 5 keeps all five views on screen.
   .notes {
     grid-template-columns: 1fr;
-  }
-
-  .tourGrid {
-    grid-template-columns: 1.4fr 1fr;
-    grid-template-areas:
-      'three three'
-      'sch panel'
-      'brd panel';
   }
 }
 
@@ -1334,37 +1151,5 @@ $bp-traces: 1100px;
 
   .privacyTitle {
     font-size: 1.1rem;
-  }
-
-  .tour {
-    padding: 22px 16px 20px;
-  }
-
-  .tourTitle {
-    font-size: 1.35rem;
-  }
-
-  .tourGrid {
-    grid-template-columns: 1fr 1fr;
-    grid-template-areas:
-      'three three'
-      'sch brd'
-      'panel panel';
-    gap: 12px;
-  }
-
-  .frame {
-    .shot3d & {
-      height: 240px;
-    }
-
-    .shotSch &,
-    .shotBrd & {
-      height: 130px;
-    }
-  }
-
-  .shotPanel {
-    max-width: 340px;
   }
 }
