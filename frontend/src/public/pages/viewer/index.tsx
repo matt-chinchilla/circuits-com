@@ -3,7 +3,7 @@
 // (one embed per project); it is hidden, not unmounted, when another tab is
 // active — and so is every other panel, so that switching tabs never bins work
 // the reader has already paid for.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import Icon from '@shared/components/Icon';
@@ -305,6 +305,19 @@ export default function ViewerPage() {
     shown.current = { schematic: null, board: null };
     resetBoardView();
   }, [resetBoardView]);
+
+  // The intake (with its guide) is far taller than the workspace, so the swap
+  // either way would otherwise keep a clamped scroll: a project opened from the
+  // bottom of the guide landed with its tab strip under the sticky navbar.
+  // Reset on the TRANSITION only — a session restored on SPA re-entry keeps
+  // wherever the router put the page. A layout effect runs after the DOM swap
+  // and before paint; the jump is instant (no smooth scroll to reduce).
+  const hadSession = useRef(session != null);
+  useLayoutEffect(() => {
+    const has = session != null;
+    if (has !== hadSession.current) window.scrollTo({ top: 0, left: 0 });
+    hadSession.current = has;
+  }, [session]);
 
   // Deliberately NOT called on unmount: surviving the /viewer ↔ /bom trip is
   // the whole point of the session. Only this button ends it.

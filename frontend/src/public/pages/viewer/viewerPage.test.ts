@@ -696,6 +696,36 @@ describe('after the project is closed', () => {
   });
 });
 
+// The intake is ~3,000px tall with its guide; the workspace is not. Opening a
+// project from a scrolled intake (the tour's "Try the example project" sits at
+// the very bottom) used to keep the clamped scroll, hiding the tab strip under
+// the sticky navbar.
+describe('the scroll position across the swap', () => {
+  it('starts an opened project at the top, and the intake at its top after "Open another"', async () => {
+    session = null;
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    await render();
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    await click(container.querySelector('[data-testid="intake"]') as HTMLElement);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0 });
+
+    await click(byText('Open another'));
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0 });
+    scrollTo.mockRestore();
+  });
+
+  it('leaves the scroll alone for a session restored on SPA re-entry', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    await render();
+    await canvasReady();
+    expect(scrollTo).not.toHaveBeenCalled();
+    scrollTo.mockRestore();
+  });
+});
+
 // MINOR-4
 describe('a schematic with nothing to buy', () => {
   it('says so instead of showing a blank panel', async () => {
