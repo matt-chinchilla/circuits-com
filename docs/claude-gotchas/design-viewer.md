@@ -442,31 +442,34 @@ sheet legitimately placed twice, which is why it is a chain and not a set.
 list for cross-sheet multi-unit parts is a later contract decision, carried
 forward deliberately.
 
-### Path keying is a ZIP property — a dragged FOLDER keys by basename
+### Path keying — every way in keys by relative path (since 2026-09-24)
 
-`project.ts:89` builds each candidate's key from
-`(file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name`.
-Two of the three ways files arrive satisfy that; the third does not.
+`project.ts` `inputPath(file)` builds each dropped file's key from
+`webkitRelativePath || relativePath || path || name`, normalised by
+`normalizeEntryName` (which drops a leading `/` and `.` segments).
 
 - **A ZIP** — `unzipToFiles` normalises each entry's own name and returns
-  `new File([data], name)` (`zip.ts:84`), so every `File.name` IS the full
-  relative path. Two `power.kicad_sch` in different folders stay two files (and a
-  pair that normalises to ONE path is refused outright, `'archive'`). This is the
-  case the `unrenderableSheets` contrast above is about.
-- **`<input webkitdirectory>`** would populate `webkitRelativePath`, which is the
-  other half of line 89. **The viewer does not use one**: both intakes are
-  react-dropzone with `useFsAccessApi: false` and no `webkitdirectory` attribute
-  (`ViewerIntake.tsx:79-85`, `BomIntake.tsx:208-218`).
-- **A dragged folder, or a multi-file pick** — file-selector traverses the
-  `FileSystemEntry` tree and stamps the nested path on its **non-standard `.path`
-  and `.relativePath`** (`file-selector/dist/file.js`, `toFileWithPath`), leaving
-  `webkitRelativePath` empty. `project.ts` reads neither, so those files key by
-  **BASENAME** — and two same-named sheets then collapse into the
-  "`<path>` was dropped twice; the last copy is the one shown" warning
-  (`project.ts:110-111`) instead of staying distinct.
+  `new File([data], name)`, so every `File.name` IS the full relative path. Two
+  `power.kicad_sch` in different folders stay two files (a pair that normalises
+  to ONE path is refused outright, `'archive'`).
+- **`<input webkitdirectory>`** would populate `webkitRelativePath`. **The viewer
+  does not use one**: both intakes are react-dropzone with `useFsAccessApi: false`.
+- **A dragged folder** — file-selector traverses the `FileSystemEntry` tree and
+  stamps the nested path (`/glasgow/io_banks.kicad_sch`) on its **non-standard
+  `.path` and `.relativePath`** (`toFileWithPath`), leaving `webkitRelativePath`
+  empty. Until 2026-09-24 `project.ts` read neither, so a folder drag keyed by
+  BASENAME, two same-named sheets collapsed into "was dropped twice", and — the
+  reason it was fixed — KiCad's backup zips in `<name>-backups/` arrived as bare
+  `.zip` names, were unpacked, and could REPLACE the live board. A picked file
+  gets `./name`, which normalises to its plain name.
 
-Reading `.path`/`.relativePath` in `project.ts` is small and is under **Open**
-(Task 2.4 observation).
+Backups and autosaves: a zip whose path contains `-backups/` is never unpacked;
+a bare zip with KiCad's backup NAME (`KICAD_BACKUP_ZIP`,
+`-YYYY-MM-DD_HHMMSS.zip`) is skipped when it arrives beside other files (one
+dropped on its own still opens, on purpose); `isIgnoredPath` also skips
+`_autosave-*`, which sorts before the real file and used to take the board slot.
+The /viewer guide's "Left out, never read" listing depends on all three
+(`guideFacts.test.ts` drags the example folder with and without paths).
 
 ### DNP: the schematic path is STRICTER than the CSV path, on purpose
 
@@ -1230,9 +1233,8 @@ agrees with the footer: it drops the SKU just picked (now the match) and puts th
   greps the import sites and fails on anything but `DesignCanvas.tsx` importing
   `kicanvasController` would have caught the Task 3.3 breach in CI instead of in
   review.
-- **Read file-selector's `.path` / `.relativePath` in `project.ts`.** Small, and
-  it is what would make a dragged FOLDER key by path like a ZIP already does
-  (Task 2.4 observation).
+- ~~**Read file-selector's `.path` / `.relativePath` in `project.ts`.**~~ DONE
+  2026-09-24 (`inputPath`, see "Path keying").
 
 ### Public copy: two "upload" strings
 
