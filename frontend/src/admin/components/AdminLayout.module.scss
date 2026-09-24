@@ -84,6 +84,10 @@
   --a-track: #f0f2f5; // empty meter/donut track (= --a-border-soft)
   // Status
   --a-danger: #{$error-red};
+  // Error TEXT (field messages, required marks). Separate from --a-danger,
+  // which also FILLS badges/buttons under white text and so cannot lighten
+  // for dark mode; this one can (dark value below, ≥4.5:1 on bg/card/glass).
+  --a-danger-text: #{$error-red};
   --a-warn: #d97706;
   --a-ok: #15803d;
   // Layout
@@ -136,8 +140,9 @@
   // <html data-admin-theme="dark"> is set (see AdminThemeContext). The
   // chart-chrome values (--a-card / --a-fg* / --a-grid / --a-axis / --a-track /
   // --a-border) MIRROR CHROME_DARK in charts/chartTheme.ts — change one,
-  // change both. Brand accents (--a-blue/purple/grad-*, status) read on dark
-  // and stay; only --a-primary is lifted so the green CTA doesn't sink.
+  // change both. Brand accents (--a-blue/purple/grad-*, status fills) read on
+  // dark and stay; --a-primary is lifted so the green CTA doesn't sink, and
+  // --a-danger-text so error copy clears AA (#c0392b was 3.42:1 on --a-bg).
   :global(html[data-admin-theme='dark']) & {
     --a-bg: #0e131c;
     --a-card: #171e2b;
@@ -158,6 +163,9 @@
     // as the dark primary CTA beside it).
     --a-teal: #0d9488;
     --a-red: #dc2626;
+    // 6.73:1 on --a-bg, 6.04:1 on --a-card, 4.85:1 on the lightest dark glass
+    // (#252f42) — pinned by dangerTextContrast.test.ts.
+    --a-danger-text: #f87171;
     --a-grid: #232d3d;
     --a-axis: #38445a;
     --a-track: #202a39;
