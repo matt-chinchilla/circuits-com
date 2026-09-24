@@ -103,3 +103,18 @@ describe('Add lead review fixes (2026-09-23)', () => {
     expect(state).not.toMatch(/maxLength/);
   });
 });
+
+describe('the wizard bubble and the save bar', () => {
+  const wizard = readFileSync(join(__dirname, '../../../wizard/Wizard.module.scss'), 'utf8');
+
+  it('marks <body> while the sticky save bar is mounted, and unmarks it on the way out', () => {
+    expect(tsx).toMatch(/const STICKY_ACTIONS_CLASS = 'has-sticky-actions'/);
+    expect(tsx).toMatch(/document\.body\.classList\.add\(STICKY_ACTIONS_CLASS\)/);
+    expect(tsx).toMatch(/return \(\) => document\.body\.classList\.remove\(STICKY_ACTIONS_CLASS\)/);
+  });
+
+  it('hides the first-session bubble under that mark', () => {
+    const welcome = block(wizard, '.welcome');
+    expect(welcome).toMatch(/:global\(body\.has-sticky-actions\) &\s*{\s*display:\s*none/);
+  });
+});

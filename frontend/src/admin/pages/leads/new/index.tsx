@@ -93,6 +93,9 @@ const MATCH_FETCH = 20;
 // The counter under Notes appears once the rep is near the limit.
 const NOTES_COUNTER_FROM = 3200;
 
+// Read by Wizard.module.scss (`:global(body.has-sticky-actions) .welcome`).
+const STICKY_ACTIONS_CLASS = 'has-sticky-actions';
+
 const SAVE_FALLBACK = 'The lead was not added. Check your connection, then try again.';
 
 type SaveMode = 'open' | 'another';
@@ -272,6 +275,16 @@ function AddLeadForm() {
   // Mid-call speed: the cursor starts in Company name.
   useEffect(() => {
     companyRef.current?.focus();
+  }, []);
+
+  // The sticky save bar sits where the wizard's first-session "Need a
+  // walkthrough?" bubble floats (z 9999, click = dismiss), so a new rep's
+  // first click on "Add lead" would only dismiss it. The mark hides the
+  // bubble (Wizard.module.scss) while this bar is on screen; it is not
+  // dismissed, so it greets them again on the next page.
+  useEffect(() => {
+    document.body.classList.add(STICKY_ACTIONS_CLASS);
+    return () => document.body.classList.remove(STICKY_ACTIONS_CLASS);
   }, []);
 
   // The live "already on the list" check. The list search (q) also matches
