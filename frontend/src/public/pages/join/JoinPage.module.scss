@@ -1745,8 +1745,24 @@
   opacity: 0;
 }
 
+// The ignite is ONE timeline split across two elements (perf, 2026-09-24):
+// the group fades + rises on .fdIgn, and the hot ink (color + text-shadow)
+// burns on the perk's own text span. Same duration, delay, easing and
+// keyframe stops as the single `joinIgnite` it replaces, so every frame
+// computes the same values. Why split: color + text-shadow are INHERITED,
+// and animating them on .fdIgn restyled everything inside it every frame —
+// the first perk carries both Founder badges, whose shadow trees are ~175
+// elements (measured: 42 → 217 elements per style recalc, 0.9–1.6s after
+// ignition, i.e. while the prices' coal bed is being drawn). The badges
+// paint no text and read no currentColor, and the check glyph has its own
+// color (`.fd .ck`), so the text span is the only element that shows the ink.
 .fdIsOpen .checks .fdIgn {
-  animation: joinIgnite 0.9s ease forwards;
+  animation: joinIgniteMotion 0.9s ease forwards;
+  animation-delay: calc(0.45s + var(--i, 0) * 0.3s);
+}
+
+.fdIsOpen .checks .perkTxt {
+  animation: joinIgniteInk 0.9s ease forwards;
   animation-delay: calc(0.45s + var(--i, 0) * 0.3s);
 }
 
@@ -1783,25 +1799,38 @@
   pointer-events: none;
 }
 
-@keyframes joinIgnite {
+// joinIgniteMotion + joinIgniteInk = the design's one `joinIgnite`, stop for
+// stop (a property only interpolates between the stops that name it, so the
+// split changes no value): opacity 0 → 1 by 45%, translateY(5px) → none over
+// the whole run, ink hot → resting.
+@keyframes joinIgniteMotion {
   0% {
     opacity: 0;
     transform: translateY(5px);
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes joinIgniteInk {
+  0% {
     color: var(--fd-hot);
     text-shadow:
       0 0 6px var(--fd-soft),
       0 0 14px var(--fd);
   }
   45% {
-    opacity: 1;
     color: var(--fd-hot);
     text-shadow:
       0 0 5px var(--fd-soft),
       0 0 10px color-mix(in srgb, var(--fd) 60%, transparent);
   }
   100% {
-    opacity: 1;
-    transform: none;
     color: inherit;
     text-shadow: none;
   }
@@ -2015,6 +2044,10 @@
 @media (prefers-reduced-motion: reduce) {
   .fdPanel {
     transition: none;
+  }
+
+  .fdIsOpen .checks .perkTxt {
+    animation: none;
   }
 
   .fdIsOpen .checks .fdIgn,

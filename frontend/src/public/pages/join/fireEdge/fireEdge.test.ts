@@ -19,22 +19,45 @@ describe('the vendored design file', () => {
   // Recorded in PROVENANCE.md. Re-export the design, do not edit the file: if
   // this fails, either the bytes drifted or the hash + PROVENANCE.md were not
   // updated together.
-  const SHA256 = '36e43f65a547b8484a846bce7968da8aaa17b23f7a0044f96671e9b37db600cf';
-  const BYTES = 22442;
+  const SHA256 = 'eee25869d6d574e2a235f2c435de97264c287a520947c09a987ee42b5653b6e5';
+  const BYTES = 22161;
 
-  it('is the owner’s export plus the one documented patch', () => {
+  it('is the owner’s export plus the two documented patches', () => {
     const buf = readFileSync(VENDOR);
     expect(createHash('sha256').update(buf).digest('hex')).toBe(SHA256);
     expect(buf.byteLength).toBe(BYTES);
     const provenance = readFileSync(join(__dirname, 'PROVENANCE.md'), 'utf8');
     expect(provenance).toContain(SHA256);
-    expect(provenance).toContain('22,442 bytes');
+    expect(provenance).toContain('22,161 bytes');
   });
 
-  it('keeps the reduced-motion gate and drops only the ≤768px one (the patch)', () => {
+  it('keeps the reduced-motion gate and drops only the ≤768px one (patch 1)', () => {
     const src = readFileSync(VENDOR, 'utf8');
     expect(src).toContain('if (reduced.matches) return; /* PATCHED');
     expect(src).not.toContain('reduced.matches || mobile.matches');
+  });
+
+  // Patch 2 (2026-09-24, performance only — PROVENANCE.md has the numbers and
+  // the seeded pixel-parity proof). These pin the two changes so a re-export
+  // that silently drops them shows up here, not as lag on the Join page.
+  it('draws the coal bed straight onto its own canvas — no offscreen layer (patch 2)', () => {
+    const src = readFileSync(VENDOR, 'utf8');
+    expect(src).toContain('if (this._coals) { this._drawCoals(ctx, eu, t, o); this._coalAt = t; } /* PATCHED');
+    // the per-frame offscreen canvas, its flush and its blit are gone
+    expect(src).not.toContain('this._cc.getContext');
+    expect(src).not.toContain('drawImage(this._cc');
+    expect(src).not.toContain('if (true)');
+  });
+
+  it('reuses one vertex buffer per coal outline instead of allocating per frame (patch 2)', () => {
+    const src = readFileSync(VENDOR, 'utf8');
+    expect(src).not.toContain('c.verts.map(([vx, vy]) =>');
+    expect(src).toContain('P[i][0] = cx + (ux * vx + nx * vy) * S; P[i][1] = cy + (uy * vx + ny * vy) * S; } /* PATCHED');
+  });
+
+  it('marks exactly the three patched places', () => {
+    const src = readFileSync(VENDOR, 'utf8');
+    expect(src.match(/\/\* PATCHED/g)).toHaveLength(3);
   });
 
   it('registers the element, and is safe to side-effect-import more than once', () => {
