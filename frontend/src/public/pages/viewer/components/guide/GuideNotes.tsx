@@ -122,9 +122,7 @@ export default function GuideNotes({ id, hidden }: { id: string; hidden: boolean
       </Note>
 
       <Note n={4} title={`Up to ${CAPS.files} KiCad files, ${CAPS.perFileMb} MB each, ${CAPS.totalMb} MB together`}>
-        <p>
-          Only the files that are read count toward these. A zip itself can be up to {CAPS.archiveMb} MB.
-        </p>
+        <p>Only the files that are read count toward these.</p>
       </Note>
 
       <Note n={5} title="Half a project still opens">

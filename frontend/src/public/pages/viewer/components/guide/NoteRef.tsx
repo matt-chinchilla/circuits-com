@@ -19,7 +19,9 @@ export default function NoteRef({ n }: { n: number }) {
       return;
     }
     // The notes are hidden with the guide: show it, then go once it has laid out.
-    setOpen(true);
+    // Looking up one note is not asking for the guide back — the reader's
+    // "Hide the guide" stays remembered.
+    setOpen(true, { remember: false });
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => goToNote(n)));
   };
   return (

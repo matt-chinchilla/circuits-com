@@ -14,7 +14,12 @@
 
 $ink: #1a1f23;
 $ink-2: #565d66; // 6.66:1 on white
-$ink-3: #7b838c; // ~4:1 on white: the "left out" rows stay grey but legible (their summary carries the meaning)
+// The "left out" rows and the table's dashes: muted, but still AA — 5.17:1 on
+// white, 4.70:1 on the #f2f4f9 bench (the glyphs' opacity carries the mute).
+$ink-3: #666e77;
+// The refusal samples' text: $error-red on its own 7% tint over the bench is
+// 4.47:1, so the words take a darker red (5.45:1); the rule and tint stay red.
+$refusal-ink: #a93226;
 $rule: #dde2e8;
 $pcb: $executive-blue;
 $trace-rest: #7fb96a;
@@ -152,7 +157,8 @@ $bp-traces: 1100px;
     grid-template-areas:
       'title specs'
       'sub specs'
-      'actions specs';
+      'actions specs'
+      'error error';
     column-gap: 48px;
     align-items: end;
   }
@@ -169,6 +175,11 @@ $bp-traces: 1100px;
     .folderCol .actions {
       grid-area: actions;
       margin-bottom: 0;
+    }
+
+    .folderCol .dropError {
+      grid-area: error;
+      margin: 12px 0 0;
     }
 
     .specs {
@@ -322,11 +333,18 @@ $bp-traces: 1100px;
   color: $ink;
   white-space: nowrap;
   @include truncate;
+  // The filename never gives way to its role: 'glasgow.kicad_p…' under "left
+  // out" read as the project file the listing says IS read (769–830px).
+  flex-shrink: 0;
 }
 
+// The role is the secondary label, so it takes the ellipsis instead.
 .role {
+  min-width: 0;
   margin-left: auto;
   padding-left: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 0.8rem;
   color: $ink-2;
   white-space: nowrap;
@@ -361,6 +379,15 @@ $bp-traces: 1100px;
   padding: 6px 0 0;
 }
 
+// Note 3's marker, beside the summary (never inside it), at the row's end.
+.leftOutRef {
+  position: absolute;
+  z-index: 1;
+  top: 11px;
+  right: 14px;
+  display: inline-flex;
+}
+
 .leftOut {
   margin: 0;
 }
@@ -370,7 +397,7 @@ $bp-traces: 1100px;
   align-items: center;
   gap: 8px;
   min-height: 28px;
-  padding: 0 14px 0 36px;
+  padding: 0 44px 0 36px;
   font-size: 0.82rem;
   color: $ink-2;
   list-style: none;
@@ -427,6 +454,12 @@ $bp-traces: 1100px;
 .folderCol .actions {
   justify-content: flex-start;
   margin: 14px 0 10px;
+}
+
+// A refusal sits under the buttons that caused it (two classes: beats the
+// drop frame's margin reset whichever sheet loads last).
+.folderCol .dropError {
+  margin: 0 0 10px;
 }
 
 .caps {
@@ -842,7 +875,7 @@ $bp-traces: 1100px;
   padding: 8px 12px;
   font-size: 0.85rem;
   line-height: 1.45;
-  color: $error-red;
+  color: $refusal-ink;
   background: rgba($error-red, 0.07);
   border-left: 3px solid $error-red;
   border-radius: 6px;
@@ -1188,6 +1221,13 @@ $bp-traces: 1100px;
     }
   }
 
+  // Same order as the buttons, and after them in the source: the refusal
+  // lands right under the button that was pressed.
+  .folderCol .dropError {
+    order: 2;
+    margin: 0 0 10px;
+  }
+
   .specs {
     order: 3;
   }
@@ -1216,6 +1256,11 @@ $bp-traces: 1100px;
 
   .role {
     display: none;
+  }
+
+  // Alone on its row here, a long name may truncate again.
+  .name {
+    flex-shrink: 1;
   }
 
   .outCard {

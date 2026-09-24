@@ -5,7 +5,8 @@ import { createContext, useContext } from 'react';
 
 export interface GuideControl {
   open: boolean;
-  setOpen: (open: boolean) => void;
+  /** `remember: false` shows or hides the guide without keeping the choice. */
+  setOpen: (open: boolean, opts?: { remember?: boolean }) => void;
 }
 
 export const GuideContext = createContext<GuideControl>({ open: true, setOpen: () => {} });

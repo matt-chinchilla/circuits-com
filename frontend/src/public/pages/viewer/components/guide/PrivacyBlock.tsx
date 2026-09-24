@@ -16,7 +16,9 @@ export default function PrivacyBlock() {
       </h2>
       <p className={styles.privacyBody}>
         Every file is read on your computer. To price the BOM, the page sends our catalog each line&rsquo;s{' '}
-        {listInProse(Object.values(PRICING_FIELDS))}, never its quantities, its designators or the files. Share publishes the
+        {listInProse(Object.values(PRICING_FIELDS))}, never its quantities, its designators or the files. A line our catalog
+        cannot match may be looked up at our distributors by its part number, or by its value and footprint, and part photos
+        load from the distributors&rsquo; own sites. Share publishes the
         BOM&rsquo;s parts, quantities and designators as a link, and only when you click it.
       </p>
     </section>

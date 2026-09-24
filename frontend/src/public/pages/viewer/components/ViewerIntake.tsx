@@ -60,8 +60,10 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
   const [open, setOpenState] = useState(() => readGuideOpen());
   const [hot, setHot] = useState<Net | null>(null);
 
-  const setOpen = useCallback((next: boolean) => {
-    writeGuideOpen(next);
+  // The toggle's choice is remembered; a note marker that opens the guide just
+  // to show one note is not a choice, so it passes remember: false.
+  const setOpen = useCallback((next: boolean, opts?: { remember?: boolean }) => {
+    if (opts?.remember !== false) writeGuideOpen(next);
     setOpenState(next);
   }, []);
 
@@ -192,6 +194,13 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
                 Try the example project
               </button>
             </div>
+            {/* Beside the buttons that caused it, in both states: below the
+                whole sheet it landed a screen or more away from the click. */}
+            {error != null && (
+              <p className={`${pageStyles.intakeError} ${styles.dropError}`} role="alert">
+                {error}
+              </p>
+            )}
             {/* The sheet's ratings: the caps, the binding sentence, the credit.
                 One block, so the compact card can stand it beside the buttons. */}
             <div className={styles.specs}>
@@ -200,7 +209,7 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
                   KiCad {CAPS.minKicad} or newer <NoteRef n={2} />
                 </span>
                 <span>
-                  Up to {CAPS.files} files, {CAPS.totalMb} MB <NoteRef n={4} />
+                  Up to {CAPS.files} KiCad files, {CAPS.totalMb} MB <NoteRef n={4} />
                 </span>
               </p>
               <p className={styles.privacyLine}>
@@ -213,12 +222,6 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
 
           <OutputList id={GUIDE_IDS.outputs} hidden={!open} hot={hot} />
         </section>
-
-        {error != null && (
-          <p className={pageStyles.intakeError} role="alert">
-            {error}
-          </p>
-        )}
 
         <GuideNotes id={GUIDE_IDS.notes} hidden={!open} />
         <PrivacyBlock />

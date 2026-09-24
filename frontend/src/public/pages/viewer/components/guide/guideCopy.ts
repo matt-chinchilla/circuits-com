@@ -6,7 +6,7 @@
 // the pricing disclosure against the request the BOM tool really sends.
 import type { MatchLineIn } from '@public/services/bom/types';
 import { INTAKE_MESSAGES } from '@public/services/kicad/project';
-import { ARCHIVE_GUARD, INTAKE_CAPS, KICAD5_MESSAGE, MIN_KICAD_VERSION, formatMb } from '@public/services/kicad/types';
+import { INTAKE_CAPS, KICAD5_MESSAGE, MIN_KICAD_VERSION, formatMb } from '@public/services/kicad/types';
 import { KICAD_FILES_PROSE, rejectionCopy } from '../../intakeCopy';
 import { VIEW_LABEL, type ViewId } from '../../viewLabels';
 
@@ -106,7 +106,7 @@ const title = (id: ViewId): string => VIEW_LABEL[id];
 
 /** "What each file becomes" — titles are the workspace's own tab names. */
 export const OUTPUTS: readonly Output[] = [
-  { key: 'project', net: 'pro', title: 'The project’s name and its sheet names', from: 'from .kicad_pro' },
+  { key: 'project', net: 'pro', title: 'The project’s name and which sheet is the root', from: 'from .kicad_pro' },
   {
     key: 'schematic',
     net: 'sch',
@@ -159,7 +159,6 @@ export const CAPS = {
   files: INTAKE_CAPS.files,
   perFileMb: proseMb(INTAKE_CAPS.perFileBytes),
   totalMb: proseMb(INTAKE_CAPS.totalBytes),
-  archiveMb: proseMb(ARCHIVE_GUARD.archiveBytes),
   minKicad: MIN_KICAD_VERSION,
 };
 

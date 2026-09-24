@@ -111,16 +111,23 @@ describe('the guide collapses', () => {
 
   it('renders shown, and still toggles, when storage throws', async () => {
     localStorage.setItem(GUIDE_KEY, 'hidden');
-    vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+    const get = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
       throw new Error('denied');
     });
-    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+    const set = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
       throw new Error('denied');
     });
-    await mount();
-    expect(toggle().getAttribute('aria-expanded')).toBe('true');
-    await act(async () => toggle().click());
-    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    try {
+      await mount();
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      await act(async () => toggle().click());
+      expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    } finally {
+      // Explicitly: restoreAllMocks does not hand happy-dom's Storage back its
+      // methods, and a later test reading storage would meet "denied".
+      get.mockRestore();
+      set.mockRestore();
+    }
   });
 
   it('renders shown when the storage object itself cannot be reached', async () => {
@@ -147,6 +154,20 @@ describe('the guide collapses', () => {
     }
   });
 
+  it('a note marker opens the guide to show its note WITHOUT forgetting "Hide the guide"', async () => {
+    await mount();
+    await act(async () => toggle().click());
+    expect(localStorage.getItem(GUIDE_KEY)).toBe('hidden');
+    const marker = container.querySelector<HTMLAnchorElement>('a[aria-label="Note 4"]')!;
+    await act(async () => marker.click());
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(localStorage.getItem(GUIDE_KEY)).toBe('hidden');
+    // The toggle itself still remembers.
+    await act(async () => toggle().click());
+    await act(async () => toggle().click());
+    expect(localStorage.getItem(GUIDE_KEY)).toBe('shown');
+  });
+
   it('a note marker in the compact card reopens the guide, and never touches the URL hash', async () => {
     await mount();
     await act(async () => toggle().click());
@@ -155,6 +176,68 @@ describe('the guide collapses', () => {
     await act(async () => marker.click());
     expect(toggle().getAttribute('aria-expanded')).toBe('true');
     expect(window.location.hash).toBe(before);
+  });
+});
+
+// ─── The folder listing ─────────────────────────────────────────────────────
+
+describe('the "left out" group', () => {
+  const stubMedia = (matches: (q: string) => boolean) =>
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) => ({ matches: matches(query), media: query }) as unknown as MediaQueryList,
+    );
+  const leftOut = () => [...container.querySelectorAll('details')].find((d) => d.textContent?.includes('Left out'))!;
+
+  it('starts open on a tall desktop screen', async () => {
+    stubMedia(() => false);
+    await mount();
+    expect(leftOut().open).toBe(true);
+  });
+
+  it('starts folded on a laptop-height screen, so the buttons stay above the fold', async () => {
+    stubMedia((q) => /max-height:\s*900px/.test(q) && q.includes('max-width: 768px'));
+    await mount();
+    expect(leftOut().open).toBe(false);
+  });
+
+  it('keeps its note marker OUT of the summary (a link inside the disclosure button is nested-interactive)', async () => {
+    await mount();
+    const summary = leftOut().querySelector('summary')!;
+    expect(summary.querySelector('a, button')).toBeNull();
+    expect(summary.textContent).toBe('Left out, never read');
+    // …but the marker is still right there, on the same row.
+    expect(leftOut().parentElement!.querySelector('a[aria-label="Note 3"]')).not.toBeNull();
+  });
+});
+
+// ─── A refusal ──────────────────────────────────────────────────────────────
+
+describe('a turned-away drop', () => {
+  it('says so beside the buttons, not below the whole sheet', async () => {
+    await mount();
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const step = new File(['ISO-10303-21;'], 'board.step', { type: 'model/step' });
+    Object.defineProperty(input, 'files', { value: [step], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    const alert = container.querySelector('[role="alert"]')!;
+    expect(alert.textContent).toBe(rejectionCopy('board.step'));
+    // Inside the drop card, straight after the buttons.
+    const sheet = container.querySelector('section[aria-label="Open a KiCad project"]')!;
+    expect(sheet.contains(alert)).toBe(true);
+    expect(alert.previousElementSibling?.querySelector('button')?.textContent).toBe('Choose files');
+  });
+
+  it('is placed after the buttons and before the ratings in the source, both layouts', () => {
+    const tsx = readFileSync(join(__dirname, '..', 'ViewerIntake.tsx'), 'utf8');
+    const actions = tsx.indexOf('styles.actions}');
+    const alert = tsx.indexOf('role="alert"');
+    const specs = tsx.indexOf('className={styles.specs}');
+    expect(actions).toBeGreaterThan(-1);
+    expect(alert).toBeGreaterThan(actions);
+    expect(specs).toBeGreaterThan(alert);
   });
 });
 
@@ -195,7 +278,12 @@ describe('the copy', () => {
   it('prints the caps and the minimum KiCad version from the reader’s constants, never as literals', async () => {
     await mount();
     expect(text()).toContain(`KiCad ${MIN_KICAD_VERSION} or newer`);
-    expect(text()).toContain(`Up to ${INTAKE_CAPS.files} files, ${proseMb(INTAKE_CAPS.totalBytes)} MB`);
+    // The drop card's own line (note 4's title starts with the same words, so
+    // the assertion is scoped to the card): only KiCad files count.
+    const card = container.querySelector('section[aria-label="Open a KiCad project"]')!;
+    const capsLine = [...card.querySelectorAll('p')].find((p) => p.textContent?.includes('or newer'))!;
+    expect(capsLine.textContent).toContain(`Up to ${INTAKE_CAPS.files} KiCad files, ${proseMb(INTAKE_CAPS.totalBytes)} MB`);
+    expect(text()).not.toContain(`Up to ${INTAKE_CAPS.files} files,`);
     expect(text()).toContain(
       `Up to ${INTAKE_CAPS.files} KiCad files, ${proseMb(INTAKE_CAPS.perFileBytes)} MB each, ${proseMb(INTAKE_CAPS.totalBytes)} MB together`,
     );
@@ -204,6 +292,26 @@ describe('the copy', () => {
     for (const [file, src] of guideSources().filter(([f]) => /(GuideNotes|ViewerIntake)\.tsx$/.test(f))) {
       expect(src, file).not.toMatch(/\b(40|60)\b|\b(8|12) MB\b|KiCad [56]\b/);
     }
+  });
+
+  it('never advertises the zip-bomb guard', async () => {
+    await mount();
+    expect(text()).not.toMatch(/zip itself|compressed more than|declares more than|archive is/i);
+    const copy = readFileSync(join(__dirname, 'guideCopy.ts'), 'utf8');
+    expect(copy).not.toMatch(/ARCHIVE_GUARD/);
+  });
+
+  it('credits the .kicad_pro with only what it gives: the name and the root sheet (sheet labels are file names)', async () => {
+    await mount();
+    expect(text()).not.toMatch(/sheet names/i);
+    expect(text()).toContain('The project’s name and which sheet is the root');
+  });
+
+  it('says where a line the catalog cannot match goes, and where part photos load from', async () => {
+    await mount();
+    const body = container.querySelector('#viewer-privacy-title')!.parentElement!.textContent ?? '';
+    expect(body).toMatch(/looked up at our distributors/);
+    expect(body).toMatch(/photos load from the distributors/);
   });
 
   it('prints the turned-away examples from the reader’s own sentences', async () => {
@@ -331,6 +439,46 @@ describe('Guide.module.scss', () => {
     expect(phone).toMatch(/\.folderCol \.actions\s*\{\s*order: 2;/);
     expect(phone).toMatch(/\.specs\s*\{\s*order: 3;/);
     expect(phone).toMatch(/\.tree\s*\{\s*order: 6;/);
+  });
+
+  /** WCAG relative-luminance contrast of two #rrggbb colours (alpha-free). */
+  const contrast = (a: number[], b: number[]): number => {
+    const lum = (c: number[]) =>
+      c
+        .map((v) => v / 255)
+        .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+        .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i]!, 0);
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x) as [number, number];
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const token = (name: string) => rgb(scss.match(new RegExp(`\\$${name}:\\s*(#[0-9a-fA-F]{6})`))![1]!);
+  const WHITE = [255, 255, 255];
+  const BENCH = rgb('#f2f4f9'); // the drop frame's bench, under the notes
+
+  it('keeps the muted "left out" ink at AA on white and on the bench', () => {
+    expect(contrast(token('ink-3'), WHITE)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('ink-3'), BENCH)).toBeGreaterThanOrEqual(4.5);
+    expect(scss).toMatch(/\.out \{\s*\.name,\s*\.role \{\s*color: \$ink-3;/);
+  });
+
+  it('writes the refusal samples in a red that holds AA on its own tint', () => {
+    const red = rgb('#c0392b'); // $error-red
+    const tint = red.map((v, i) => 0.07 * v + 0.93 * BENCH[i]!);
+    expect(contrast(token('refusal-ink'), tint)).toBeGreaterThanOrEqual(4.5);
+    expect(scss).toMatch(/\.refusalMsg \{[^}]*color: \$refusal-ink;/);
+  });
+
+  it('lets a role label take the ellipsis before a file name does', () => {
+    expect(scss).toMatch(/\n\.name \{[^}]*flex-shrink: 0;/);
+    expect(scss).toMatch(/\n\.role \{[^}]*min-width: 0;[^}]*text-overflow: ellipsis;/);
+  });
+
+  it('places a refusal under the buttons in the compact card’s grid and in the phone stack', () => {
+    expect(scss).toContain("'error error'");
+    expect(scss).toMatch(/\.folderCol \.dropError \{\s*grid-area: error;/);
+    const phone = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));
+    expect(phone).toMatch(/\.folderCol \.dropError \{\s*order: 2;/);
   });
 
   it('draws the pulse with no filter (a drop-shadow under a moving dash offset re-rasterises every frame)', () => {
