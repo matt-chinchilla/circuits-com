@@ -5,7 +5,9 @@ import {
   LEAD_MAX,
   buildLeadBody,
   carryCompany,
+  isExactLeadMatch,
   looseKey,
+  matchAnnouncement,
   readLeadExists,
   serverFieldErrors,
   validateLeadForm,
@@ -232,5 +234,90 @@ describe('looseKey', () => {
   it('folds case, spacing and punctuation for the on-the-list hint', () => {
     expect(looseKey('  FDH  Electronics, Inc. ')).toBe(looseKey('fdh electronics inc'));
     expect(looseKey('Bisco')).not.toBe(looseKey('Bisco Industries'));
+  });
+});
+
+describe('isExactLeadMatch', () => {
+  // A seeded branch row: company_name ALREADY carries the branch, and
+  // branch_label is parsed out of it (seed_leads + POST both store it so).
+  const powell = {
+    id: 'p1',
+    company_name: 'Powell Electronics (Southeast)',
+    branch_label: 'Southeast',
+    contact_name: 'John White',
+  };
+
+  it('matches a branch lead typed the way the roster writes it', () => {
+    expect(
+      isExactLeadMatch(powell, form({ company_name: 'Powell Electronics (Southeast)', contact_name: 'John White' })),
+    ).toBe(true);
+    expect(
+      isExactLeadMatch(powell, form({ company_name: ' powell electronics  (southeast) ', contact_name: 'john white' })),
+    ).toBe(true);
+  });
+
+  it('tells another person or another branch apart', () => {
+    expect(
+      isExactLeadMatch(powell, form({ company_name: 'Powell Electronics (Southeast)', contact_name: 'Ann Other' })),
+    ).toBe(false);
+    expect(
+      isExactLeadMatch(powell, form({ company_name: 'Powell Electronics (Carolinas)', contact_name: 'John White' })),
+    ).toBe(false);
+  });
+
+  it('matches a company-only row to a company-only form', () => {
+    const row = { id: 'a', company_name: 'Acme (East)', branch_label: 'East', contact_name: null };
+    expect(isExactLeadMatch(row, form({ company_name: 'Acme (East)' }))).toBe(true);
+  });
+});
+
+describe('matchAnnouncement', () => {
+  const row = (contact_name: string | null) => ({ id: contact_name ?? 'c', company_name: 'FDH Electronics', contact_name });
+
+  it('is empty with nothing on the list', () => {
+    expect(matchAnnouncement([], null, false)).toBe('');
+  });
+
+  it('names the exact person when there is one', () => {
+    const exact = row('Ian Locke');
+    expect(matchAnnouncement([row('Nat Little'), exact], exact, false)).toBe(
+      'Ian Locke at FDH Electronics is already on the call list.',
+    );
+  });
+
+  it('otherwise summarises how many, with a plus when the list has more', () => {
+    expect(matchAnnouncement([row('A'), row('B')], null, false)).toBe(
+      '2 leads at this company are already on the call list.',
+    );
+    expect(matchAnnouncement([row('A')], null, false)).toBe('1 lead at this company is already on the call list.');
+    expect(matchAnnouncement([row('A'), row('B'), row('C')], null, true)).toBe(
+      '3+ leads at this company are already on the call list.',
+    );
+  });
+});
+
+describe('the server-side tidy, mirrored', () => {
+  it('drops invisible format characters before the strip, as LeadCreate does', () => {
+    expect(buildLeadBody(form({ company_name: 'Acme\u200b' })).company_name).toBe('Acme');
+    expect(buildLeadBody(form({ company_name: '\ufeffAc\u200dme' })).company_name).toBe('Acme');
+    expect(validateLeadForm(form({ company_name: '\u200b' })).company_name).toMatch(/company name/i);
+    // an invisible-only contact is no contact at all: company-only, no error
+    expect(validateLeadForm(form({ company_name: 'A', contact_name: '\u200b' }))).toEqual({});
+    expect(buildLeadBody(form({ company_name: 'A', contact_name: '\u200b' })).contact_name).toBeUndefined();
+  });
+
+  it('refuses a contact with no letter or digit (it would key as the company alone)', () => {
+    for (const contact_name of ['.', '-', '...', ' - ']) {
+      expect(validateLeadForm(form({ company_name: 'A', contact_name })).contact_name).toMatch(/person's name/);
+    }
+    expect(validateLeadForm(form({ company_name: 'A', contact_name: 'J. White' })).contact_name).toBeUndefined();
+  });
+
+  it('refuses NUL on the field that carries it (Postgres cannot store it)', () => {
+    expect(validateLeadForm(form({ company_name: 'A', notes: 'a\u0000b' })).notes).toMatch(/hidden control character/);
+  });
+
+  it('flags a spelled-out state instead of keeping two letters of it', () => {
+    expect(validateLeadForm(form({ company_name: 'A', state: 'New York' })).state).toMatch(/two letters/i);
   });
 });

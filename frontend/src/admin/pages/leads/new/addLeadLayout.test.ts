@@ -77,3 +77,29 @@ describe('Add lead form markup', () => {
     expect(tsx).not.toMatch(/<select\b/);
   });
 });
+
+describe('Add lead review fixes (2026-09-23)', () => {
+  it('shows company_name as stored — it already carries the branch, so nothing appends branch_label', () => {
+    expect(tsx).not.toMatch(/fullCompany/);
+    expect(tsx).not.toMatch(/branch_label/);
+  });
+
+  it('announces the match rail from a status that is always mounted, not from the rail itself', () => {
+    const rail = tsx.slice(tsx.indexOf('function MatchRail('), tsx.indexOf('// ─── Page'));
+    expect(rail).not.toMatch(/aria-live/);
+    expect(tsx).toMatch(/<p className=\{styles\.srOnly\} role="status" aria-live="polite">\s*\{exists \? '' : matchAnnouncement\(/);
+    const sr = block(scss, '.srOnly');
+    expect(sr).toMatch(/position:\s*absolute/);
+    expect(sr).toMatch(/clip:\s*rect\(0, 0, 0, 0\)/);
+  });
+
+  it('carries the company from the LATEST form state after "Add and start another"', () => {
+    expect(tsx).toMatch(/setForm\(\(prev\) => carryCompany\(prev\)\)/);
+    expect(tsx).not.toMatch(/setForm\(carryCompany\(form\)\)/);
+  });
+
+  it('lets State hold what was typed, so "New York" is flagged rather than cut to "NE"', () => {
+    const state = tsx.slice(tsx.indexOf('field="state"'), tsx.indexOf('field="postal_code"'));
+    expect(state).not.toMatch(/maxLength/);
+  });
+});

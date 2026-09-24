@@ -40,7 +40,10 @@ import {
   buildLeadBody,
   carryCompany,
   codePoints,
+  isExactLeadMatch,
+  leadLabel,
   looseKey,
+  matchAnnouncement,
   readLeadExists,
   serverFieldErrors,
   validateLeadForm,
@@ -85,6 +88,8 @@ const TIER_OPTIONS: ListOption<LeadTier | ''>[] = [
 const MATCH_DEBOUNCE_MS = 300;
 const MATCH_MIN_CHARS = 3;
 const MATCH_ROWS = 3;
+// How many rows the probe asks for; a full page means the list may hold more.
+const MATCH_FETCH = 20;
 // The counter under Notes appears once the rep is near the limit.
 const NOTES_COUNTER_FROM = 3200;
 
@@ -95,15 +100,6 @@ type SaveMode = 'open' | 'another';
 interface Added {
   id: string;
   label: string;
-}
-
-function leadLabel(contact: string | null, company: string): string {
-  return contact ? `${contact} at ${company}` : company;
-}
-
-/** The company as the roster writes it: "Head (Branch)". */
-function fullCompany(lead: Pick<AdminLead, 'company_name' | 'branch_label'>): string {
-  return lead.branch_label ? `${lead.company_name} (${lead.branch_label})` : lead.company_name;
 }
 
 // ─── Field primitives ───────────────────────────────────────────────────────
@@ -204,7 +200,9 @@ interface MatchRailProps {
 function MatchRail({ matches, more, exactId, consolePath }: MatchRailProps) {
   const exact = exactId ? matches.find((m) => m.id === exactId) ?? null : null;
   return (
-    <div className={styles.rail} data-exact={exact ? '' : undefined} aria-live="polite">
+    // Not a live region: it mounts WITH its text, which screen readers skip.
+    // The always-mounted status beside it (matchAnnouncement) speaks for it.
+    <div className={styles.rail} data-exact={exact ? '' : undefined}>
       <p className={styles.railHead}>
         {exact
           ? `${leadLabel(exact.contact_name, exact.company_name)} is already on the call list`
@@ -217,14 +215,14 @@ function MatchRail({ matches, more, exactId, consolePath }: MatchRailProps) {
             <span className={styles.railText}>
               <span className={styles.railName}>{lead.contact_name ?? lead.company_name}</span>
               <span className={styles.railSub}>
-                {lead.contact_name ? fullCompany(lead) : 'Company only'}
+                {lead.contact_name ? lead.company_name : 'Company only'}
                 {lead.city ? `, ${lead.city}` : ''}
               </span>
             </span>
             <Link
               to={consolePath(`/admin/leads/${lead.id}`)}
               className={styles.railOpen}
-              aria-label={`Open ${leadLabel(lead.contact_name, fullCompany(lead))}`}
+              aria-label={`Open ${leadLabel(lead.contact_name, lead.company_name)}`}
             >
               Open
             </Link>
@@ -289,10 +287,10 @@ function AddLeadForm() {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       adminApi
-        .getLeads({ q: typedCompany, page: 1, per_page: 20, sort: 'company' })
+        .getLeads({ q: typedCompany, page: 1, per_page: MATCH_FETCH, sort: 'company' })
         .then((res) => {
           if (cancelled) return;
-          setMatches(res.leads.filter((l) => looseKey(fullCompany(l)).includes(needle)));
+          setMatches(res.leads.filter((l) => looseKey(l.company_name).includes(needle)));
         })
         .catch(() => {
           // A hint, not a gate: a failed probe shows nothing and blocks nothing.
@@ -307,12 +305,7 @@ function AddLeadForm() {
 
   // The exact person (same company, same contact) — the row the server would
   // refuse. A hint; canon() on the server decides.
-  const exactMatch =
-    matches.find(
-      (l) =>
-        looseKey(fullCompany(l)) === looseKey(form.company_name) &&
-        looseKey(l.contact_name) === looseKey(form.contact_name),
-    ) ?? null;
+  const exactMatch = matches.find((l) => isExactLeadMatch(l, form)) ?? null;
   const shownMatches = (() => {
     const head = matches.slice(0, MATCH_ROWS);
     if (exactMatch && !head.some((m) => m.id === exactMatch.id)) head[head.length - 1] = exactMatch;
@@ -350,8 +343,10 @@ function AddLeadForm() {
         navigate(consolePath(`/admin/leads/${lead.id}`));
         return;
       }
-      setAdded({ id: lead.id, label: leadLabel(lead.contact_name, fullCompany(lead)) });
-      setForm(carryCompany(form));
+      setAdded({ id: lead.id, label: leadLabel(lead.contact_name, lead.company_name) });
+      // From the LATEST state: the inputs stay live during the POST, and an
+      // edit to a carried field made meanwhile must survive the reset.
+      setForm((prev) => carryCompany(prev));
       setErrors({});
       setProbeNonce((n) => n + 1);
       contactRef.current?.focus();
@@ -501,6 +496,12 @@ function AddLeadForm() {
                   />
                 )
               )}
+              {/* Always mounted, so a screen reader hears the rail APPEAR (a live
+                  region inserted with its text is silent). Quiet while the
+                  refusal speaks for itself as an alert. */}
+              <p className={styles.srOnly} role="status" aria-live="polite">
+                {exists ? '' : matchAnnouncement(matches, exactMatch, matches.length >= MATCH_FETCH)}
+              </p>
             </TextField>
 
             <div className={styles.pair}>
@@ -647,7 +648,6 @@ function AddLeadForm() {
                   field="state"
                   label="State"
                   placeholder="NY"
-                  maxLength={2}
                   transform={(v) => v.toUpperCase()}
                   form={form}
                   errors={errors}

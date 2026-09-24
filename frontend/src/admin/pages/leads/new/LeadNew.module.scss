@@ -426,6 +426,20 @@
   color: var(--a-fg3);
 }
 
+// Visually hidden but announced: the match rail's always-mounted polite
+// status (a live region only speaks for changes AFTER it is in the tree).
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 // ─── Actions ────────────────────────────────────────────────────────────────
 //
 // Sticky to the viewport bottom: on a phone the form is several screens tall

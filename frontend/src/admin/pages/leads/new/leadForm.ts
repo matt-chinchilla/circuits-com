@@ -4,17 +4,21 @@
 // bad ZIP in the field, not as an opaque 422 after a round trip.
 //
 // Mirror rules, 1:1 with the server:
-//   • every string is stripped, and "" means absent (omitted from the body);
+//   • invisible format characters (zero-width space, BOM — Unicode Cf) are
+//     dropped, then every string is stripped, and "" means absent (omitted
+//     from the body); a NUL is refused on its field, never stripped;
 //   • lengths count CODE POINTS, as Python's len() does — `[...s].length`,
 //     never `s.length` (an emoji is 2 UTF-16 units and 1 to the server);
 //   • state is upper-cased BEFORE the two-letter rule, so "ny" is fine;
-//   • ZIP is 5 digits or ZIP+4; the two email fields share one loose pattern.
+//   • ZIP is 5 digits or ZIP+4; the two email fields share one loose pattern;
+//   • a contact needs a letter or digit (one that canon() folds away would
+//     take the company-only key yet be stored as a person).
 //
 // Inputs render as plain text fields with an inputMode and noValidate on the
 // form (the browser's own typed fields swallow submit on a value they
 // dislike — see CLAUDE.md), which is why every check lives here.
 
-import type { LeadCreateBody, LeadExistsDetail, LeadTier } from '@admin/types/leads';
+import type { AdminLead, LeadCreateBody, LeadExistsDetail, LeadTier } from '@admin/types/leads';
 
 export type LeadTextField =
   | 'company_name'
@@ -79,7 +83,12 @@ export const EMPTY_LEAD_FORM: LeadFormState = {
   notes: '',
 };
 
-// Same patterns as the server (Python `re`, ASCII-only classes on both sides).
+// Same pattern TEXT as the server. The digit classes are ASCII on both sides
+// (`[0-9]` server-side, JS `\d`); `\s` and trim()/strip() are NOT an exact
+// match at the Unicode edges — JS `\s` and trim() include U+FEFF, Python's
+// strip() also removes \x1c-\x1f — and the contact rule's letter/digit test
+// (`\p{L}\p{N}` vs Python isalnum) differs for a few exotic characters. Any
+// such drift comes back as a 422 that serverFieldErrors pins on its field.
 const STATE_RE = /^[A-Z]{2}$/;
 const ZIP_RE = /^\d{5}(-\d{4})?$/;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -89,9 +98,13 @@ export function codePoints(value: string): number {
   return [...value].length;
 }
 
-/** What the server will store for this field: stripped, state upper-cased. */
+const FORMAT_CHARS = /\p{Cf}/gu;
+const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+/** What the server will store for this field: format characters dropped,
+ *  stripped, state upper-cased. */
 function clean(field: LeadTextField, raw: string): string {
-  const value = raw.trim();
+  const value = raw.replace(FORMAT_CHARS, '').trim();
   return field === 'state' ? value.toUpperCase() : value;
 }
 
@@ -101,6 +114,10 @@ export function validateLeadForm(form: LeadFormState): LeadFormErrors {
   for (const field of TEXT_FIELDS) {
     const value = clean(field, form[field]);
     if (!value) continue;
+    if (value.includes('\u0000')) {
+      errors[field] = 'Remove the hidden control character from this field.';
+      continue;
+    }
     const length = codePoints(value);
     const max = LEAD_MAX[field];
     if (length > max && field !== 'state' && field !== 'postal_code') {
@@ -110,6 +127,11 @@ export function validateLeadForm(form: LeadFormState): LeadFormErrors {
 
   if (!clean('company_name', form.company_name)) {
     errors.company_name = 'Enter the company name.';
+  }
+
+  const contact = clean('contact_name', form.contact_name);
+  if (contact && !errors.contact_name && !HAS_LETTER_OR_DIGIT.test(contact)) {
+    errors.contact_name = "Enter the person's name, or leave it blank for the company alone.";
   }
 
   const state = clean('state', form.state);
@@ -215,4 +237,41 @@ export function looseKey(value: string | null | undefined): string {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
+}
+
+type MatchRow = Pick<AdminLead, 'id' | 'company_name' | 'contact_name'>;
+
+/** "Ian Locke at FDH Electronics", or the company alone. `company_name` is
+ *  already the roster's "Head (Branch)" string — never append branch_label. */
+export function leadLabel(contact: string | null, company: string): string {
+  return contact ? `${contact} at ${company}` : company;
+}
+
+/**
+ * The exact person (same company, same contact) — the row the server would
+ * refuse. A HINT: canon() on the server decides. `company_name` already holds
+ * the branch, so it is compared as stored.
+ */
+export function isExactLeadMatch(
+  lead: MatchRow,
+  form: Pick<LeadFormState, 'company_name' | 'contact_name'>,
+): boolean {
+  return (
+    looseKey(lead.company_name) === looseKey(form.company_name) &&
+    looseKey(lead.contact_name) === looseKey(form.contact_name)
+  );
+}
+
+/**
+ * What the always-mounted polite status says about the match rail: a short
+ * summary, never the rows (a live region reading whole rows is a wall of
+ * speech). Empty when there is nothing to announce.
+ */
+export function matchAnnouncement(matches: MatchRow[], exact: MatchRow | null, more: boolean): string {
+  if (exact) return `${leadLabel(exact.contact_name, exact.company_name)} is already on the call list.`;
+  if (matches.length === 0) return '';
+  const count = `${matches.length}${more ? '+' : ''}`;
+  return matches.length === 1 && !more
+    ? `${count} lead at this company is already on the call list.`
+    : `${count} leads at this company are already on the call list.`;
 }
