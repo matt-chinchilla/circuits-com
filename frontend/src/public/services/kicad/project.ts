@@ -4,7 +4,7 @@
 // that names them, then by a UNIQUE basename, never by traversal. KiCad 5 is
 // refused before anything mounts; the intake caps apply after the ignore
 // filter, to the files the tool will actually read.
-import { isIgnoredPath, isKicadName, normalizeEntryName, unzipToFiles } from './zip';
+import { LEGACY_KICAD_EXTENSIONS, isIgnoredPath, isKicadName, normalizeEntryName, unzipToFiles } from './zip';
 import {
   INTAKE_CAPS,
   KICAD5_MESSAGE,
@@ -15,7 +15,7 @@ import {
   type KicadSheet,
 } from './types';
 
-const LEGACY_EXTENSIONS = ['.sch', '.pro'];
+const LEGACY_EXTENSIONS: readonly string[] = LEGACY_KICAD_EXTENSIONS;
 const SHEETFILE = /\(property\s+"Sheetfile"\s+"([^"]*)"/g;
 const VERSION = /\(kicad_(?:sch|pcb)\s*\(version\s+(\d+)\)/;
 const DOC_UUID = /\(kicad_sch[\s\S]{0,400}?\(uuid\s+"?([0-9a-fA-F-]{36})"?\)/;
@@ -77,6 +77,20 @@ function capError(message: string): KicadReadError {
   return new KicadReadError(message, 'cap');
 }
 
+/**
+ * Every refusal this module words, as the reader will see it. Exported so the
+ * /viewer guide can print the REAL sentences ("What a turned-away file looks
+ * like") instead of a retyped copy that drifts.
+ */
+export const INTAKE_MESSAGES = {
+  empty: 'No KiCad files in what was dropped — looking for .kicad_pro, .kicad_sch and .kicad_pcb.',
+  projectOnly: 'That project has no schematic or board to show — only a .kicad_pro was found.',
+  tooManyFiles: (count: number) => `That is ${count} KiCad files; the limit is ${INTAKE_CAPS.files}.`,
+  fileTooLarge: (name: string, bytes: number) =>
+    `${name} is ${formatMbUp(bytes)} MB; the limit per file is ${formatMb(INTAKE_CAPS.perFileBytes)} MB.`,
+  totalTooLarge: (bytes: number) => `Those files total ${formatMbUp(bytes)} MB; the limit is ${formatMb(INTAKE_CAPS.totalBytes)} MB.`,
+} as const;
+
 export async function buildProject(input: File[]): Promise<KicadProject> {
   const expanded: File[] = [];
   for (const file of input) {
@@ -92,19 +106,19 @@ export async function buildProject(input: File[]): Promise<KicadProject> {
     candidates.push({ path, file });
   }
   if (candidates.length === 0) {
-    throw new KicadReadError('No KiCad files in what was dropped — looking for .kicad_pro, .kicad_sch and .kicad_pcb.', 'empty');
+    throw new KicadReadError(INTAKE_MESSAGES.empty, 'empty');
   }
 
   const modern = candidates.filter((c) => !LEGACY_EXTENSIONS.includes(extensionOf(c.path)));
   if (modern.length === 0) throw new KicadReadError(KICAD5_MESSAGE, 'kicad5');
 
-  if (modern.length > INTAKE_CAPS.files) throw capError(`That is ${modern.length} KiCad files; the limit is ${INTAKE_CAPS.files}.`);
+  if (modern.length > INTAKE_CAPS.files) throw capError(INTAKE_MESSAGES.tooManyFiles(modern.length));
   let total = 0;
   for (const c of modern) {
-    if (c.file.size > INTAKE_CAPS.perFileBytes) throw capError(`${basename(c.path)} is ${formatMbUp(c.file.size)} MB; the limit per file is ${formatMb(INTAKE_CAPS.perFileBytes)} MB.`);
+    if (c.file.size > INTAKE_CAPS.perFileBytes) throw capError(INTAKE_MESSAGES.fileTooLarge(basename(c.path), c.file.size));
     total += c.file.size;
   }
-  if (total > INTAKE_CAPS.totalBytes) throw capError(`Those files total ${formatMbUp(total)} MB; the limit is ${formatMb(INTAKE_CAPS.totalBytes)} MB.`);
+  if (total > INTAKE_CAPS.totalBytes) throw capError(INTAKE_MESSAGES.totalTooLarge(total));
 
   const warnings: string[] = [];
   const files = new Map<string, string>();
@@ -191,7 +205,7 @@ export async function buildProject(input: File[]): Promise<KicadProject> {
   // render — a lone .kicad_pro is the common case. Board-only projects are
   // legitimate, so the predicate needs BOTH to be absent.
   if (root == null && board == null) {
-    throw new KicadReadError('That project has no schematic or board to show — only a .kicad_pro was found.', 'empty');
+    throw new KicadReadError(INTAKE_MESSAGES.projectOnly, 'empty');
   }
 
   const name = proPath != null ? stem(proPath) : root != null ? stem(root) : board != null ? stem(board) : 'design';

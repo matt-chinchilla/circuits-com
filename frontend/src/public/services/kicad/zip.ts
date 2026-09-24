@@ -10,7 +10,11 @@
 import { unzipSync, type UnzipFileInfo } from 'fflate';
 import { ARCHIVE_GUARD, KicadReadError, formatMb } from './types';
 
-export const KICAD_EXTENSIONS = ['.kicad_pro', '.kicad_sch', '.kicad_pcb', '.sch', '.pro'] as const;
+/** The files the reader opens: project, schematic sheets, board. */
+export const MODERN_KICAD_EXTENSIONS = ['.kicad_pro', '.kicad_sch', '.kicad_pcb'] as const;
+/** KiCad 5's names — admitted ONLY so the drop can be refused by name. */
+export const LEGACY_KICAD_EXTENSIONS = ['.sch', '.pro'] as const;
+export const KICAD_EXTENSIONS = [...MODERN_KICAD_EXTENSIONS, ...LEGACY_KICAD_EXTENSIONS] as const;
 
 export function normalizeEntryName(name: string): string | null {
   const slashed = name.replace(/\\/g, '/').replace(/^\/+/, '');

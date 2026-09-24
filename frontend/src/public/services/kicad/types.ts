@@ -84,8 +84,11 @@ export const ARCHIVE_GUARD = {
 /** KiCad 6.0's board format. Anything lower is KiCad 5. */
 export const MIN_BOARD_VERSION = 20211014;
 
-export const KICAD5_MESSAGE =
-  'This is a KiCad 5 project. Open it in KiCad 6 or newer and save it — that rewrites it in the format this viewer reads.';
+/** The oldest KiCad release the reader opens — the version MIN_BOARD_VERSION
+ *  belongs to. The /viewer guide prints it; nothing here types it twice. */
+export const MIN_KICAD_VERSION = 6;
+
+export const KICAD5_MESSAGE = `This is a KiCad ${MIN_KICAD_VERSION - 1} project. Open it in KiCad ${MIN_KICAD_VERSION} or newer and save it — that rewrites it in the format this viewer reads.`;
 
 export type KicadReadErrorKind = 'kicad5' | 'cap' | 'archive' | 'empty' | 'unreadable';
 
