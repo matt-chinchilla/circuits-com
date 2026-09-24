@@ -27,6 +27,7 @@ import { safeHttpUrl } from '@shared/utils/url';
 import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { OUTCOME_META, outcomeInkVars } from '../outcome';
 import { parseServerTime } from '../time';
+import { provenanceLine } from '../provenance';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
 import styles from './LeadDetail.module.scss';
@@ -110,7 +111,7 @@ export default function LeadDetailPage() {
   const [demoBlocked, setDemoBlocked] = useState(false);
   // A 401 — see ../loadError.ts. Recovery, not a message.
   const [sessionExpired, setSessionExpired] = useState(false);
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<EnrichForm | null>(null);
@@ -319,6 +320,7 @@ export default function LeadDetailPage() {
   }
 
   const headline = lead.contact_name ?? lead.company_name;
+  const provenance = provenanceLine(lead.created_by, lead.created_at, user?.username);
   const site = lead.website ? safeHttpUrl(lead.website) : null;
   const linkedin = lead.linkedin_url ? safeHttpUrl(lead.linkedin_url) : null;
   const address = [lead.city, lead.state, lead.postal_code].filter(Boolean).join(', ');
@@ -360,6 +362,7 @@ export default function LeadDetailPage() {
                 {lead.contact_attempts} {lead.contact_attempts === 1 ? 'attempt' : 'attempts'}
               </span>
             </p>
+            {provenance && <p className={styles.provenance}>{provenance}</p>}
           </div>
         </div>
 

@@ -55,6 +55,14 @@
   flex-wrap: wrap;
 }
 
+// Who put this lead on the list — a quiet footnote under the status line, not a
+// datum competing with the outcome beside it.
+.provenance {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--a-fg3);
+}
+
 .outcomeText {
   color: var(--oc);
   display: inline-flex;
