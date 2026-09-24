@@ -23,6 +23,12 @@ export interface AdminLead {
   last_outcome: LeadOutcome | null;
   last_contacted_at: string | null;
   contact_attempts: number;
+  /** Username of the rep who added the lead from the console; null for rows
+   *  from the roster import (seed_data/leads.csv). OPTIONAL as well as
+   *  nullable: a persisted query-cache payload can predate the key, and an
+   *  ABSENT value must read as "unknown", never as "from the roster". */
+  created_by?: string | null;
+  created_at?: string | null;
 }
 
 export interface LeadContactRow {
@@ -71,3 +77,34 @@ export interface RepActivity {
   outcome_mix: Partial<Record<LeadOutcome, number>>;
   contacts: Array<RecentLeadContact & { note: string | null }>;
 }
+
+/** Company size on the call list — the roster's S/M/L column. */
+export type LeadTier = 'S' | 'M' | 'L';
+
+/** POST /api/admin/leads/ — `LeadCreate` (extra="forbid"). Every value is
+ *  trimmed client-side and an empty one is omitted, never sent as "". */
+export interface LeadCreateBody {
+  company_name: string;
+  tier?: LeadTier | null;
+  street?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  main_phone?: string | null;
+  website?: string | null;
+  sales_email?: string | null;
+  contact_name?: string | null;
+  contact_title?: string | null;
+  direct_phone?: string | null;
+  contact_email?: string | null;
+  linkedin_url?: string | null;
+  hours_tz?: string | null;
+  notes?: string | null;
+}
+
+/** The 409 `detail` of a create that would duplicate a lead. A customer's
+ *  private lead answers with the code alone — its id and company are not the
+ *  staff roster's to show. */
+export type LeadExistsDetail =
+  | { code: 'lead_exists'; lead_id: string; company_name: string; contact_name: string | null }
+  | { code: 'lead_exists_private' };
