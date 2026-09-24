@@ -203,7 +203,7 @@ export default function FounderDiscount({ open, onToggle, onArrive, anchorRef }:
               <li key={p} style={{ '--i': i } as CSSProperties}>
                 <span className={styles.fdIgn}>
                   <TierCheck />
-                  <span>{p}</span>
+                  <span className={styles.perkTxt}>{p}</span>
                   {i === 0 && (
                     <span
                       className={styles.fdBadges}
