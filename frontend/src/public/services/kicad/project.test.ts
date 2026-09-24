@@ -102,6 +102,84 @@ describe('buildProject', () => {
     expect(p.pro?.sheets.length).toBe(4);
   });
 
+  // A dragged FOLDER arrives through file-selector: webkitRelativePath is empty
+  // and the nested path rides on its own `.path` / `.relativePath`.
+  const dragged = (path: string, content: BlobPart): File => {
+    const file = f(path.slice(path.lastIndexOf('/') + 1), content);
+    Object.defineProperty(file, 'path', { value: path });
+    Object.defineProperty(file, 'relativePath', { value: path });
+    return file;
+  };
+  const BACKUP_BOARD = '(kicad_pcb (version 20240108) (generator "pcbnew") (backup yes))';
+  const LIVE_BOARD = '(kicad_pcb (version 20240108) (generator "pcbnew") (live yes))';
+  const backupZip = (name: string) =>
+    new File([zipSync({ 'main.kicad_pcb': strToU8(BACKUP_BOARD), 'main.kicad_sch': strToU8(ROOT), 'sub/reg.kicad_sch': strToU8(SUB) })], name);
+
+  it('never opens a KiCad backup that arrives beside the live files with no path of its own', async () => {
+    const p = await buildProject([
+      f('main.kicad_sch', ROOT),
+      f('sub/reg.kicad_sch', SUB),
+      f('main.kicad_pcb', LIVE_BOARD),
+      backupZip('main-2026-09-12_195300.zip'),
+    ]);
+    expect(p.files.get('main.kicad_pcb')).toBe(LIVE_BOARD);
+    expect(p.warnings.join('\n')).not.toMatch(/dropped twice/);
+  });
+
+  it('never unpacks a zip inside a -backups/ folder of a dragged project folder', async () => {
+    const p = await buildProject([
+      dragged('/main/main.kicad_sch', ROOT),
+      dragged('/main/sub/reg.kicad_sch', SUB),
+      dragged('/main/main.kicad_pcb', LIVE_BOARD),
+      Object.defineProperty(backupZip('x.zip'), 'path', { value: '/main/main-backups/x.zip' }),
+    ]);
+    expect(p.board).toBe('main/main.kicad_pcb');
+    expect(p.files.get('main/main.kicad_pcb')).toBe(LIVE_BOARD);
+    expect(p.warnings.join('\n')).not.toMatch(/dropped twice/);
+  });
+
+  it('keys a dragged folder by its relative path, so two same-named sheets stay two', async () => {
+    const top = schematic({
+      uuid: ROOT_UUID,
+      body: `${sheet({ uuid: SHEET_A_UUID, file: 'a/reg.kicad_sch' })} ${sheet({ uuid: 'cccccccc-0000-4000-8000-000000000009', file: 'b/reg.kicad_sch' })}`,
+    });
+    const p = await buildProject([
+      dragged('/proj/top.kicad_sch', top),
+      dragged('/proj/a/reg.kicad_sch', SUB),
+      dragged('/proj/b/reg.kicad_sch', SUB),
+    ]);
+    expect(p.sheets.map((s) => s.path)).toEqual(['proj/top.kicad_sch', 'proj/a/reg.kicad_sch', 'proj/b/reg.kicad_sch']);
+    expect(p.warnings.join('\n')).not.toMatch(/dropped twice/);
+  });
+
+  it('a chosen file keeps its plain name (file-selector stamps "./name" on a picked file)', async () => {
+    const picked = f('main.kicad_sch', ROOT);
+    Object.defineProperty(picked, 'path', { value: './main.kicad_sch' });
+    const p = await buildProject([picked, f('sub/reg.kicad_sch', SUB)]);
+    expect(p.root).toBe('main.kicad_sch');
+  });
+
+  it('many backups never count toward the file cap', async () => {
+    const backups = Array.from({ length: 12 }, (_, i) => backupZip(`main-2026-09-${String(10 + i).padStart(2, '0')}_195300.zip`));
+    const p = await buildProject([f('main.kicad_sch', ROOT), f('sub/reg.kicad_sch', SUB), f('main.kicad_pcb', LIVE_BOARD), ...backups]);
+    expect(p.files.get('main.kicad_pcb')).toBe(LIVE_BOARD);
+  });
+
+  it('still opens ONE backup zip dropped on its own, on purpose', async () => {
+    const p = await buildProject([backupZip('main-2026-09-12_195300.zip')]);
+    expect(p.files.get('main.kicad_pcb')).toBe(BACKUP_BOARD);
+  });
+
+  it('never lets an autosave copy take the board slot', async () => {
+    const zip = new File(
+      [zipSync({ 'g/g.kicad_sch': strToU8(ROOT), 'g/sub/reg.kicad_sch': strToU8(SUB), 'g/g.kicad_pcb': strToU8(LIVE_BOARD), 'g/_autosave-g.kicad_pcb': strToU8(BACKUP_BOARD) })],
+      'g.zip',
+    );
+    const p = await buildProject([zip]);
+    expect(p.board).toBe('g/g.kicad_pcb');
+    expect(p.warnings.join('\n')).not.toMatch(/boards were dropped/);
+  });
+
   it.skipIf(!hasFixture('kicad-demos'))('reads the KiCad demo with a twice-placed sheet', async () => {
     const p = await buildProject(fixtureFiles('kicad-demos').filter((x) => x.name.startsWith('complex_hierarchy/')));
     expect(p.sheets.map((s) => s.path)).toEqual(['complex_hierarchy/complex_hierarchy.kicad_sch', 'complex_hierarchy/ampli_ht.kicad_sch']);

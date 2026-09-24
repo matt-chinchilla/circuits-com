@@ -32,6 +32,12 @@ describe('name filters', () => {
     expect(isIgnoredPath('sub/fp-info-cache')).toBe(true);
     expect(isIgnoredPath('sub/main.kicad_sch')).toBe(false);
   });
+  it('skips KiCad autosave copies by their prefix, and only by the prefix', () => {
+    // An autosave sorts BEFORE the real file ('_' < 'g'), so it would win the board slot.
+    expect(isIgnoredPath('glasgow/_autosave-glasgow.kicad_pcb')).toBe(true);
+    expect(isIgnoredPath('_autosave-x.kicad_sch')).toBe(true);
+    expect(isIgnoredPath('glasgow/my_autosave-notes.kicad_sch')).toBe(false);
+  });
 });
 
 describe('unzipToFiles', () => {

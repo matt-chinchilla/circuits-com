@@ -31,9 +31,16 @@ export function isKicadName(path: string): boolean {
   return KICAD_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
+/** Never read: KiCad's backup folder, its footprint cache, and its autosave
+ *  copies (`_autosave-<name>`, which would otherwise sort BEFORE the real file
+ *  and take its board slot). */
 export function isIgnoredPath(path: string): boolean {
-  return path.includes('-backups/') || path.endsWith('fp-info-cache');
+  const base = path.slice(path.lastIndexOf('/') + 1);
+  return path.includes('-backups/') || path.endsWith('fp-info-cache') || base.startsWith('_autosave-');
 }
+
+/** KiCad's own name for a backup archive: `<project>-YYYY-MM-DD_HHMMSS.zip`. */
+export const KICAD_BACKUP_ZIP = /-\d{4}-\d{2}-\d{2}_\d{6}\.zip$/i;
 
 export type ArchiveGuard = { archiveBytes: number; declaredTotalBytes: number; maxRatio: number };
 

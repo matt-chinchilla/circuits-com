@@ -1,8 +1,8 @@
 // "Notes on what it reads" — the rules, as the project sheet's numbered
 // datasheet notes. Every number and file type is read from the reader's own
 // constants (guideCopy.ts), and every sentence is true of the code as it is:
-// the folder DRAG is deliberately not offered (a dragged folder can pull in
-// KiCad's backup copies; a zip of the folder is read correctly).
+// a folder drag is deliberately not the advertised path (R2): a zip of the
+// folder and the picked files work in every browser.
 import { Fragment, type ReactNode } from 'react';
 import Icon from '@shared/components/Icon';
 import { MODERN_KICAD_EXTENSIONS } from '@public/services/kicad/zip';
@@ -91,7 +91,7 @@ export default function GuideNotes({ id, hidden }: { id: string; hidden: boolean
       <Note n={1} title="A zip of the folder, or the files together">
         <p>
           Zip the project folder and drop the zip, or use Choose files to pick its {codeList(MODERN_KICAD_EXTENSIONS)} files
-          together. A zip works in every browser, and KiCad&rsquo;s backups inside it are skipped.
+          together. A zip works in every browser, and KiCad&rsquo;s backups and autosave copies inside it are skipped.
         </p>
       </Note>
 

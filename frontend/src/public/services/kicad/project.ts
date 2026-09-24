@@ -4,7 +4,7 @@
 // that names them, then by a UNIQUE basename, never by traversal. KiCad 5 is
 // refused before anything mounts; the intake caps apply after the ignore
 // filter, to the files the tool will actually read.
-import { LEGACY_KICAD_EXTENSIONS, isIgnoredPath, isKicadName, normalizeEntryName, unzipToFiles } from './zip';
+import { KICAD_BACKUP_ZIP, LEGACY_KICAD_EXTENSIONS, isIgnoredPath, isKicadName, normalizeEntryName, unzipToFiles } from './zip';
 import {
   INTAKE_CAPS,
   KICAD5_MESSAGE,
@@ -91,18 +91,40 @@ export const INTAKE_MESSAGES = {
   totalTooLarge: (bytes: number) => `Those files total ${formatMbUp(bytes)} MB; the limit is ${formatMb(INTAKE_CAPS.totalBytes)} MB.`,
 } as const;
 
+type PathedFile = File & { webkitRelativePath?: string; relativePath?: string; path?: string };
+
+/**
+ * Where a dropped file sat in the project. A picked folder carries
+ * webkitRelativePath; a DRAGGED folder arrives through react-dropzone's
+ * file-selector, which leaves that empty and puts the nested path on its own
+ * `relativePath` / `path` ("/glasgow/glasgow-backups/x.zip"; a picked file gets
+ * "./name"). A file unpacked from a zip carries its entry path as its name.
+ */
+export function inputPath(file: File): string | null {
+  const f = file as PathedFile;
+  return normalizeEntryName(f.webkitRelativePath || f.relativePath || f.path || file.name);
+}
+
 export async function buildProject(input: File[]): Promise<KicadProject> {
-  const expanded: File[] = [];
+  const expanded: { path: string; file: File }[] = [];
   for (const file of input) {
-    if (file.name.toLowerCase().endsWith('.zip')) expanded.push(...(await unzipToFiles(file)));
-    else expanded.push(file);
+    const path = inputPath(file);
+    if (path == null) continue;
+    if (path.toLowerCase().endsWith('.zip')) {
+      // A zip in a -backups/ folder is KiCad's, never the project. A drag that
+      // lost the folder path still carries KiCad's timestamped backup NAME —
+      // skipped whenever it arrives beside other files (a folder drag); a
+      // backup dropped on its own is opened, since that is on purpose.
+      if (isIgnoredPath(path) || (input.length > 1 && KICAD_BACKUP_ZIP.test(path))) continue;
+      for (const entry of await unzipToFiles(file)) expanded.push({ path: normalizeEntryName(entry.name) ?? entry.name, file: entry });
+    } else {
+      expanded.push({ path, file });
+    }
   }
 
   const candidates: { path: string; file: File }[] = [];
-  for (const file of expanded) {
-    const raw = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-    const path = normalizeEntryName(raw);
-    if (path == null || isIgnoredPath(path) || !isKicadName(path)) continue;
+  for (const { path, file } of expanded) {
+    if (isIgnoredPath(path) || !isKicadName(path)) continue;
     candidates.push({ path, file });
   }
   if (candidates.length === 0) {

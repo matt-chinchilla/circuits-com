@@ -38,6 +38,32 @@ describe('the folder on the sheet', () => {
   it('marks as "left out" only what the reader really never reads', () => {
     for (const row of LEFT_OUT) expect(isIgnoredPath(row.probe) || !isKicadName(row.probe), row.probe).toBe(true);
   });
+
+  // The sheet draws a FOLDER, so the listing must also hold for the files a
+  // folder drag delivers: a nested path on file-selector's `.path`, or no path
+  // at all — a backup zip then arrives by its bare timestamped name.
+  it('keeps the backups left out when the folder itself is dragged in, with or without its paths', async () => {
+    const example = unzipSync(new Uint8Array(readFileSync(join(PUBLIC, EXAMPLE_URL))));
+    const live = Object.entries(example).filter(([name]) => isKicadName(name) && !isIgnoredPath(name));
+    const board = live.find(([name]) => name.endsWith('.kicad_pcb'))!;
+    const { zipSync, strToU8 } = await import('fflate');
+    const backupName = LEFT_OUT.find((r) => r.folder && r.probe.includes('-backups/'))!.probe;
+    const backup = zipSync({ [board[0].slice(board[0].lastIndexOf('/') + 1)]: strToU8('(kicad_pcb (version 20240108) (backup yes))') });
+    for (const withPaths of [false, true]) {
+      const asDropped = (path: string, data: BlobPart) => {
+        const file = new File([data], path.slice(path.lastIndexOf('/') + 1));
+        if (withPaths) Object.defineProperty(file, 'path', { value: `/${path}` });
+        return file;
+      };
+      const project = await buildProject([
+        ...live.map(([name, data]) => asDropped(name, data as BlobPart)),
+        asDropped(backupName, backup as BlobPart),
+      ]);
+      const shown = project.files.get(project.board!)!;
+      expect(shown, `paths: ${withPaths}`).not.toContain('(backup yes)');
+      expect(project.warnings.join('\n'), `paths: ${withPaths}`).not.toMatch(/dropped twice/);
+    }
+  });
 });
 
 describe('the turned-away examples', () => {
