@@ -163,27 +163,7 @@
 }
 
 .notesSummary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 10px 0 8px;
-  font-size: 0.8rem;
-  line-height: 1;
-  white-space: nowrap;
-  color: var(--vw-ink-2);
-  list-style: none;
-  border-radius: 9px;
-  cursor: pointer;
-  @include vw-focus-ring;
-
-  &::-webkit-details-marker {
-    display: none;
-  }
-
-  &:hover {
-    background: var(--vw-hover);
-  }
+  @include vw-disclosure-summary;
 }
 
 .notesGlyph {
@@ -479,7 +459,10 @@
     min-height: 460px;
   }
 
+  // Positioned: the key legend's card hangs from the whole bar here (see
+  // KeyLegend.module.scss), below the wrapped tab row.
   .topbar {
+    position: relative;
     flex-wrap: wrap;
     gap: 4px 8px;
     padding: 6px 8px 6px 12px;

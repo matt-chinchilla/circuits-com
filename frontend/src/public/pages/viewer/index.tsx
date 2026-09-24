@@ -22,6 +22,7 @@ import type { KicadProject } from '@public/services/kicad/types';
 import { clearDesignSession, getDesignSession, openDesign, type DesignSession } from '@public/services/designSession';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import ViewerIntake from './components/ViewerIntake';
+import KeyLegend, { LEGEND_KEY } from './components/KeyLegend';
 import { VIEW_KEY, VIEW_LABEL, viewForKey, viewsFor, type ViewId } from './viewLabels';
 import { typingIn } from '@public/components/kicad/keyboard';
 import BoardPanel, { type BoardPanelHandle, type SheetRow, type ShowOn } from './components/BoardPanel';
@@ -151,6 +152,9 @@ export default function ViewerPage() {
   const [activeSheet, setActiveSheet] = useState<string | undefined>(undefined);
   const [canvasState, setCanvasState] = useState<CanvasStateName>('loading');
   const [toast, setToast] = useState<string | null>(null);
+  /** The key legend in the top bar: here, not in the legend, because `?` and
+   *  Esc reach it from anywhere on the page. */
+  const [keysOpen, setKeysOpen] = useState(false);
   /**
    * Has the BOM tab been opened for THIS project? A one-way latch, not a mirror
    * of `tab`: the workbench prices once per `parsed` IDENTITY, so a flag that
@@ -336,6 +340,7 @@ export default function ViewerPage() {
     wb.reset();
     clearDesignSession();
     setSession(null);
+    setKeysOpen(false);
     setBomSeen(false);
     setStackupSeen(false);
     setActiveSheet(undefined);
@@ -616,7 +621,8 @@ export default function ViewerPage() {
   }, [session]);
 
   // `/` focuses the search and Esc clears a highlight, then the selection, anywhere on the page
-  // that is not itself a text field. A field owns its own Esc: the panel's
+  // that is not itself a text field. `?` shows and hides the key legend, and an
+  // open legend is what Esc closes first. A field owns its own Esc: the panel's
   // search empties itself first and clears the selection on a second press
   // (BoardPanel); the BOM's quantity box keeps the browser's behaviour.
   // A view's letter (VIEW_KEY: s p k d m) jumps to that tab — only a tab this
@@ -636,7 +642,15 @@ export default function ViewerPage() {
       } else if (e.key === '/') {
         e.preventDefault();
         panelRef.current?.focusSearch();
+      } else if (e.key === LEGEND_KEY) {
+        // Shift+/ on a US layout: guarded like `/`, never like a view letter.
+        e.preventDefault();
+        setKeysOpen((open) => !open);
       } else if (e.key === 'Escape') {
+        if (keysOpen) {
+          setKeysOpen(false);
+          return;
+        }
         // A lit layer or net goes first, where the reader can see it; the
         // selection on the next press.
         const view = boardViewRef.current;
@@ -646,7 +660,7 @@ export default function ViewerPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [session, clearSelection, tab, tabs]);
+  }, [session, clearSelection, tab, tabs, keysOpen]);
 
   useEffect(() => {
     if (toast == null) return;
@@ -974,6 +988,7 @@ export default function ViewerPage() {
                   </ul>
                 </details>
               )}
+              <KeyLegend views={tabs} open={keysOpen} onToggle={setKeysOpen} />
               {/* One toggle, named by its word: "Night" pressed is night, the
                   same lit tint the rail's open tab wears. The name never
                   changes — the state is aria-pressed — so a screen reader

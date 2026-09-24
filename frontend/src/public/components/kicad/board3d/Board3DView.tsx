@@ -18,7 +18,7 @@ import { labelLines, type PartLabel } from './partLabel';
 import {
   createSceneRenderer, type AnchorScreen, type HoverHit, type ObjectClass3D, type SceneRenderer, type ViewName,
 } from './sceneRenderer';
-import { BOARD_KEYS, VIEW_MODE_KEYS, ariaKey, boardActionForKey, viewModeForKey } from './shortcuts';
+import { BOARD_ACTION_LABEL, BOARD_KEYS, VIEW_MODE_KEYS, ariaKey, boardActionForKey, viewModeForKey } from './shortcuts';
 import { useBoardScene } from './useBoardScene';
 import { VIEW_MODES, getViewMode, setViewMode, useViewMode } from './viewMode';
 import styles from './Board3DView.module.scss';
@@ -459,16 +459,16 @@ export default function Board3DView({
         <div className={styles.toolbar}>
           <div className={styles.track} role="group" aria-label="Board view">
             <button type="button" className={styles.ctl} aria-pressed={view === 'top'} aria-keyshortcuts={ariaKey(BOARD_KEYS.top)} onClick={() => go('top')}>
-              Top
+              {BOARD_ACTION_LABEL.top}
             </button>
             <button type="button" className={styles.ctl} aria-pressed={view === 'bottom'} aria-keyshortcuts={ariaKey(BOARD_KEYS.bottom)} onClick={() => go('bottom')}>
-              Bottom
+              {BOARD_ACTION_LABEL.bottom}
             </button>
             <button type="button" className={styles.ctl} aria-keyshortcuts={ariaKey(BOARD_KEYS.flip)} onClick={() => rendererRef.current?.flip()}>
-              Flip
+              {BOARD_ACTION_LABEL.flip}
             </button>
             <button type="button" className={styles.ctl} aria-keyshortcuts={ariaKey(BOARD_KEYS.reset)} onClick={() => go('reset')}>
-              Reset
+              {BOARD_ACTION_LABEL.reset}
             </button>
           </div>
           {/* Solid / See-through / X-ray. Named "View" and not "Bodies": on the

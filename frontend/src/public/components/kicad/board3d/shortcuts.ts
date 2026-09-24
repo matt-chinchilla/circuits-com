@@ -15,6 +15,14 @@ export const BOARD_KEYS: Readonly<Record<BoardAction, string>> = {
   reset: 'r',
 };
 
+/** Each board action's name, as its toolbar button and the key legend say it. */
+export const BOARD_ACTION_LABEL: Readonly<Record<BoardAction, string>> = {
+  top: 'Top',
+  bottom: 'Bottom',
+  flip: 'Flip',
+  reset: 'Reset',
+};
+
 export const VIEW_MODE_KEYS: Readonly<Record<ViewMode, string>> = {
   solid: '1',
   'see-through': '2',

@@ -212,3 +212,30 @@
     outline-offset: -2px;
   }
 }
+
+// The summary of a top-bar <details> popover: the notes count and the key
+// legend. A glyph and a quiet word; the browser owns the disclosure marker's
+// removal here, the host owns the popover card under it.
+@mixin vw-disclosure-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px 0 8px;
+  font-size: 0.8rem;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--vw-ink-2);
+  list-style: none;
+  border-radius: 9px;
+  cursor: pointer;
+  @include vw-focus-ring;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &:hover {
+    background: var(--vw-hover);
+  }
+}

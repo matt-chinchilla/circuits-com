@@ -1273,6 +1273,85 @@ describe('the view keys', () => {
   });
 });
 
+// The key legend in the top bar: `?` from anywhere shows it, Esc closes it
+// before it does anything else.
+describe('the key legend', () => {
+  const legend = () =>
+    [...container.querySelectorAll('details')].find((d) => d.querySelector('summary')?.textContent?.includes('Keys')) as HTMLDetailsElement;
+  const search = () => container.querySelector('input[aria-label="Find a reference"]') as HTMLInputElement;
+  const panelText = () => container.querySelector('aside')!.textContent ?? '';
+  async function key(k: string, init: KeyboardEventInit = {}, target: EventTarget = document.body): Promise<KeyboardEvent> {
+    const event = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...init });
+    await act(async () => {
+      target.dispatchEvent(event);
+    });
+    return event;
+  }
+  async function select(text: string) {
+    const input = search();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      setter.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      input.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+  }
+
+  it('opens on "?" (which arrives with Shift) and closes on a second "?"', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    expect(legend().hasAttribute('open')).toBe(false);
+    const event = await key('?', { shiftKey: true });
+    expect(legend().hasAttribute('open')).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+    await key('?', { shiftKey: true });
+    expect(legend().hasAttribute('open')).toBe(false);
+  });
+
+  it('lists the views this project offers', async () => {
+    await render();
+    const caps = [...legend().querySelectorAll('dl kbd')].map((k) => k.textContent);
+    expect(caps).toContain('S');
+    expect(caps).toContain('M');
+    // No board: no Board, Stackup or 3D letter, and none of the 3D keys.
+    for (const k of ['P', 'K', 'D', 'T', '1']) expect(caps).not.toContain(k);
+  });
+
+  it('Esc closes the legend first, and a second Esc still clears the selection', async () => {
+    await render();
+    await canvasReady();
+    await select('U99');
+    expect(panelText()).toMatch(/Not in this project/);
+    await key('?', { shiftKey: true });
+    expect(legend().hasAttribute('open')).toBe(true);
+    await key('Escape');
+    expect(legend().hasAttribute('open')).toBe(false);
+    // The selection survived the press that closed the legend…
+    expect(panelText()).toMatch(/U99/);
+    // …and goes on the next one, as it always did.
+    await key('Escape');
+    expect(panelText()).toMatch(/Click a part/);
+  });
+
+  it('leaves "?" typed into the panel search alone', async () => {
+    await render();
+    const event = await key('?', { shiftKey: true }, search());
+    expect(legend().hasAttribute('open')).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('leaves a modified "?" to the browser', async () => {
+    await render();
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      const event = await key('?', { shiftKey: true, ...init });
+      expect(legend().hasAttribute('open')).toBe(false);
+      expect(event.defaultPrevented).toBe(false);
+    }
+  });
+});
+
 // The part panel — one selection for the page, whichever door it came through.
 describe('the part panel', () => {
   const panel = () => container.querySelector('aside') as HTMLElement;
@@ -1870,7 +1949,9 @@ describe('the workspace', () => {
     expect(alert).toBeDefined();
     expect(alert.textContent).toMatch(/Missing sheet file: io_extra\.kicad_sch/);
     expect(alert.parentElement).toBe(workspace());
-    expect(workspace().querySelector('details')).toBeNull();
+    // The key legend is a <details> too; no NOTES one is drawn.
+    const notes = [...workspace().querySelectorAll('details')].filter((d) => /\bnotes?\b/.test(d.querySelector('summary')?.textContent ?? ''));
+    expect(notes).toHaveLength(0);
   });
 
   it('starts in the day, the toggle turns the workspace to night, and the choice is remembered', async () => {

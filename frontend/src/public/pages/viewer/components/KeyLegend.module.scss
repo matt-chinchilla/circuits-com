@@ -1,0 +1,205 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+@use '../workspaceTokens' as *;
+
+// The key legend: a reference card, not a feature. It wears the notes
+// popover's summary and card (the same mixins), so the two read as one pair
+// on the bar; inside, a hairline list set like the part panel's facts — the
+// key cap on the left in a fixed column, what it does on the right. Every
+// colour is a workspace token, so night mode needs nothing of its own.
+
+.legend {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.summary {
+  @include vw-disclosure-summary;
+}
+
+// Open reads as pressed, in the bar's own hover tint.
+.legend[open] > .summary {
+  color: var(--vw-ink);
+  background: var(--vw-hover);
+}
+
+.glyph {
+  font-size: 18px;
+  line-height: 1;
+}
+
+@mixin cap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 22px;
+  padding: 0 5px;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--vw-ink-ctl);
+  background: var(--vw-key-bg);
+  border: 1px solid var(--vw-surface-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+
+.key {
+  @include cap;
+}
+
+// The `?` beside the word: how to reach the card without the mouse.
+.hint {
+  @include cap;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 0.66rem;
+  color: var(--vw-ink-3);
+}
+
+.card {
+  @include vw-card;
+  // Opaque: the card hangs over the drawing, and the day card's translucent
+  // washes over a dark canvas read grey with the schematic showing through.
+  // Under them sits the mode's own solid (a plain hex in both sets).
+  background-color: var(--vw-card-solid);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  // Over the phone's part sheet (40), under the toast (50).
+  z-index: 45;
+  width: max-content;
+  max-width: min(600px, calc(100vw - 16px));
+  // A short window scrolls the card, never the page under it.
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  padding: 14px 16px 12px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--vw-ink-2);
+  border-radius: 12px;
+}
+
+.cols {
+  display: flex;
+  gap: 32px;
+}
+
+.col {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.group + .group {
+  margin-top: 14px;
+}
+
+.heading {
+  margin: 0 0 4px;
+  font-family: $font-body;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vw-ink-3);
+}
+
+.list {
+  margin: 0;
+}
+
+// The 3D tab's two sets (the toolbar's "Board view" and "View") sit apart.
+.listNext {
+  margin-top: 8px;
+}
+
+// One key, one action. The key column is fixed, so every action starts on
+// the same line down the card; 44px holds two caps (the tab arrows).
+.row,
+.orbit {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  margin: 0;
+  border-top: 1px solid var(--vw-seam);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+// Four arrows are wider than the column: the note takes the whole row.
+.orbit {
+  display: flex;
+  margin-top: 8px;
+  padding-top: 6px;
+}
+
+.keys {
+  display: flex;
+  gap: 3px;
+  margin: 0;
+}
+
+.action {
+  margin: 0;
+  color: var(--vw-ink);
+  white-space: nowrap;
+}
+
+.orbit .action {
+  white-space: normal;
+  color: var(--vw-ink-2);
+}
+
+.foot {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  font-size: 0.76rem;
+  color: var(--vw-ink-3);
+  border-top: 1px solid var(--vw-seam);
+}
+
+// A phone: no keyboard to press these with, and no 40px to spare on the bar's
+// top row beside a notes count (the button wrapped the bar to three rows at
+// 390, measured). So the summary goes, `?` still summons the card for a phone
+// with a keyboard, and the legend leaves the flow — no flex gap, no width — as
+// a strip along the bar's bottom edge that the card hangs from, edge to edge,
+// one column.
+@include responsive($bp-mobile) {
+  .legend {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 0;
+  }
+
+  .summary {
+    display: none;
+  }
+
+  .card {
+    top: 6px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 170px);
+  }
+
+  .cols {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .action {
+    white-space: normal;
+  }
+}
