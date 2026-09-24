@@ -13,7 +13,7 @@ import { act, createElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { BomRow, MatchLineIn } from '@public/services/bom/types';
 import type { ParseResult } from '@public/services/bom/parseBom';
 import { INTAKE_MESSAGES } from '@public/services/kicad/project';
@@ -214,6 +214,13 @@ describe('the "left out" group', () => {
 
 describe('a turned-away drop', () => {
   it('says so beside the buttons, not below the whole sheet', async () => {
+    const scrolled = vi.fn();
+    const proto = HTMLElement.prototype as unknown as { scrollIntoView?: (o?: unknown) => void };
+    const had = proto.scrollIntoView;
+    proto.scrollIntoView = scrolled;
+    onTestFinished(() => {
+      proto.scrollIntoView = had;
+    });
     await mount();
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const step = new File(['ISO-10303-21;'], 'board.step', { type: 'model/step' });
@@ -224,6 +231,7 @@ describe('a turned-away drop', () => {
     });
     const alert = container.querySelector('[role="alert"]')!;
     expect(alert.textContent).toBe(rejectionCopy('board.step'));
+    expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' });
     // Inside the drop card, straight after the buttons.
     const sheet = container.querySelector('section[aria-label="Open a KiCad project"]')!;
     expect(sheet.contains(alert)).toBe(true);
@@ -479,6 +487,14 @@ describe('Guide.module.scss', () => {
     expect(scss).toMatch(/\.folderCol \.dropError \{\s*grid-area: error;/);
     const phone = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));
     expect(phone).toMatch(/\.folderCol \.dropError \{\s*order: 2;/);
+  });
+
+  it('puts the buttons before the listing on a short desktop screen too', () => {
+    const start = scss.indexOf('and (max-height: 760px)');
+    expect(start).toBeGreaterThan(-1);
+    const block = scss.slice(start, scss.indexOf('\n}\n', start));
+    expect(block).toMatch(/\.folderCol \.actions\s*\{\s*order: 2;/);
+    expect(block).toMatch(/\.tree\s*\{\s*order: 6;/);
   });
 
   it('draws the pulse with no filter (a drop-shadow under a moving dash offset re-rasterises every frame)', () => {

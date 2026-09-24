@@ -1177,6 +1177,29 @@ $bp-traces: 1100px;
 
 // Phone: no drag and drop to speak of, so the copy says "choose", and the
 // buttons come FIRST — above the folder listing — so they sit above the fold.
+// A short desktop screen (≤760px tall, e.g. 1280×720): even with the "left
+// out" group folded, the listing pushed "Choose files" below the fold. The
+// buttons, a refusal and the ratings come first there — the phone's order.
+// The traces measure live positions, so they follow the rows.
+@media (min-width: #{$bp-mobile + 1px}) and (max-height: 760px) {
+  .folderCol .actions {
+    order: 2;
+  }
+
+  .folderCol .dropError {
+    order: 2;
+  }
+
+  .specs {
+    order: 3;
+  }
+
+  .tree {
+    order: 6;
+    margin-top: 18px;
+  }
+}
+
 @include responsive($bp-mobile) {
   // The bench's top padding is too short for it on a phone: back in flow.
   .toggleRow {

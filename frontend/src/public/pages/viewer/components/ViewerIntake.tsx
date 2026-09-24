@@ -16,7 +16,7 @@
 //
 // The example loads Glasgow revC3 (0BSD) through the SAME buildProject a drop
 // uses.
-import { useCallback, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone';
 import Icon from '@shared/components/Icon';
 import { buildProject } from '@public/services/kicad/project';
@@ -59,6 +59,13 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpenState] = useState(() => readGuideOpen());
   const [hot, setHot] = useState<Net | null>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  // A refusal sits under the buttons; on a short screen it can still start at
+  // the fold, so bring it fully into view (nearest: no jump when it already is).
+  useEffect(() => {
+    if (error != null) errorRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [error]);
 
   // The toggle's choice is remembered; a note marker that opens the guide just
   // to show one note is not a choice, so it passes remember: false.
@@ -197,7 +204,7 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
             {/* Beside the buttons that caused it, in both states: below the
                 whole sheet it landed a screen or more away from the click. */}
             {error != null && (
-              <p className={`${pageStyles.intakeError} ${styles.dropError}`} role="alert">
+              <p ref={errorRef} className={`${pageStyles.intakeError} ${styles.dropError}`} role="alert">
                 {error}
               </p>
             )}
