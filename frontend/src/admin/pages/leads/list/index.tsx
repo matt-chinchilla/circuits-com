@@ -95,7 +95,7 @@ export default function LeadsPage() {
   const [sessionExpired, setSessionExpired] = useState(false);
   // Bumped by the Retry button; only a fetch dependency.
   const [reloadNonce, setReloadNonce] = useState(0);
-  const { logout, isReadOnly } = useAuth();
+  const { logout, isReadOnly, isCustomer } = useAuth();
 
   // What the admin types vs. what reaches the server. One request per keystroke
   // over a 359-row roster is a self-inflicted DoS.
@@ -289,9 +289,11 @@ export default function LeadsPage() {
             {total.toLocaleString('en-US')} {total === 1 ? 'lead' : 'leads'}
           </span>
         )}
-        {/* Hidden, not disabled, for a view-only account: the server refuses
-            the write (403 read_only) and a button that can only fail is noise. */}
-        {!isReadOnly && !demoBlocked && !sessionExpired && (
+        {/* Hidden, not disabled, for a view-only account (the server refuses
+            the write, 403 read_only) and for a customer who reached this page
+            by URL under /account (403 staff_only): a button that can only
+            fail is noise. */}
+        {!isReadOnly && !isCustomer && !demoBlocked && !sessionExpired && (
           <Link to={consolePath('/admin/leads/new')} className={styles.addBtn}>
             <Plus size={15} strokeWidth={2} aria-hidden="true" />
             Add lead
