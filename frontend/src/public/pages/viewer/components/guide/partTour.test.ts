@@ -98,6 +98,15 @@ describe('PartTour.module.scss', () => {
     expect(scss).toMatch(/\$tour-max-phone:\s*480px/);
   });
 
+  it('brings the 3D view closer on the chip where its frame is small: tablet 1.3x, phone 1.4x', () => {
+    const tablet = scss.slice(scss.indexOf('@media (max-width: $bp-tour)'), scss.indexOf('@include responsive($bp-mobile)'));
+    const phone = scss.slice(scss.indexOf('@include responsive($bp-mobile)'));
+    expect(tablet).toMatch(/\.frame3d \{[\s\S]*?\.view \{\s*transform: scale\(1\.3\);\s*transform-origin: 57% 46%;/);
+    expect(phone).toMatch(/\.frame3d \{[\s\S]*?\.view \{\s*transform: scale\(1\.4\);\s*transform-origin: 50% 46%;/);
+    // Still 2x device pixels in the largest tablet box (642 x 360 at 1024, zoomed 1.3): 1680 / 1.3 >= 2 * 642.
+    expect(IMAGES.tour3d.width / 1.3).toBeGreaterThanOrEqual(2 * 642);
+  });
+
   it('never crops the part panel: it keeps its own aspect', () => {
     const block = scss.slice(scss.indexOf('.framePanel {'), scss.indexOf('.caption {'));
     expect(block).toMatch(/height: auto;/);

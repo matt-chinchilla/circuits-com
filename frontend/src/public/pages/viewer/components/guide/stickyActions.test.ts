@@ -59,7 +59,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 const PAIR = ['Choose files', 'Try the example project'];
-/** The drop card's pair — the tour's own "Try the example project" link is not part of it. */
+/** The drop card's pair — the tour's own "See U30 on the example" link is not part of it. */
 const pair = () =>
   [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
     (b) => PAIR.includes(b.textContent?.trim() ?? '') && b.closest('#viewer-guide-tour') == null,

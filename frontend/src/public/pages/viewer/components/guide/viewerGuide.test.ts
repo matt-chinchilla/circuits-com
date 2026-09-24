@@ -17,14 +17,22 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import type { BomRow, MatchLineIn } from '@public/services/bom/types';
 import type { ParseResult } from '@public/services/bom/parseBom';
 import { INTAKE_MESSAGES } from '@public/services/kicad/project';
-import { INTAKE_CAPS, KICAD5_MESSAGE, MIN_KICAD_VERSION } from '@public/services/kicad/types';
-import { EXAMPLE_CREDIT, rejectionCopy } from '../../intakeCopy';
+import { INTAKE_CAPS, KICAD5_MESSAGE, KicadReadError, MIN_KICAD_VERSION } from '@public/services/kicad/types';
+import { EXAMPLE_CREDIT, EXAMPLE_URL, rejectionCopy } from '../../intakeCopy';
 import { VIEW_LABEL, VIEW_ORDER, viewsFor } from '../../viewLabels';
 import ViewerIntake from '../ViewerIntake';
-import { CAPS, PRICING_FIELDS, PRIVACY_SENTENCE, PROJECT_NAME, proseMb } from './guideCopy';
+import { CAPS, PRICING_FIELDS, PRIVACY_SENTENCE, PROJECT_NAME, TOUR_REF, proseMb } from './guideCopy';
 import { GUIDE_KEY } from './guideState';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// The reader, replaceable per test: the tour's link is proven against a read
+// that succeeds and one that refuses, without parsing a real project here.
+const kicad = vi.hoisted(() => ({ build: vi.fn<(files: File[]) => Promise<unknown>>() }));
+vi.mock('@public/services/kicad/project', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@public/services/kicad/project')>()),
+  buildProject: (files: File[]) => kicad.build(files),
+}));
 
 // The pricing request, captured: the disclosure is pinned to what is SENT.
 const sent: { match: MatchLineIn[][] } = { match: [] };
@@ -380,6 +388,77 @@ describe('the copy', () => {
       const file = join(__dirname, '../../../../../../public', img.getAttribute('src')!);
       expect(readFileSync(file).length, file).toBeGreaterThan(1000);
     }
+  });
+});
+
+// ─── The tour's way in ───────────────────────────────────────────────────────
+// The drop card's pair is docked at the bottom of the screen whenever the tour
+// is in view, so the tour does not end on a second "Try the example project":
+// it ends on the part it followed, opened live.
+
+describe('the tour’s way in', () => {
+  const tour = () => document.getElementById('viewer-guide-tour')!;
+  const seeLink = () =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent?.trim() === `See ${TOUR_REF} on the example`)!;
+  const example = () => ({ ok: true, blob: async () => new Blob(['zip']) });
+
+  beforeEach(() => {
+    kicad.build.mockReset();
+    window.location.hash = '';
+  });
+
+  it('ends on "See U30 on the example", not on a copy of the docked pair', async () => {
+    await mount();
+    expect(TOUR_REF).toBe('U30');
+    expect([...tour().querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
+      `See ${TOUR_REF} on the example`,
+    ]);
+    expect(tour().textContent).not.toContain('Try the example project');
+    expect(tour().textContent).toContain(`Pick ${TOUR_REF} on any view`);
+    // Exactly one "Try the example project" on the whole intake: the pair's.
+    expect(
+      [...container.querySelectorAll('button')].filter((b) => b.textContent?.trim() === 'Try the example project'),
+    ).toHaveLength(1);
+  });
+
+  it('opens the example with U30 in the URL hash — written before the project is handed over', async () => {
+    const seenAtOpen: string[] = [];
+    await mount(createElement(ViewerIntake, { onProject: () => seenAtOpen.push(window.location.hash) }));
+    const fetched = vi.fn(async () => example());
+    vi.stubGlobal('fetch', fetched);
+    const project = { name: 'stub' };
+    kicad.build.mockResolvedValueOnce(project);
+    await act(async () => {
+      seeLink().click();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(fetched).toHaveBeenCalledWith(EXAMPLE_URL);
+    expect(kicad.build).toHaveBeenCalledTimes(1);
+    expect(window.location.hash).toBe(`#${TOUR_REF}`);
+    expect(seenAtOpen).toEqual([`#${TOUR_REF}`]);
+  });
+
+  it('leaves the hash alone when the example is refused, and when the pair’s own button opens it', async () => {
+    const opened = vi.fn();
+    await mount(createElement(ViewerIntake, { onProject: opened }));
+    vi.stubGlobal('fetch', async () => example());
+
+    kicad.build.mockRejectedValueOnce(new KicadReadError('refused', 'unreadable'));
+    await act(async () => {
+      seeLink().click();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(window.location.hash).toBe('');
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('refused');
+    expect(opened).not.toHaveBeenCalled();
+
+    kicad.build.mockResolvedValueOnce({ name: 'stub' });
+    await act(async () => {
+      byText('Try the example project')!.click();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(window.location.hash).toBe('');
   });
 });
 

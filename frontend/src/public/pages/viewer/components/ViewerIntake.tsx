@@ -76,12 +76,18 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
     setOpenState(next);
   }, []);
 
+  // `focusRef` lands the opened project on one part: it is written to the URL
+  // hash, the page's own `#ref` path (a BOM-row link, a pasted anchor), which
+  // the workspace focuses once its canvas is ready. Written only AFTER the
+  // project read, so a refused drop never leaves a stray `#U30` in the URL.
   const read = useCallback(
-    async (files: File[]) => {
+    async (files: File[], focusRef?: string) => {
       setBusy(true);
       setError(null);
       try {
-        onProject(await buildProject(files));
+        const project = await buildProject(files);
+        if (focusRef != null) window.location.hash = encodeURIComponent(focusRef);
+        onProject(project);
       } catch (err) {
         setError(err instanceof KicadReadError ? err.message : UNREADABLE_COPY);
       } finally {
@@ -104,19 +110,22 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
     [read],
   );
 
-  const loadExample = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(EXAMPLE_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      await read([new File([blob], 'glasgow-revC3.zip', { type: 'application/zip' })]);
-    } catch {
-      setError(EXAMPLE_FAILED_COPY);
-      setBusy(false);
-    }
-  }, [read]);
+  const loadExample = useCallback(
+    async (focusRef?: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await fetch(EXAMPLE_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        await read([new File([blob], 'glasgow-revC3.zip', { type: 'application/zip' })], focusRef);
+      } catch {
+        setError(EXAMPLE_FAILED_COPY);
+        setBusy(false);
+      }
+    },
+    [read],
+  );
 
   const { getRootProps, getInputProps, isDragActive, open: openPicker } = useDropzone({
     onDrop,
@@ -239,7 +248,8 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
 
         <GuideNotes id={GUIDE_IDS.notes} hidden={!open} />
         <PrivacyBlock />
-        <PartTour id={GUIDE_IDS.tour} hidden={!open} busy={busy} onTryExample={() => void loadExample()} />
+        {/* The tour's own way in: the example, opened on the part it followed. */}
+        <PartTour id={GUIDE_IDS.tour} hidden={!open} busy={busy} onSeeRef={(ref) => void loadExample(ref)} />
       </div>
     </GuideContext.Provider>
   );

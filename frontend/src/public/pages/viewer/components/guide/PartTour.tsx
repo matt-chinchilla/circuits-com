@@ -5,8 +5,13 @@
 // markers — the board's own vocabulary. The frames' shapes live in
 // PartTour.module.scss; the three views fill theirs (`fill`), the part panel
 // keeps its own aspect so none of its text is cropped.
+//
+// The tour ends on a link that opens the example WITH U30 selected — the
+// selection it just showed, live. It is not another "Try the example project":
+// that pair is docked at the bottom of the screen whenever the tour is in view,
+// and two identical buttons a hand apart would only ask which one to press.
 import Icon from '@shared/components/Icon';
-import { IMAGES, type GuideImage } from './guideCopy';
+import { IMAGES, TOUR_REF, type GuideImage } from './guideCopy';
 import styles from './PartTour.module.scss';
 
 interface ShotProps {
@@ -46,18 +51,19 @@ interface Props {
   id: string;
   hidden: boolean;
   busy: boolean;
-  onTryExample: () => void;
+  /** Open the example with this reference selected. */
+  onSeeRef: (ref: string) => void;
 }
 
-export default function PartTour({ id, hidden, busy, onTryExample }: Props) {
+export default function PartTour({ id, hidden, busy, onSeeRef }: Props) {
   return (
     <section id={id} hidden={hidden} className={styles.tour} aria-labelledby="viewer-tour-title">
       <h2 className={styles.tourTitle} id="viewer-tour-title">
         Click a part once, find it everywhere
       </h2>
       <p className={styles.tourLead}>
-        Pick U30 on any view, or type its reference, and the schematic, the board and the 3D view all point at the same
-        chip. The part panel says where it sits on the board and what our catalog knows about it.
+        Pick {TOUR_REF} on any view, or type its reference, and the schematic, the board and the 3D view all point at
+        the same chip. The part panel says where it sits on the board and what our catalog knows about it.
       </p>
       <div className={styles.tourGrid}>
         <Shot
@@ -97,8 +103,8 @@ export default function PartTour({ id, hidden, busy, onTryExample }: Props) {
         <kbd>/</kbd> searches for a reference, <kbd>Esc</kbd> clears it. Designators in the BOM select parts the same way.
       </p>
       <p className={styles.tourTry}>
-        <button type="button" className={styles.tryLink} onClick={onTryExample} disabled={busy}>
-          Try the example project
+        <button type="button" className={styles.tryLink} onClick={() => onSeeRef(TOUR_REF)} disabled={busy}>
+          See {TOUR_REF} on the example
           <Icon name="arrow-right" className={styles.tryGlyph} />
         </button>
       </p>

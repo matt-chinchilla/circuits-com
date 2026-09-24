@@ -235,6 +235,14 @@ $frame-paper: #f8f9fc; // the part panel's own background
     flex: 1 0 auto;
     min-height: 0;
     aspect-ratio: 16 / 9;
+
+    // A 16:9 window shows the whole 3:2 capture here, and at 423px wide (820)
+    // the chip was a thumbnail. Closer on the chip and its label, as the phone
+    // does: the file carries over 2.5x the pixels of this box at 1.3.
+    .view {
+      transform: scale(1.3);
+      transform-origin: 57% 46%;
+    }
   }
 }
 

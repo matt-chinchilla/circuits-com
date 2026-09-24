@@ -83,6 +83,14 @@ export const LEFT_OUT: readonly LeftOutEntry[] = [
   { name: 'LICENSE', role: 'not a KiCad file', folder: false, probe: `${EXAMPLE_FOLDER}LICENSE` },
 ];
 
+/**
+ * The part the tour follows across the views — the example's FPGA. Its closing
+ * link opens the example with this reference selected (the page's own `#ref`
+ * path), so the tour ends on the thing it just taught, not on a second copy of
+ * the "Try the example project" button that is docked beside it anyway.
+ */
+export const TOUR_REF = 'U30';
+
 export interface GuideImage {
   src: string;
   /** The file's own pixel size — the box is reserved before it loads. */
