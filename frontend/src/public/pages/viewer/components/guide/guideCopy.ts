@@ -108,7 +108,7 @@ export const IMAGES = {
   stackup: { src: '/viewer-guide/stackup.webp', width: 360, height: 155, alt: 'The example board’s four-layer stackup, drawn to scale beside its layer table' },
   board3d: { src: '/viewer-guide/board-3d-u30.webp', width: 820, height: 581, alt: 'The example board in 3D, with U30 lit in cyan and labelled with its part number' },
   // The tour: U30 followed across the views (tour-*). Sized for the tour's
-  // largest frame at 2x; viewerGuide.test.ts holds the frame sizes.
+  // largest frame at 2x; partTour.test.ts holds the frame sizes (LARGEST_BOX).
   tour3d: {
     src: '/viewer-guide/tour-3d-u30.webp',
     width: 1680,

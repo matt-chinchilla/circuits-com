@@ -63,7 +63,8 @@ export default function PartTour({ id, hidden, busy, onSeeRef }: Props) {
       </h2>
       <p className={styles.tourLead}>
         Pick {TOUR_REF} on any view, or type its reference, and the schematic, the board and the 3D view all point at
-        the same chip. The part panel says where it sits on the board and what our catalog knows about it.
+        the same chip. The part panel says where it sits on the board and, once the BOM is priced, what our catalog
+        knows about it.
       </p>
       <div className={styles.tourGrid}>
         <Shot
@@ -96,7 +97,7 @@ export default function PartTour({ id, hidden, busy, onSeeRef }: Props) {
           frame={styles.framePanel}
           fill={false}
           label="Part panel"
-          caption="From the file first, then from the catalog."
+          caption="From the file first; the catalog match once the BOM is priced."
         />
       </div>
       <p className={styles.keys}>

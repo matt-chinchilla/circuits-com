@@ -145,9 +145,9 @@ export default function GuideNotes({ id, hidden }: { id: string; hidden: boolean
           </Station>
 
           <Station n={2} title={`KiCad ${CAPS.minKicad} or newer`}>
-            KiCad {CAPS.minKicad - 1} files (<code>.pro</code>, <code>.sch</code>, or a board saved before KiCad{' '}
-            {CAPS.minKicad}) are turned away with a note. Open and save them in KiCad {CAPS.minKicad} or newer, then drop
-            again.
+            A KiCad {CAPS.minKicad - 1} project (only <code>.pro</code> and <code>.sch</code> files, or a board saved
+            before KiCad {CAPS.minKicad}) is turned away with a note. Open it in KiCad {CAPS.minKicad} or newer, save it,
+            and drop it again.
           </Station>
 
           <Station n={3} title="Only KiCad files are read">

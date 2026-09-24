@@ -9,7 +9,7 @@ exactly the size `guideCopy.ts` (IMAGES) reserves for it.
 The tour's four pictures (tour-*) are sized to at least twice the largest box
 the tour draws them in (the 3D frame tops out near 810x540 CSS px; the
 schematic and board frames at 480 wide in the phone column, where a 3x screen
-draws them from ~1290 device px; the part panel at 340 wide on a phone); `viewerGuide.test.ts` holds those numbers and fails
+draws them from ~1290 device px; the part panel at 340 wide on a phone); `partTour.test.ts` holds those numbers (LARGEST_BOX) and fails
 if a file shrinks below them. No frame shows the example project's name: the
 crops stay clear of title blocks, silkscreen titles and the project bar, and
 the capture hides the part panel's Sheet row.

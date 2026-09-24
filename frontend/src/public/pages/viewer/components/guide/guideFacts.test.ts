@@ -126,6 +126,16 @@ describe('the turned-away examples', () => {
     // A KiCad 5 project, by its names.
     expect(await refusalOf([new File(['EESchema'], 'old.sch'), new File(['x'], 'old.pro')])).toBe(KICAD5_MESSAGE);
   });
+
+  it('turn away a KiCad 5 PROJECT, not its files: beside a re-saved board they are skipped (note 2 says so)', async () => {
+    const project = await buildProject([
+      new File(['EESchema'], 'my-board.sch'),
+      new File(['x'], 'my-board.pro'),
+      new File(['(kicad_pcb (version 20240108) (generator "pcbnew"))'], 'my-board.kicad_pcb'),
+    ]);
+    expect(project.board).toMatch(/my-board\.kicad_pcb$/);
+    expect(project.warnings.join('\n')).not.toContain(KICAD5_MESSAGE);
+  });
 });
 
 describe('what the live lookup sends', () => {

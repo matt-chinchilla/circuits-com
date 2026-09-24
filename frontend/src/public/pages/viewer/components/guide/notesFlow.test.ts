@@ -75,6 +75,15 @@ describe('the notes, as a path', () => {
     for (const f of flags) expect(f).not.toBeNull();
   });
 
+  // The reader refuses .pro/.sch only when NOTHING modern is in the drop
+  // (guideFacts.test.ts proves both halves); beside a re-saved board they are
+  // skipped without a word, so the note speaks of a whole project, not files.
+  it('says note 2’s refusal of a whole KiCad 5 project, not of its files one by one', () => {
+    const two = stations()[1].textContent ?? '';
+    expect(two).toMatch(/A KiCad \d+ project \(only \.pro and \.sch files, or a board saved before KiCad \d+\) is turned away with a note/);
+    expect(two).not.toMatch(/files \(\.pro/);
+  });
+
   it('names the file types note 3 reads from the reader’s own list', () => {
     const codes = [...notes().querySelectorAll('#note-3 code')].map((c) => c.textContent);
     expect(codes).toEqual([...MODERN_KICAD_EXTENSIONS]);

@@ -9,7 +9,7 @@
 // stacked (its 3:2 capture is cropped around the chip by object-position), and
 // the part panel keeps its own aspect so its text is never cropped or
 // letterboxed. The files carry at least twice the device pixels of the largest
-// box drawn here (viewerGuide.test.ts pins the numbers), and the grid stops
+// box drawn here (partTour.test.ts pins the numbers in LARGEST_BOX), and the grid stops
 // growing at $tour-max so that stays true on an ultrawide screen.
 
 $mask: #0b3d24; // soldermask green
