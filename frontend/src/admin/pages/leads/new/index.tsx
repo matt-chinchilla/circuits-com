@@ -264,7 +264,6 @@ function AddLeadForm() {
   const [exists, setExists] = useState<LeadExistsDetail | null>(null);
   const [added, setAdded] = useState<Added | null>(null);
   const [matches, setMatches] = useState<AdminLead[]>([]);
-  const [moreMatches, setMoreMatches] = useState(false);
   // Bumped after "Add and start another" so the rail picks up the lead just added.
   const [probeNonce, setProbeNonce] = useState(0);
 
@@ -285,7 +284,6 @@ function AddLeadForm() {
     const needle = looseKey(typedCompany);
     if (needle.length < MATCH_MIN_CHARS) {
       setMatches([]);
-      setMoreMatches(false);
       return undefined;
     }
     let cancelled = false;
@@ -294,9 +292,7 @@ function AddLeadForm() {
         .getLeads({ q: typedCompany, page: 1, per_page: 20, sort: 'company' })
         .then((res) => {
           if (cancelled) return;
-          const hits = res.leads.filter((l) => looseKey(fullCompany(l)).includes(needle));
-          setMatches(hits);
-          setMoreMatches(res.total > res.leads.length);
+          setMatches(res.leads.filter((l) => looseKey(fullCompany(l)).includes(needle)));
         })
         .catch(() => {
           // A hint, not a gate: a failed probe shows nothing and blocks nothing.
@@ -499,7 +495,7 @@ function AddLeadForm() {
                 shownMatches.length > 0 && (
                   <MatchRail
                     matches={shownMatches}
-                    more={moreMatches || matches.length > MATCH_ROWS}
+                    more={matches.length > MATCH_ROWS}
                     exactId={exactMatch?.id ?? null}
                     consolePath={consolePath}
                   />
