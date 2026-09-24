@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Lead, Manufacturer
 from app.services.lead_distance import distance_from_hq_miles
-from app.services.manufacturer_canon import canon, split_branch
+from app.services.lead_identity import lead_company_parts, lead_source_key
 
 _ENRICHMENT = "ENRICHMENT NEEDED"
 
@@ -51,19 +51,21 @@ def seed_leads(db: Session, csv_path: Path | None = None) -> dict:
         raw_contact = (r.get("Contact Name") or "").strip()
         is_placeholder = raw_contact.upper() == _ENRICHMENT or not raw_contact
         contact = None if is_placeholder else raw_contact
-        source_key = canon(f"{company}|{contact or '__company__'}")[:300]
+        # Key + grouping come from the ONE identity home that the console's
+        # "Add lead" (POST /api/admin/leads/) also uses: a lead typed in the
+        # admin and the same person in leads.csv must collide, not fork.
+        source_key = lead_source_key(company, contact)
         if source_key in existing:
             continue
         existing.add(source_key)
 
-        head, branch = split_branch(company)
-        company_slug = canon(head)[:220]
+        company_slug, branch_label = lead_company_parts(company)
         tier = clean(r, "Tier(S/M/L)", 1)
         lead = Lead(
             id=uuid.uuid4(),
             source_key=source_key,
             company_name=company[:200],
-            branch_label=branch[:80] if branch else None,
+            branch_label=branch_label,
             company_slug=company_slug,
             manufacturer_id=mfr_by_canon.get(company_slug),
             tier=tier,
