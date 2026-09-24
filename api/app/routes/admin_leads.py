@@ -277,6 +277,20 @@ def _find_by_source_key(db: Session, source_key: str) -> Lead | None:
     return db.query(Lead).filter(Lead.source_key == source_key).first()
 
 
+def _find_enriched(db: Session, company_slug: str, source_key: str) -> Lead | None:
+    """A roster row that IS this person although its stored key says
+    otherwise. PATCH fills in (or renames) a contact without re-keying — it
+    must not: the seed keys on source_key, and a re-keyed placeholder would be
+    re-inserted on the next boot. So after the exact probe misses, the
+    company's roster rows are re-keyed in memory from what they hold now.
+    A handful of rows per company (ix_leads_company_slug)."""
+    rows = db.query(Lead).filter(Lead.company_slug == company_slug, Lead.user_id.is_(None)).all()
+    for row in rows:
+        if lead_source_key(row.company_name, row.contact_name) == source_key:
+            return row
+    return None
+
+
 def _lead_exists(existing: Lead) -> HTTPException:
     """The 409 for a duplicate. A COMPANY row is named so the form can link
     to it. A CUSTOMER's private prospect (user_id set) is never named: the
@@ -305,11 +319,11 @@ def create_lead(
     contact = data["contact_name"]
     source_key = lead_source_key(company, contact)
 
-    existing = _find_by_source_key(db, source_key)
+    company_slug, branch_label = lead_company_parts(company)
+    existing = _find_by_source_key(db, source_key) or _find_enriched(db, company_slug, source_key)
     if existing is not None:
         raise _lead_exists(existing)
 
-    company_slug, branch_label = lead_company_parts(company)
     lead = Lead(
         id=uuid_mod.uuid4(),
         source_key=source_key,

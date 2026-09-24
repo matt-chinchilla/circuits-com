@@ -172,6 +172,52 @@ class TestDuplicates:
         assert _post(client, h, company_name="FDH", contact_name="Nat Little").status_code == 201
         assert _post(client, h, company_name="FDH").status_code == 201  # company-only row
 
+    def test_an_enriched_placeholder_still_refuses_the_same_person(
+        self, client, db, seeded_db, auth_header
+    ):
+        """PATCH fills in a placeholder's contact but never re-keys it (the
+        seed keys on source_key, so a re-key would make the next boot
+        re-insert the placeholder). The add must still find that person."""
+        h = auth_header()
+        first = _post(client, h, company_name="ZZReview Zip4").json()
+        assert first["contact_name"] is None
+        patched = client.patch(f"{URL}{first['id']}", json={"contact_name": "Bob Smith"}, headers=h)
+        assert patched.status_code == 200, patched.text
+
+        again = _post(client, h, company_name="zzreview  zip4", contact_name="bob smith")
+        assert again.status_code == 409, again.text
+        assert again.json()["detail"]["code"] == "lead_exists"
+        assert again.json()["detail"]["lead_id"] == first["id"]
+        assert db.query(Lead).count() == 1
+
+        # a different person at the same company is still a new row
+        assert (
+            _post(client, h, company_name="ZZReview Zip4", contact_name="Ann Other").status_code
+            == 201
+        )
+        assert db.query(Lead).count() == 2
+
+    def test_a_renamed_contact_is_found_under_the_new_name(
+        self, client, db, seeded_db, auth_header
+    ):
+        h = auth_header()
+        first = _post(client, h, company_name="FDH", contact_name="Ian Locke").json()
+        client.patch(f"{URL}{first['id']}", json={"contact_name": "Nat Little"}, headers=h)
+        again = _post(client, h, company_name="FDH", contact_name="Nat Little")
+        assert again.status_code == 409
+        assert again.json()["detail"]["lead_id"] == first["id"]
+        assert db.query(Lead).count() == 1
+
+    def test_the_same_person_at_another_branch_is_a_new_row(
+        self, client, db, seeded_db, auth_header
+    ):
+        # company_slug groups branches; the duplicate is the KEY, branch included
+        h = auth_header()
+        first = _post(client, h, company_name="Powell (East)").json()
+        client.patch(f"{URL}{first['id']}", json={"contact_name": "Bob Smith"}, headers=h)
+        resp = _post(client, h, company_name="Powell (West)", contact_name="Bob Smith")
+        assert resp.status_code == 201, resp.text
+
     def test_seed_then_api_is_one_row(self, client, db, seeded_db, auth_header, tmp_path):
         seed_leads(
             db, csv_path=_write_csv(tmp_path, [{"Company": "Lumissil", "Contact Name": "Kim Ray"}])
@@ -229,6 +275,9 @@ class TestDuplicates:
             return None if calls["n"] == 1 else real(db_, key)
 
         monkeypatch.setattr(admin_leads, "_find_by_source_key", blind_first_probe)
+        # the in-memory re-key probe is blind too (the other writer's row is
+        # not committed yet from this request's point of view)
+        monkeypatch.setattr(admin_leads, "_find_enriched", lambda *_a: None)
         resp = _post(client, h, company_name="Race Co", contact_name="Sam Hill")
         assert calls["n"] == 2, "the IntegrityError path must re-probe"
         assert resp.status_code == 409
