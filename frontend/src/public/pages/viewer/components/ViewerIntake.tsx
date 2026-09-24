@@ -30,11 +30,13 @@ import NoteRef from './guide/NoteRef';
 import OutputList from './guide/OutputList';
 import PartTour from './guide/PartTour';
 import PrivacyBlock from './guide/PrivacyBlock';
+import StickyActions from './guide/StickyActions';
 import { CAPS, KICAD_FILES_PROSE, PRIVACY_SENTENCE, type Net } from './guide/guideCopy';
 import { GuideContext } from './guide/guideContext';
 import { readGuideOpen, writeGuideOpen } from './guide/guideState';
 import pageStyles from '../ViewerPage.module.scss';
 import styles from './guide/Guide.module.scss';
+import stickyStyles from './guide/StickyActions.module.scss';
 
 // .sch and .pro are admitted ONLY so an old-format project is refused by name.
 const ACCEPT: Accept = {
@@ -193,18 +195,23 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
 
             <FolderListing id={GUIDE_IDS.folder} hidden={!open} hot={hot} />
 
-            <div className={`${pageStyles.btnRow} ${styles.actions}`}>
-              <button type="button" className={pageStyles.dropBtn} onClick={openPicker} disabled={busy}>
-                {busy ? 'Reading…' : 'Choose files'}
-              </button>
-              <button type="button" className={pageStyles.exampleBtn} onClick={() => void loadExample()} disabled={busy}>
-                Try the example project
-              </button>
-            </div>
+            {/* The ONE pair of buttons: on the card while their place is in
+                view, docked to the bottom of the screen while it is not. */}
+            <StickyActions
+              className={styles.actions}
+              busy={busy}
+              dragActive={isDragActive}
+              onChoose={openPicker}
+              onExample={() => void loadExample()}
+            />
             {/* Beside the buttons that caused it, in both states: below the
                 whole sheet it landed a screen or more away from the click. */}
             {error != null && (
-              <p ref={errorRef} className={`${pageStyles.intakeError} ${styles.dropError}`} role="alert">
+              <p
+                ref={errorRef}
+                className={`${pageStyles.intakeError} ${styles.dropError} ${stickyStyles.clearOfBar}`}
+                role="alert"
+              >
                 {error}
               </p>
             )}
