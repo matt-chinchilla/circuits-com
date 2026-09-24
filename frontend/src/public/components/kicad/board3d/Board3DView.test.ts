@@ -50,6 +50,8 @@ function fakeRenderer() {
     onAnchorMove: (h: typeof r.anchorMove) => { r.anchorMove = h; },
     onHover: (h: typeof r.hover) => { r.hover = h; },
     onPick: (h: ((ref: string | null) => void) | null) => { r.pick = h; },
+    lost: null as (() => void) | null,
+    onContextLost: (h: (() => void) | null) => { r.lost = h; },
   };
   return r;
 }
@@ -68,7 +70,15 @@ describe('Board3DView', () => {
     await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => r as never, quality: 'full' })); });
     expect(r.mounted).toBe(1);
     expect(el.querySelector('[role="note"]')?.textContent).toContain('Component bodies are estimates from courtyards, not part shapes.');
-    expect(el.textContent).toContain('2 footprints');
+    expect(el.textContent).toContain('2\u00a0footprints');
+  });
+  it('the stats line breaks only between figures, never inside one or before a dot', async () => {
+    await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => fakeRenderer() as never, quality: 'full' })); });
+    const stats = [...el.querySelectorAll('p')].find((p) => p.textContent!.includes('footprints'))!.textContent!;
+    // The only ordinary spaces are the ones AFTER each dot: a phone-width wrap
+    // (the owner's 390px screen clipped it as "built in 786 m") parts figures,
+    // never "786" from "ms", and never starts a line with "·".
+    expect(stats).toBe('2\u00a0footprints\u00a0· 4\u00a0pads\u00a0· 1\u00a0vias\u00a0· built\u00a0in\u00a012\u00a0ms');
   });
   it('publishes the measurement hook on the host after the first frame', async () => {
     const r = fakeRenderer();
@@ -170,6 +180,22 @@ describe('Board3DView', () => {
     expect(made[0].disposed).toBe(1);
     expect(el.querySelector('[role="alert"]')).toBeNull();
     expect([...el.querySelectorAll('button')].map((b) => b.textContent)).toContain('Flip');
+    expect(state.retry).not.toHaveBeenCalled();
+  });
+  it('a renderer whose context is lost says so and Try again mounts a fresh one', async () => {
+    const made: ReturnType<typeof fakeRenderer>[] = [];
+    const create = () => { const r = fakeRenderer(); made.push(r); return r as never; };
+    await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: create, quality: 'full' })); });
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    // A phone short of GPU memory, or an app switch on iOS: the canvas goes
+    // blank AFTER mount resolved, so only the renderer's event can tell.
+    await act(async () => { made[0].lost!(); });
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('The 3D view stopped');
+    expect([...el.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Try again']);
+    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === 'Try again')!.click(); });
+    expect(made).toHaveLength(2);
+    expect(made[0].disposed).toBe(1);
+    expect(el.querySelector('[role="alert"]')).toBeNull();
     expect(state.retry).not.toHaveBeenCalled();
   });
   it('pauses while the canvas is scrolled off-screen and resumes when it returns', async () => {
@@ -453,6 +479,9 @@ describe('the stylesheet the frame depends on', () => {
     expect(scss).toMatch(/\.caption \{[^{}]*color:\s*\$footer-ink/);
     expect(scss).toMatch(/\.stats \{[^{}]*color:\s*\$footer-ink/);
     expect(scss).toMatch(/\.canvasHost \{[\s\S]*?&:focus-visible \{[^{}]*outline-offset:\s*-3px/);
+  });
+  it('lets the stats line wrap on a phone and keeps it on one line above', () => {
+    expect(scss).toMatch(/\.stats \{[^{}]*white-space:\s*nowrap;[^{}]*@include responsive\(\$bp-mobile\) \{[^{}]*white-space:\s*normal/);
   });
   it('gives the canvas host its own paintable box', () => {
     expect(scss).toMatch(/\.canvasHost \{[^{}]*flex:\s*1 1 auto/);

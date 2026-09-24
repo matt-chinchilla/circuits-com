@@ -106,7 +106,19 @@ const NO_START = {
   body: 'The browser could not open a 3D drawing surface for this board. Try again, or use the Board tab.',
 };
 
-const DOT = ' · ';
+/** When the renderer was running and the browser took its context away. */
+const LOST = {
+  title: 'The 3D view stopped',
+  body: 'The browser took back the 3D drawing surface — phones do this when graphics memory runs short or the page sits in the background. Try again to redraw the board.',
+};
+
+/** The stats line's separator: a no-break space BEFORE the dot keeps it on the
+ *  line it ends, so a phone-width wrap starts the next line with a figure,
+ *  never with "·". */
+const DOT = '\u00a0· ';
+/** Inside one figure ("1,149 pads", "built in 786 ms") a wrap would part a
+ *  number from its unit; the separators are the only breaks. */
+const unbroken = (text: string): string => text.replace(/ /g, '\u00a0');
 
 /** The callout's distance from its anchor: to the right of the dot and above
  *  it, the way a drawing's leader lifts away from the part it names. */
@@ -142,9 +154,11 @@ export function captionOf(scene: BoardScene, quality: Quality = 'full'): string 
   } else if (quality === 'reduced') {
     // Nothing was attempted, so nothing is disclaimed — but a reader seeing a
     // bare board needs to know the bodies are missing by design, and that the
-    // pads still answer. Device-neutral: the reduced tier is a narrow window OR
-    // a dense display, and a mouse reader must not be told to "tap". The view
-    // toggle is still offered here, so it says what is left for it to do.
+    // pads still answer. Since 2026-09-23 no device is sent here on its own
+    // (`quality.ts`: WebGL2 alone decides, and without it nothing renders);
+    // only `setQualityOverride('reduced')` is. Device-neutral all the same — a
+    // mouse reader must not be told to "tap". The view toggle is still offered
+    // here, so it says what is left for it to do.
     parts.push('Component bodies are not drawn on this display. Select a pad to identify a part. See-through and X-ray fade the solder mask only.');
   }
   const has = (kind: BoardScene['warnings'][number]['kind']) => scene.warnings.some((w) => w.kind === kind);
@@ -176,18 +190,16 @@ const statsLine = (stats: BoardScene['stats']): string =>
     `${stats.pads.toLocaleString('en-US')} pads`,
     `${stats.vias.toLocaleString('en-US')} vias`,
     `built in ${Math.round(stats.buildMs).toLocaleString('en-US')} ms`,
-  ].join(DOT);
+  ].map(unbroken).join(DOT);
 
 export default function Board3DView({
   project, stackup, createRenderer, quality, selectedRef, onSelect, label,
   hiddenLayers, highlightedLayer, opacity, highlightedNet,
 }: Board3DViewProps) {
   const supported = webgl2Supported();
-  // Decided ONCE, at mount (spec §6): a window the visitor drags wider must not
-  // silently re-tessellate the board underneath them.
-  const [autoQuality] = useState<Quality>(() =>
-    currentQuality({ webgl2: supported, innerWidth: window.innerWidth, devicePixelRatio: window.devicePixelRatio }),
-  );
+  // Decided ONCE, at mount (spec §6): the override may change between mounts,
+  // and a board must not be re-tessellated underneath a reader mid-visit.
+  const [autoQuality] = useState<Quality>(() => currentQuality({ webgl2: supported }));
   const tier = quality ?? autoQuality;
   // No WebGL2 means no renderer, so there is nothing for a build to feed — the
   // null project keeps a worker from ever being spawned for a board nobody sees.
@@ -207,9 +219,10 @@ export default function Board3DView({
   /** Bumped when a renderer has mounted, so the highlight effect below re-runs
    *  against the live one rather than the null it saw before. */
   const [live, setLive] = useState(0);
-  /** The renderer's mount rejected. `attempt` is what "Try again" bumps to
-   *  run the mount effect afresh (the scene itself is fine and cached). */
-  const [mountFailed, setMountFailed] = useState(false);
+  /** The renderer could not start (`mount` rejected), or it started and the
+   *  browser later took its context away. `attempt` is what "Try again" bumps
+   *  to run the mount effect afresh (the scene itself is fine and cached). */
+  const [mountFailed, setMountFailed] = useState<'start' | 'lost' | null>(null);
   const [attempt, setAttempt] = useState(0);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
@@ -309,6 +322,9 @@ export default function Board3DView({
     renderer.onHover?.((hit) => {
       if (!cancelled) showTip(hit);
     });
+    renderer.onContextLost?.(() => {
+      if (!cancelled) setMountFailed('lost');
+    });
     void renderer
       .mount(host, scene, tier)
       .then(() => {
@@ -324,7 +340,7 @@ export default function Board3DView({
         setLive((n) => n + 1);
       })
       .catch(() => {
-        if (!cancelled) setMountFailed(true);
+        if (!cancelled) setMountFailed('start');
       });
 
     // The loop runs only while the canvas can be SEEN: a hidden tab, or a
@@ -399,11 +415,12 @@ export default function Board3DView({
     event.preventDefault();
   };
 
-  const ready = supported && status === 'ready' && scene != null && !mountFailed;
-  const failed = supported && (status === 'error' || mountFailed);
+  const ready = supported && status === 'ready' && scene != null && mountFailed == null;
+  const failed = supported && (status === 'error' || mountFailed != null);
+  const noStart = mountFailed === 'lost' ? LOST : NO_START;
   const tryAgain = () => {
-    if (mountFailed) {
-      setMountFailed(false);
+    if (mountFailed != null) {
+      setMountFailed(null);
       setAttempt((n) => n + 1);
     } else {
       retry();
@@ -491,10 +508,10 @@ export default function Board3DView({
         {(!supported || failed) && (
           <div className={styles.problem} role="alert">
             <p className={styles.problemTitle}>
-              {!supported ? NO_WEBGL.title : mountFailed ? NO_START.title : "Couldn't build this board"}
+              {!supported ? NO_WEBGL.title : mountFailed != null ? noStart.title : "Couldn't build this board"}
             </p>
             <p className={styles.problemBody}>
-              {!supported ? NO_WEBGL.body : mountFailed ? NO_START.body : (error ?? 'The board could not be built.')}
+              {!supported ? NO_WEBGL.body : mountFailed != null ? noStart.body : (error ?? 'The board could not be built.')}
             </p>
             {supported && (
               <button type="button" className={styles.retry} onClick={tryAgain}>

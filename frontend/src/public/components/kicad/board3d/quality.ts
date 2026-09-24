@@ -6,7 +6,10 @@
 // and unusable everywhere else.
 import type { Quality } from '@public/services/kicad/board3d/types';
 
-export interface QualityEnv { webgl2: boolean; innerWidth: number; devicePixelRatio: number }   // width + dpr kept in the env for callers; neither is a tier input
+/** Deliberately ONE input. Width and pixel ratio were each a tier input once,
+ *  and each put the wrong device on the wrong tier (see below); the renderer
+ *  bounds the pixel cost itself with `setPixelRatio(min(dpr, 2))`. */
+export interface QualityEnv { webgl2: boolean }
 
 /**
  * Every device with WebGL2 draws the whole board (AMENDED 2026-09-23, the
@@ -15,8 +18,8 @@ export interface QualityEnv { webgl2: boolean; innerWidth: number; devicePixelRa
  * phone to `reduced`: a 1× backing store on a 3× screen (a ninth of the
  * pixels, stretched), no antialiasing, no component bodies. It was a guess at
  * phone GPUs that never measured one — and the phone canvas is the SMALL one:
- * 347×491 CSS px at the renderer's `min(dpr, 2)` cap is ~0.7 MP, a fifth of
- * a 1376×616 desktop canvas at 2×. The pixel ratio was already ruled out as a
+ * 370×414 CSS px at the renderer's `min(dpr, 2)` cap is 740×828, ~0.6 MP,
+ * under a fifth of a 1376×616 desktop canvas at 2× (measured 2026-09-23). The pixel ratio was already ruled out as a
  * gate (2026-09-22: 2.24×/2.52× desktops). `reduced` stays reachable through
  * the override and for a device without WebGL2 (which renders nothing anyway).
  */

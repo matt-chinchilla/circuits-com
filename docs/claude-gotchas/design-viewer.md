@@ -910,12 +910,12 @@ Exactly one setting, `'full' | 'reduced'`, decided ONCE at mount by
 drops tracks under 0.2 mm, halves the arc caps, coarsens the tolerance
 (`TOL_MM`), pins `setPixelRatio(1)`, turns MSAA off and **skips component bodies
 entirely** — which also skips their warning, because nothing was attempted. That
-is why a phone shows **no caption at all** on a clean board: there is nothing to
+is why a phone used to show **no caption at all** on a clean board (phones draw `full` since 2026-09-23, so the reduced caption below is override-only now): there is nothing to
 admit. *(Superseded by the refinement, 32d624e: `reduced` now says "Component
 bodies are not drawn on this display. Select a pad to identify a part.", because
 a reader looking at a bare board needs to know the bodies are missing by design
 and that the pads still answer. Device-neutral since 3e8d23a — no "tap", no "at
-this size" — because the reduced tier is a narrow window OR a dense display.)* Measured Glasgow: 294,094 triangles / 9 draw calls full, 182,392 / 8
+this size" — because the reduced tier WAS a narrow window OR a dense display; since 2026-09-23 it is neither, only the override.)* Measured Glasgow: 294,094 triangles / 9 draw calls full, 182,392 / 8
 reduced.
 
 ### Where the numbers live
@@ -1125,8 +1125,14 @@ cyan `#4fc3f7`, emissive so it reads at any orbit): a range rewrite and at most
 two extra draw calls, never a colour attribute over 300k vertices. A pick is a
 pointer-up within 6px/500ms of its pointer-down (an orbit drag never picks) and
 raycasts EVERY mesh nearest-first, so the substrate occludes a top-side body
-seen from below; at `reduced` quality a phone still picks by pads, and the
-caption says the bodies are not drawn at that size.
+seen from below. A TOUCH that names nothing casts four near-miss rays 6px out,
+and those cast only `nearMissTargets()` — the parted meshes (pads' copper,
+bodies, leads) plus the substrate as the far-side occluder, never mask, silk or
+hole walls (143k of Glasgow's 308k triangles; a bare-board tap was 274-434 ms
+at a 4x CPU slowdown with five full casts, measured 2026-09-23). A lost WebGL
+context after mount (`webglcontextlost` on the canvas → `onContextLost`) stops
+the loop for good and the host shows "The 3D view stopped" + Try again, which
+mounts a fresh renderer; three's own restore path is not relied on.
 
 Reset framing (`framing.ts`, pure) projects the model box's eight corners
 through the real perspective camera at every 10° of azimuth and solves for the

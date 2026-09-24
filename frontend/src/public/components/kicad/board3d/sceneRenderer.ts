@@ -112,6 +112,10 @@ export interface SceneRenderer {
    *  sky (null). A click is a pointer-up within a few pixels of its pointer-down;
    *  an orbit drag never picks. */
   onPick?(handler: ((ref: string | null) => void) | null): void;
+  /** Who to tell when the browser takes the WebGL context away after mount (a
+   *  phone short of GPU memory, a backgrounded app, a GPU reset). The canvas is
+   *  blank from then on; the host offers a fresh renderer instead. */
+  onContextLost?(handler: (() => void) | null): void;
 }
 
 export interface SceneRendererOptions {
@@ -134,10 +138,12 @@ function prefersReducedMotion(): boolean {
 const CLICK_SLOP_PX = 6;
 const CLICK_MAX_MS = 500;
 /** When a TOUCH lands on nothing pickable, four more rays this far out are
- *  tried — a fingertip beside a 0402's pad on a phone, where the bodies are not
- *  drawn, still identifies the part. Each cast is ~20 ms on a 300k-triangle
- *  board (measured), so a touch miss costs five casts; a mouse or pen is precise
- *  and a click on bare board (the common "deselect") costs exactly one. */
+ *  tried — a fingertip beside a 0402's pad still identifies the part. A mouse or
+ *  pen is precise, and a click on bare board (the common "deselect") costs one
+ *  cast. The first cast is against every visible mesh, ~20 ms on Glasgow's
+ *  308k triangles (~80 ms at a 4× CPU slowdown, measured 2026-09-23); the four
+ *  near-miss rays cast only what can answer them (`nearMissTargets`), which
+ *  leaves out the masks, silk and hole walls — 143k of those 308k triangles. */
 const PICK_TOLERANCE_PX = 6;
 /** How long a mouse rests before the part under it is named. A raycast is
  *  ~20 ms on a 300k-triangle board, so the pointer's every move must not
@@ -397,6 +403,10 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
   let three: Three | null = null;
   let modelBox: Box3Like | null = null;
   let pickHandler: ((ref: string | null) => void) | null = null;
+  let lostHandler: (() => void) | null = null;
+  /** The browser took the context away: nothing drawn from here on can show,
+   *  so the loop stays stopped whatever the host's visibility sync asks. */
+  let contextLost = false;
   let pointerDown: { x: number; y: number; at: number } | null = null;
   /** Pointers currently down. A second finger (a pinch) voids the click: the
    *  finger lifted last may not have moved, and it must not pick. */
@@ -781,20 +791,26 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     });
   }
 
-  /** The footprint under ONE ray, through the nearest hit of ANY mesh: the
-   *  substrate and mask take part as occluders, so a click on the bottom face
+  /** The footprint under ONE ray, through the nearest hit of the `targets`: the
+   *  substrate always takes part as an occluder, so a click on the bottom face
    *  never picks a top-side body through the board. */
-  function castAt(T: Three, cam: NonNullable<typeof camera>, group: NonNullable<typeof model>, rect: DOMRect, x: number, y: number): string | null {
+  function castAt(T: Three, cam: NonNullable<typeof camera>, targets: InstanceType<Three['Object3D']>[], rect: DOMRect, x: number, y: number): string | null {
     const ndc = new T.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
     const ray = new T.Raycaster();
     ray.setFromCamera(ndc, cam);
-    // A hidden layer neither draws nor stands in the way of a pick, and the
-    // bodies' outline is a line: a ray near it would report the line, not
-    // the body under it, so only the meshes are cast against.
-    const hit = ray.intersectObjects(group.children.filter((c) => c.visible && (c as { isMesh?: boolean }).isMesh === true), false)[0];
+    const hit = ray.intersectObjects(targets, false)[0];
     if (hit == null || hit.faceIndex == null) return null;
     const entry = parted.find((p) => p.mesh === hit.object);
     return entry == null ? null : partAtFace(entry.parts, hit.faceIndex);
+  }
+
+  /** What a near-miss ray casts against: the meshes that carry parts (the
+   *  pads' copper, the bodies, the leads) and the substrate that hides the far
+   *  side. It is looking for a PART beside the fingertip, and the mask, silk and
+   *  hole walls can never be one — they would only cost triangles and stand in
+   *  front of a pad's edge, which is the very edge a near miss is aimed at. */
+  function nearMissTargets(): InstanceType<Three['Object3D']>[] {
+    return drawn.filter((d) => d.mesh.visible && (d.group.parts != null || d.group.material === 'substrate')).map((d) => d.mesh);
   }
 
   /** The footprint under a canvas point — or, for a touch, under one of four
@@ -804,11 +820,16 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     const rect = renderer.domElement.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
     const t0 = performance.now();
-    let ref = castAt(three, camera, model, rect, clientX, clientY);
+    // A hidden layer neither draws nor stands in the way of a pick, and the
+    // bodies' outline is a line: a ray near it would report the line, not
+    // the body under it, so only the meshes are cast against.
+    const visible = model.children.filter((c) => c.visible && (c as { isMesh?: boolean }).isMesh === true);
+    let ref = castAt(three, camera, visible, rect, clientX, clientY);
     if (ref == null && pointerType === 'touch') {
       const d = PICK_TOLERANCE_PX;
+      const near = nearMissTargets();
       for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]]) {
-        ref = castAt(three, camera, model, rect, clientX + dx, clientY + dy);
+        ref = castAt(three, camera, near, rect, clientX + dx, clientY + dy);
         if (ref != null) break;
       }
     }
@@ -834,6 +855,12 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_SLOP_PX) return;
     if (performance.now() - down.at > CLICK_MAX_MS) return;
     pickHandler(pickAt(e.clientX, e.clientY, e.pointerType));
+  };
+  const onContextLostEvent = (): void => {
+    contextLost = true;
+    if (frame !== 0) cancelAnimationFrame(frame);
+    frame = 0;
+    lostHandler?.();
   };
   const onPointerCancel = (e: PointerEvent): void => {
     pointers.delete(e.pointerId);
@@ -931,6 +958,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       canvas.addEventListener('pointercancel', onPointerCancel);
       canvas.addEventListener('pointermove', onPointerMove);
       canvas.addEventListener('pointerleave', onPointerLeave);
+      canvas.addEventListener('webglcontextlost', onContextLostEvent);
       // The view state — a selection, hidden layers, faded classes — asked for
       // before the meshes existed is applied now, before the first frame.
       applyView();
@@ -994,6 +1022,10 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       pickHandler = handler;
     },
 
+    onContextLost(handler) {
+      lostHandler = handler;
+    },
+
     setView(view) {
       if (camera == null || controls == null) return;
       autoOrbit = false;
@@ -1037,7 +1069,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     },
 
     resume() {
-      if (disposed) return;
+      if (disposed || contextLost) return;
       paused = false;
       onChange();
     },
@@ -1066,6 +1098,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       parted.length = 0;
       drawn.length = 0;
       pickHandler = null;
+      lostHandler = null;
       modelBox = null;
       if (gone.renderer != null) {
         const canvas = gone.renderer.domElement;
@@ -1074,6 +1107,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
         canvas.removeEventListener('pointercancel', onPointerCancel);
         canvas.removeEventListener('pointermove', onPointerMove);
         canvas.removeEventListener('pointerleave', onPointerLeave);
+        canvas.removeEventListener('webglcontextlost', onContextLostEvent);
         canvas.remove();
       }
       renderer = null;

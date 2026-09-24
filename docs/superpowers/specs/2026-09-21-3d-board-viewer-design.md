@@ -153,7 +153,7 @@ Pure modules first (vitest, node environment):
 
 Host (happy-dom, `// @vitest-environment happy-dom`): `Board3DView.test.ts` with a fake `createRenderer` — building/ready/error states, caption text for each warning, dispose called on unmount and on tab change, no-WebGL2 copy; `viewerPage.test.ts` gains the fifth tab and the mount-only-while-selected assertion.
 
-Browser measurement before the tab is declared done (not automated): chrome-devtools on `/viewer` with Glasgow — draw calls (`renderer.info.render.calls` ≤ 20), fps during orbit at both tiers (≥ 50 desktop full, ≥ 30 emulated phone reduced), JS heap before/after leaving the tab (returns within 5 MB), WebGL context count (exactly one after leaving). Numbers recorded in the progress ledger and in this spec's §11.
+Browser measurement before the tab is declared done (not automated): chrome-devtools on `/viewer` with Glasgow — draw calls (`renderer.info.render.calls` ≤ 20), fps during orbit at both tiers (≥ 50 desktop full, ≥ 30 emulated phone reduced — phones draw `full` since 2026-09-23 and no phone fps has been measured at it: the WSL2 box has no GPU, so the owner's own phone is the gate), JS heap before/after leaving the tab (returns within 5 MB), WebGL context count (exactly one after leaving). Numbers recorded in the progress ledger and in this spec's §11.
 
 ## 10. Risks and mitigations
 
@@ -173,7 +173,7 @@ Browser measurement before the tab is declared done (not automated): chrome-devt
 
 **Scene** — the hardware-independent numbers, read off `.canvasHost`'s `data-*` after the first frame:
 
-| | desktop (1440×900, `full`) | phone (390×844, `reduced`) | target |
+| | desktop (1440×900, `full`) | phone (390×844, `reduced` — the tier phones got until 2026-09-23; at `full`: 308,634 triangles / 12 calls / 740×828 canvas) | target |
 |---|---|---|---|
 | draw calls | **9** | **8** | ≤ 20 |
 | triangles | 294,094 | 182,392 | — |

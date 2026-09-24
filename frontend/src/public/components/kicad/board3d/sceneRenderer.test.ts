@@ -148,6 +148,56 @@ describe('the pick', () => {
     expect(cast).toHaveBeenCalledTimes(5);
     expect(picks).toEqual([null, null]);
   });
+  it('casts the four near-miss rays only at what can answer them: parts and the substrate', async () => {
+    // Glasgow is 308k triangles, 143k of them mask, silk and hole walls; at a
+    // phone's CPU a touch on bare board cast five full passes (274-434 ms at a
+    // 4x slowdown, measured 2026-09-23). Here a mask and silk lie over a pad:
+    // the first ray (every visible mesh) stops on them and names nothing; the
+    // first near-miss ray casts only the pad's copper and the substrate, so it
+    // finds R1 under them. A real mask opens around every pad, so on a board
+    // this is the fingertip landing on the mask just beside a pad's edge.
+    const g = board();
+    const layer = (material: 'mask' | 'silk' | 'copper', layerName: string, z: number) => ({
+      ...g.groups[0], material, layerName,
+      positions: g.groups[0].positions.map((v, i) => (i % 3 === 2 ? z : v)),
+    });
+    g.groups.push(
+      { ...layer('copper', 'F.Cu', 0.1), parts: [{ ref: 'R1', start: 0, count: 6 }] },
+      layer('mask', 'F.Mask', 0.2),
+      layer('silk', 'F.SilkS', 0.3),
+    );
+    r = createSceneRenderer({ reducedMotion: true });
+    await r.mount(host, g, 'full');
+    const picks: (string | null)[] = [];
+    r.onPick?.((ref) => picks.push(ref));
+    const cast = vi.spyOn(THREE.Raycaster.prototype, 'intersectObjects');
+    pointer(canvas(), 'pointerdown', 200, 150, 'touch');
+    pointer(canvas(), 'pointerup', 200, 150, 'touch');
+    expect(cast.mock.calls.map(([targets]) => (targets as unknown[]).length)).toEqual([4, 2]);
+    expect(picks).toEqual(['R1']);
+    // A mouse is precise: it gets the one full cast, mask in front, nothing named.
+    cast.mockClear();
+    pointer(canvas(), 'pointerdown', 200, 150);
+    pointer(canvas(), 'pointerup', 200, 150);
+    expect(cast.mock.calls.map(([targets]) => (targets as unknown[]).length)).toEqual([4]);
+    expect(picks).toEqual(['R1', null]);
+  });
+});
+
+describe('a lost context', () => {
+  it('tells the host, and the loop stays stopped whatever the visibility sync asks', async () => {
+    r = createSceneRenderer();
+    await r.mount(host, board(), 'full');
+    let lost = 0;
+    r.onContextLost?.(() => { lost++; });
+    expect(queue.length).toBeGreaterThan(0);
+    canvas().dispatchEvent(new Event('webglcontextlost'));
+    expect(lost).toBe(1);
+    r.pause();
+    r.resume();
+    frame();
+    expect(queue).toHaveLength(0);
+  });
 });
 
 describe('the hover (mouse only, after a pause)', () => {
