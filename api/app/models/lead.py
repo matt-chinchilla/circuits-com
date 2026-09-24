@@ -78,6 +78,11 @@ class Lead(Base):
     # `lead_contacts.recorded_by` is a free string: `users` is inside the
     # reseed TRUNCATE CASCADE graph and an FK would enrol the whole CRM in it.
     user_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    # WHO typed this row into the console (migration 058): the staff
+    # username, stamped once by POST /api/admin/leads/. NULL = it came from
+    # the roster import (leads.csv via seed_leads). A FREE STRING like
+    # LeadContact.recorded_by — an FK to users would join the reseed graph.
+    created_by = Column(String(120), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
 

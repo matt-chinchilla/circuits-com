@@ -201,6 +201,15 @@ def test_recorded_by_is_free_string_not_fk():
     assert col.type.length >= 120
 
 
+def test_lead_created_by_is_free_string_not_fk():
+    """Migration 058: who typed a lead in. Same reason as recorded_by — an FK
+    to users would pull the whole CRM into the reseed TRUNCATE CASCADE."""
+    col = Base.metadata.tables["leads"].c.created_by
+    assert not col.foreign_keys
+    assert col.nullable
+    assert col.type.length >= 120
+
+
 def test_length_contracts():
     m = Base.metadata.tables["manufacturers"]
     assert m.c.canonical_key.type.length >= 220
