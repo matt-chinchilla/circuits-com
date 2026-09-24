@@ -22,7 +22,8 @@ import type { KicadProject } from '@public/services/kicad/types';
 import { clearDesignSession, getDesignSession, openDesign, type DesignSession } from '@public/services/designSession';
 import { STATIC_PAGE_SEO } from '@public/services/seoRoutes';
 import ViewerIntake from './components/ViewerIntake';
-import { VIEW_LABEL, viewsFor, type ViewId } from './viewLabels';
+import { VIEW_KEY, VIEW_LABEL, viewForKey, viewsFor, type ViewId } from './viewLabels';
+import { typingIn } from '@public/components/kicad/keyboard';
 import BoardPanel, { type BoardPanelHandle, type SheetRow, type ShowOn } from './components/BoardPanel';
 import { readSheetThumbnail, type SheetThumbnail } from '@public/services/kicad/sheetThumbnail';
 import { knownRefs, partFacts, resolveRef } from './partFacts';
@@ -140,12 +141,6 @@ const NO_NETS: NetInfo[] = [];
 
 function defaultTab(session: DesignSession): Tab {
   return session.project.root != null ? 'schematic' : 'board';
-}
-
-/** Is the keyboard's target a place where `/` and Esc mean something else? */
-function typingIn(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
 
 export default function ViewerPage() {
@@ -612,15 +607,33 @@ export default function ViewerPage() {
     [selectedRef, focus, outline],
   );
 
+  // The order, the names and which half of a project each view needs live in
+  // viewLabels.ts — the /viewer guide's "what each file adds" table reads the
+  // same rule, so it can never promise a tab this list does not offer.
+  const tabs = useMemo<{ id: Tab; label: string }[]>(() => {
+    if (session == null) return [];
+    return viewsFor(session.project.root != null, session.project.board != null).map((id) => ({ id, label: VIEW_LABEL[id] }));
+  }, [session]);
+
   // `/` focuses the search and Esc clears a highlight, then the selection, anywhere on the page
   // that is not itself a text field. A field owns its own Esc: the panel's
   // search empties itself first and clears the selection on a second press
   // (BoardPanel); the BOM's quantity box keeps the browser's behaviour.
+  // A view's letter (VIEW_KEY: s p k d m) jumps to that tab — only a tab this
+  // project offers; any other letter is left to the browser.
   useEffect(() => {
     if (session == null) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || typingIn(e.target)) return;
-      if (e.key === '/') {
+      // A view letter wants a plain press (shift+s is not s), but `/` itself
+      // arrives WITH Shift on some layouts (German: shift+7), so the two older
+      // shortcuts keep the guard they always had.
+      const jump = e.shiftKey ? null : viewForKey(e.key.toLowerCase());
+      if (jump != null) {
+        if (!tabs.some((t) => t.id === jump)) return;
+        e.preventDefault();
+        setTab(jump);
+      } else if (e.key === '/') {
         e.preventDefault();
         panelRef.current?.focusSearch();
       } else if (e.key === 'Escape') {
@@ -633,21 +646,13 @@ export default function ViewerPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [session, clearSelection, tab]);
+  }, [session, clearSelection, tab, tabs]);
 
   useEffect(() => {
     if (toast == null) return;
     const id = setTimeout(() => setToast(null), 2500);
     return () => clearTimeout(id);
   }, [toast]);
-
-  // The order, the names and which half of a project each view needs live in
-  // viewLabels.ts — the /viewer guide's "what each file adds" table reads the
-  // same rule, so it can never promise a tab this list does not offer.
-  const tabs = useMemo<{ id: Tab; label: string }[]>(() => {
-    if (session == null) return [];
-    return viewsFor(session.project.root != null, session.project.board != null).map((id) => ({ id, label: VIEW_LABEL[id] }));
-  }, [session]);
 
   /**
    * The board's layer stack, or null when there is no board or it cannot be
@@ -942,6 +947,9 @@ export default function ViewerPage() {
                   // Roving: the strip is one tab stop and the arrows move
                   // inside it.
                   tabIndex={tab === t.id ? 0 : -1}
+                  // The page-wide letter that jumps here (no title: a hover
+                  // tooltip would land in a screen recording).
+                  aria-keyshortcuts={VIEW_KEY[t.id].toUpperCase()}
                   ref={(el) => {
                     tabRefs.current[t.id] = el;
                   }}

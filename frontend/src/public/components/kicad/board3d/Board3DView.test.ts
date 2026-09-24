@@ -368,6 +368,73 @@ describe('Board3DView — the View toggle (Solid / See-through / X-ray)', () => 
   });
 });
 
+describe('Board3DView — single-key controls (owner, 2026-09-24)', () => {
+  const press = (key: string, init: KeyboardEventInit = {}, target: EventTarget = window) => {
+    const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+    act(() => { target.dispatchEvent(e); });
+    return e;
+  };
+  const byLabel = (t: string) => [...el.querySelectorAll('button')].find((b) => b.textContent === t)!;
+  const mount = async (r: ReturnType<typeof fakeRenderer>) => {
+    await act(async () => { root.render(createElement(Board3DView, { project, stackup: null, createRenderer: () => r as never, quality: 'full' })); });
+  };
+
+  it('a plain T/B/R/F on window drives the renderer, and presses the matching button', async () => {
+    const r = fakeRenderer();
+    await mount(r);
+    expect(press('t').defaultPrevented).toBe(true);
+    expect(r.views).toEqual(['top']);
+    expect(byLabel('Top').getAttribute('aria-pressed')).toBe('true');
+    press('B'); // CapsLock: compared lower-case
+    expect(byLabel('Bottom').getAttribute('aria-pressed')).toBe('true');
+    press('f');
+    expect(r.flips).toBe(1);
+    press('r');
+    expect(r.views).toEqual(['top', 'bottom', 'reset']);
+    expect(byLabel('Top').getAttribute('aria-pressed')).toBe('false');
+  });
+  it('1/2/3 set the view mode', async () => {
+    const r = fakeRenderer();
+    await mount(r);
+    press('2');
+    expect(r.modes.at(-1)).toBe('see-through');
+    expect(byLabel('See-through').getAttribute('aria-pressed')).toBe('true');
+    press('3');
+    expect(r.modes.at(-1)).toBe('xray');
+    press('1');
+    expect(r.modes.at(-1)).toBe('solid');
+  });
+  it('ignores a modified key, a held key, a handled key, a key typed in a field, and an unmapped key', async () => {
+    const r = fakeRenderer();
+    await mount(r);
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    const before = r.modes.length;
+    expect(press('r', { ctrlKey: true }).defaultPrevented).toBe(false);
+    press('t', { shiftKey: true });
+    press('f', { repeat: true });
+    press('1', {}, input);
+    const handled = new KeyboardEvent('keydown', { key: 'b', cancelable: true });
+    handled.preventDefault();
+    act(() => { window.dispatchEvent(handled); });
+    expect(press('x').defaultPrevented).toBe(false);
+    expect(r.views).toEqual([]);
+    expect(r.flips).toBe(0);
+    expect(r.modes.length).toBe(before);
+    input.remove();
+  });
+  it('stops listening once unmounted, and names each key on its button', async () => {
+    const r = fakeRenderer();
+    await mount(r);
+    expect(['Top', 'Bottom', 'Flip', 'Reset', 'Solid', 'See-through', 'X-ray'].map((t) => byLabel(t).getAttribute('aria-keyshortcuts')))
+      .toEqual(['T', 'B', 'F', 'R', '1', '2', '3']);
+    act(() => root.unmount());
+    press('t');
+    expect(r.views).toEqual([]);
+    root = createRoot(el);
+  });
+});
+
 describe('Board3DView — the callout on the selected part (owner, 2026-09-22: "clearly labeled")', () => {
   const J5 = { ref: 'J5', value: 'PinHeader_2x22_P1.27mm', footprint: 'Glasgow:PinHeader_2x22_P1.27mm_Vertical__SMD' };
   const mount = (r: object, selectedRef: string | null, label: typeof J5 | null = null) =>

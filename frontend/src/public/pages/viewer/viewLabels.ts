@@ -27,3 +27,21 @@ export const VIEW_ORDER: readonly ViewId[] = ['schematic', 'board', 'stackup', '
 export function viewsFor(hasSchematic: boolean, hasBoard: boolean): ViewId[] {
   return VIEW_ORDER.filter((id) => (id === 'schematic' || id === 'bom' ? hasSchematic : hasBoard));
 }
+
+/**
+ * The one plain key that jumps straight to each view. Clear of the 3D view's
+ * own keys (t/b/f/r, 1/2/3) and of the page's `/` and Esc; `p` is the board
+ * because `b` is the 3D view's "bottom". Callers pass `e.key.toLowerCase()`.
+ */
+export const VIEW_KEY: Record<ViewId, string> = {
+  schematic: 's',
+  board: 'p',
+  stackup: 'k',
+  board3d: 'd',
+  bom: 'm',
+};
+
+/** The view a key jumps to, or null when the key is not one of them. */
+export function viewForKey(key: string): ViewId | null {
+  return VIEW_ORDER.find((id) => VIEW_KEY[id] === key) ?? null;
+}

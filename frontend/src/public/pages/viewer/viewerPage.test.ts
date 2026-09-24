@@ -1200,6 +1200,79 @@ describe('the tablist contract', () => {
 });
 
 
+// One plain letter per view (VIEW_KEY), for a promo recorded without a mouse.
+describe('the view keys', () => {
+  /** A cancelable keydown from `target` (the page body unless given), so the
+   *  test can see whether the page claimed it. */
+  async function key(k: string, init: KeyboardEventInit = {}, target: EventTarget = document.body): Promise<KeyboardEvent> {
+    const event = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...init });
+    await act(async () => {
+      target.dispatchEvent(event);
+    });
+    return event;
+  }
+  const selected = () => tabButtons().find((b) => b.getAttribute('aria-selected') === 'true')?.textContent;
+
+  it('jumps to each view with its own letter, and claims the key', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    for (const [k, label] of [['p', 'Board'], ['k', 'Stackup'], ['d', '3D'], ['m', 'BOM'], ['s', 'Schematic']]) {
+      const event = await key(k);
+      expect(selected()).toBe(label);
+      expect(event.defaultPrevented).toBe(true);
+    }
+  });
+
+  it('ignores the letter of a view this project does not offer (no board: p, k, d)', async () => {
+    await render();
+    for (const k of ['p', 'k', 'd']) {
+      const event = await key(k);
+      expect(selected()).toBe('Schematic');
+      expect(event.defaultPrevented).toBe(false);
+    }
+  });
+
+  it('ignores the letter of a view this project does not offer (no schematic: s, m)', async () => {
+    session = makeSession({ root: null, board: 'board.kicad_pcb' });
+    await render();
+    expect(selected()).toBe('Board');
+    for (const k of ['s', 'm']) {
+      const event = await key(k);
+      expect(selected()).toBe('Board');
+      expect(event.defaultPrevented).toBe(false);
+    }
+  });
+
+  it('leaves a modified press to the browser: ctrl+s is still save', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    await key('p');
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }]) {
+      const event = await key('s', init);
+      expect(selected()).toBe('Board');
+      expect(event.defaultPrevented).toBe(false);
+    }
+  });
+
+  it('types the letter into the panel search instead of switching views', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    await key('p');
+    const search = container.querySelector('input[aria-label="Find a reference"]') as HTMLInputElement;
+    const event = await key('s', {}, search);
+    expect(selected()).toBe('Board');
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('names each tab’s letter to assistive tech, and only there', async () => {
+    session = makeSession({ board: 'main.kicad_pcb' });
+    await render();
+    expect(tabButtons().map((b) => b.getAttribute('aria-keyshortcuts'))).toEqual(['S', 'P', 'K', 'D', 'M']);
+    // No hover tooltip: it would land in the recording.
+    expect(tabButtons().every((b) => !b.hasAttribute('title'))).toBe(true);
+  });
+});
+
 // The part panel — one selection for the page, whichever door it came through.
 describe('the part panel', () => {
   const panel = () => container.querySelector('aside') as HTMLElement;
@@ -1340,6 +1413,14 @@ describe('the part panel', () => {
     await render();
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
+    });
+    expect(document.activeElement).toBe(search());
+  });
+
+  it('"/" still focuses the search when it arrives with Shift, as it does on a German layout', async () => {
+    await render();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', shiftKey: true, bubbles: true }));
     });
     expect(document.activeElement).toBe(search());
   });

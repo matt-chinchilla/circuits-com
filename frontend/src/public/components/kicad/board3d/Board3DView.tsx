@@ -10,6 +10,7 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } f
 import { hasEstimatedBody, partAnchor } from '@public/services/kicad/board3d/partAnchor';
 import type { BoardScene, Quality } from '@public/services/kicad/board3d/types';
 import type { BoardStackup, KicadProject } from '@public/services/kicad/types';
+import { isPlainKey } from '../keyboard';
 import { webgl2Supported } from '../webgl';
 import { ORBIT } from './board3dTheme';
 import { currentQuality } from './quality';
@@ -17,6 +18,7 @@ import { labelLines, type PartLabel } from './partLabel';
 import {
   createSceneRenderer, type AnchorScreen, type HoverHit, type ObjectClass3D, type SceneRenderer, type ViewName,
 } from './sceneRenderer';
+import { BOARD_KEYS, VIEW_MODE_KEYS, ariaKey, boardActionForKey, viewModeForKey } from './shortcuts';
 import { useBoardScene } from './useBoardScene';
 import { VIEW_MODES, getViewMode, setViewMode, useViewMode } from './viewMode';
 import styles from './Board3DView.module.scss';
@@ -416,6 +418,28 @@ export default function Board3DView({
   };
 
   const ready = supported && status === 'ready' && scene != null && mountFailed == null;
+
+  // The single-key controls (shortcuts.ts), from anywhere on the page: this
+  // component exists only while the 3D tab is shown, so the listener is scoped
+  // to it. A held key does not repeat — a held F would flip the board back and
+  // forth. `go` reads only a ref and a state setter, so a stale copy is fine.
+  useEffect(() => {
+    if (!ready) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.repeat || !isPlainKey(e)) return;
+      const key = e.key.toLowerCase();
+      const action = boardActionForKey(key);
+      const mode = action == null ? viewModeForKey(key) : null;
+      if (action == null && mode == null) return;
+      e.preventDefault();
+      if (action === 'flip') rendererRef.current?.flip();
+      else if (action != null) go(action);
+      else if (mode != null) setViewMode(mode);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ready]);
+
   const failed = supported && (status === 'error' || mountFailed != null);
   const noStart = mountFailed === 'lost' ? LOST : NO_START;
   const tryAgain = () => {
@@ -434,16 +458,16 @@ export default function Board3DView({
       {ready && (
         <div className={styles.toolbar}>
           <div className={styles.track} role="group" aria-label="Board view">
-            <button type="button" className={styles.ctl} aria-pressed={view === 'top'} onClick={() => go('top')}>
+            <button type="button" className={styles.ctl} aria-pressed={view === 'top'} aria-keyshortcuts={ariaKey(BOARD_KEYS.top)} onClick={() => go('top')}>
               Top
             </button>
-            <button type="button" className={styles.ctl} aria-pressed={view === 'bottom'} onClick={() => go('bottom')}>
+            <button type="button" className={styles.ctl} aria-pressed={view === 'bottom'} aria-keyshortcuts={ariaKey(BOARD_KEYS.bottom)} onClick={() => go('bottom')}>
               Bottom
             </button>
-            <button type="button" className={styles.ctl} onClick={() => rendererRef.current?.flip()}>
+            <button type="button" className={styles.ctl} aria-keyshortcuts={ariaKey(BOARD_KEYS.flip)} onClick={() => rendererRef.current?.flip()}>
               Flip
             </button>
-            <button type="button" className={styles.ctl} onClick={() => go('reset')}>
+            <button type="button" className={styles.ctl} aria-keyshortcuts={ariaKey(BOARD_KEYS.reset)} onClick={() => go('reset')}>
               Reset
             </button>
           </div>
@@ -462,6 +486,7 @@ export default function Board3DView({
                   type="button"
                   className={styles.ctl}
                   aria-pressed={viewMode === mode.id}
+                  aria-keyshortcuts={ariaKey(VIEW_MODE_KEYS[mode.id])}
                   title={mode.help}
                   onClick={() => setViewMode(mode.id)}
                 >
