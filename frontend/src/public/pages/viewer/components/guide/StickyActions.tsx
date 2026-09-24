@@ -1,0 +1,153 @@
+// The drop card's two buttons — "Choose files" and "Try the example project" —
+// kept on screen at every scroll position (owner: they "need to ALWAYS be
+// visible on the screen").
+//
+// There is ONE pair, never a copy. While the buttons' place on the card is in
+// view they sit there; the moment any of that place leaves the viewport (or
+// slides under the sticky navbar) the SAME row docks to the bottom of the
+// screen, and its place on the card keeps its height so nothing below moves.
+// One element means one tab stop per button, the same handlers, the busy state
+// for free, focus that survives the dock, and a reading order that never
+// changes for a screen reader.
+//
+// Docked, the row is a torn-off corner of the sheet — white, the PCB grid, the
+// crop marks — and it is still INSIDE the drop zone's DOM, so a file dragged
+// onto it lands in the same react-dropzone root (desktop says so; a phone,
+// which has no drag and drop, shows only the buttons, full width, clear of the
+// home indicator). A spacer at the end of the document gives the page back the
+// height the bar covers, so the footer's last line can still scroll clear.
+//
+// The workspace replaces the whole intake when a project opens, so the bar is
+// unmounted with it and can never show over the workspace.
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import Icon from '@shared/components/Icon';
+import pageStyles from '../../ViewerPage.module.scss';
+import styles from './StickyActions.module.scss';
+
+interface Props {
+  /** The slot's class on the card (its margins and its order in each layout). */
+  className: string;
+  busy: boolean;
+  /** A drag is over the drop zone: the docked bar lights the way the sheet does. */
+  dragActive: boolean;
+  onChoose: () => void;
+  onExample: () => void;
+}
+
+/** "Fully in view" — a sub-pixel short of 1 still counts. */
+export const FULLY_IN_VIEW = 0.99;
+
+/** The sticky navbar's bottom edge: a row under it is covered, not visible. */
+export function stickyTopInset(): number {
+  if (typeof document === 'undefined') return 0;
+  for (const el of document.querySelectorAll('header')) {
+    const pos = getComputedStyle(el).position;
+    if (pos === 'sticky' || pos === 'fixed') return Math.max(0, Math.round(el.getBoundingClientRect().bottom));
+  }
+  return 0;
+}
+
+export default function StickyActions({ className, busy, dragActive, onChoose, onExample }: Props) {
+  const slotRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [docked, setDocked] = useState(false);
+  const dockedRef = useRef(false);
+  const [spacer, setSpacer] = useState(0);
+
+  useEffect(() => {
+    const slot = slotRef.current;
+    if (slot == null || typeof IntersectionObserver === 'undefined') return;
+    let io: IntersectionObserver | null = null;
+    let inset = -1;
+
+    const dock = (next: boolean) => {
+      if (next === dockedRef.current) return;
+      const row = rowRef.current;
+      // Hold the row's place BEFORE it leaves the flow: the slot must not
+      // collapse, or the card would shift and the observer would flip back.
+      if (next && row != null) slot.style.height = `${row.offsetHeight}px`;
+      if (!next) slot.style.height = '';
+      dockedRef.current = next;
+      setDocked(next);
+    };
+
+    const observe = () => {
+      const top = stickyTopInset();
+      if (top === inset) return;
+      inset = top;
+      io?.disconnect();
+      io = new IntersectionObserver(
+        (entries) => {
+          // One callback can carry several frames' records for the slot, oldest
+          // first: only the LAST says where it is now (reading the first left
+          // the bar docked over a card whose buttons were back in view).
+          const entry = entries[entries.length - 1];
+          dock(!(entry.isIntersecting && entry.intersectionRatio >= FULLY_IN_VIEW));
+        },
+        { rootMargin: `-${top}px 0px 0px 0px`, threshold: [0, FULLY_IN_VIEW, 1] },
+      );
+      io.observe(slot);
+    };
+
+    observe();
+    // The navbar is taller on a phone: re-measure when the viewport changes.
+    window.addEventListener('resize', observe);
+    return () => {
+      window.removeEventListener('resize', observe);
+      io?.disconnect();
+      slot.style.height = '';
+    };
+  }, []);
+
+  // The document grows by exactly what the docked bar covers.
+  useLayoutEffect(() => {
+    if (!docked) {
+      setSpacer(0);
+      return;
+    }
+    const measure = () => {
+      const row = rowRef.current;
+      if (row != null) setSpacer(Math.max(0, Math.ceil(window.innerHeight - row.getBoundingClientRect().top)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [docked]);
+
+  return (
+    <div ref={slotRef} className={className}>
+      <div
+        ref={rowRef}
+        className={styles.row}
+        data-docked={docked ? 'true' : undefined}
+        data-drag={docked && dragActive ? 'true' : undefined}
+      >
+        <span className={`${styles.crop} ${styles.cropTl}`} aria-hidden="true" />
+        <span className={`${styles.crop} ${styles.cropTr}`} aria-hidden="true" />
+        <span className={`${styles.crop} ${styles.cropBl}`} aria-hidden="true" />
+        <span className={`${styles.crop} ${styles.cropBr}`} aria-hidden="true" />
+        <span className={styles.lead} aria-hidden="true">
+          <Icon name="tray-arrow-down" className={styles.leadGlyph} />
+          {dragActive ? 'Drop the project here' : 'Drop your KiCad project here, or'}
+        </span>
+        <button type="button" className={`${pageStyles.dropBtn} ${styles.btn}`} onClick={onChoose} disabled={busy}>
+          {busy ? 'Reading…' : 'Choose files'}
+        </button>
+        <button
+          type="button"
+          className={`${pageStyles.exampleBtn} ${styles.btn} ${styles.example}`}
+          onClick={onExample}
+          disabled={busy}
+        >
+          {/* One flex item: a flex row would trim the space before "project". */}
+          <span>
+            Try the example<span className={styles.tail}> project</span>
+          </span>
+        </button>
+      </div>
+      {spacer > 0 &&
+        createPortal(<div className={styles.spacer} style={{ height: spacer }} aria-hidden="true" />, document.body)}
+    </div>
+  );
+}

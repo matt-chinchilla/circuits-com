@@ -1,0 +1,204 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// The drop card's button row, and the same row docked to the bottom of the
+// screen when its place on the card is out of view (StickyActions.tsx).
+//
+// Docked it is a torn-off corner of the project sheet, not a banner: the
+// sheet's white, its 24px PCB grid, its rule and its crop marks, lifted just
+// enough to read as floating over the page. Selectors that override the drop
+// frame's buttons carry the row's class twice so they win whichever module's
+// CSS loads last.
+
+$ink: #1a1f23;
+$pcb: $executive-blue;
+$rule: #dde2e8;
+$crop: #9aa6b2;
+
+// ─── On the card ───────────────────────────────────────────────────────────
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+// The bar's own furniture exists only while docked.
+.lead,
+.crop {
+  display: none;
+}
+
+// ─── Docked ────────────────────────────────────────────────────────────────
+.row[data-docked='true'] {
+  position: fixed;
+  z-index: 40;
+  // Centred without a translate (a -50% transform blurs text on a fractional
+  // pixel): both insets plus a fitted width and auto margins.
+  left: 16px;
+  right: 16px;
+  bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 8px));
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
+  flex-wrap: nowrap;
+  gap: 10px;
+  // 16px right: the crop marks (7px in, 8px long) stay clear of the button.
+  padding: 10px 16px 10px 20px;
+  border: 1px solid $rule;
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(10, 74, 46, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 74, 46, 0.045) 1px, transparent 1px),
+    #ffffff;
+  background-size: 24px 24px, 24px 24px, auto;
+  background-position: -1px -1px;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.06),
+    0 20px 44px -18px rgba(16, 24, 40, 0.38);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  .lead {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 8px;
+    font-family: $font-heading;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: $ink;
+    white-space: nowrap;
+  }
+
+  .crop {
+    display: block;
+  }
+
+  // A drag over the drop zone: the same "connected" rim the sheet takes.
+  &[data-drag='true'] {
+    border-color: $nav-blue;
+    box-shadow:
+      0 0 0 4px rgba(68, 189, 19, 0.18),
+      0 20px 44px -18px rgba(16, 24, 40, 0.38);
+
+    .lead {
+      color: $pcb;
+    }
+  }
+}
+
+// The bar is opaque; a frosted button on it would only cost a blur layer.
+.row.row[data-docked='true'] .example {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.leadGlyph {
+  font-size: 1.2rem;
+  color: $pcb;
+}
+
+// The sheet's crop marks, drawn smaller: the bar is a corner of the sheet.
+// 7px in, so each mark sits inside the 12px corner's curve, clear of the rim.
+.crop {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 0 solid $crop;
+  pointer-events: none;
+}
+
+.cropTl {
+  top: 7px;
+  left: 7px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+
+.cropTr {
+  top: 7px;
+  right: 7px;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+
+.cropBl {
+  bottom: 7px;
+  left: 7px;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+
+.cropBr {
+  bottom: 7px;
+  right: 7px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
+.spacer {
+  display: block;
+  pointer-events: none;
+}
+
+// It arrives once, when it docks; nothing moves after that.
+@media (prefers-reduced-motion: no-preference) {
+  .row[data-docked='true'] {
+    animation: dockIn 0.2s ease-out both;
+  }
+}
+
+@keyframes dockIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+// ─── Phone: the sheet's bottom edge, full width ───────────────────────────
+// No drag and drop to speak of, so no "drop here" line: the two buttons side
+// by side, the example's label shortened to fit 360px (its accessible name
+// keeps the visible words), clear of the home indicator.
+@include responsive($bp-mobile) {
+  .row[data-docked='true'] {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    padding: 10px 16px max(10px, env(safe-area-inset-bottom, 0px));
+    border-width: 1px 0 0;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -10px 30px -16px rgba(16, 24, 40, 0.38);
+
+    .lead,
+    .cropBl,
+    .cropBr {
+      display: none;
+    }
+  }
+
+  // Beats the card's phone rule (`.folderCol .actions button`: full width).
+  .row.row[data-docked='true'] .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .row[data-docked='true'] .tail {
+    display: none;
+  }
+}
+
+// A refusal scrolls itself into view (nearest); it must stop short of the
+// docked bar rather than land underneath it.
+.clearOfBar {
+  scroll-margin-bottom: 120px;
+}
