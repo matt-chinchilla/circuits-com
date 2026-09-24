@@ -21,6 +21,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { useConsolePath } from '@admin/services/consolePath';
 
 import { useAuth } from '@admin/contexts/AuthContext';
@@ -94,7 +95,7 @@ export default function LeadsPage() {
   const [sessionExpired, setSessionExpired] = useState(false);
   // Bumped by the Retry button; only a fetch dependency.
   const [reloadNonce, setReloadNonce] = useState(0);
-  const { logout } = useAuth();
+  const { logout, isReadOnly } = useAuth();
 
   // What the admin types vs. what reaches the server. One request per keystroke
   // over a 359-row roster is a self-inflicted DoS.
@@ -104,6 +105,8 @@ export default function LeadsPage() {
   const [tierFilter, setTierFilter] = useState<TierFilter>('all');
   const [distanceFilter, setDistanceFilter] = useState<DistanceFilterKey>('all');
   const [enrichOnly, setEnrichOnly] = useState(false);
+  // The rep's own additions (added_by=me). Server-side, like every filter here.
+  const [addedByMe, setAddedByMe] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
 
@@ -138,6 +141,7 @@ export default function LeadsPage() {
     if (outcomeFilter !== 'all') params.outcome = outcomeFilter;
     if (tierFilter !== 'all') params.tier = tierFilter;
     if (enrichOnly) params.needs_enrichment = true;
+    if (addedByMe) params.added_by = 'me';
     const distance = distanceParams(distanceFilter);
     if (distance.min_miles !== undefined) params.min_miles = distance.min_miles;
     if (distance.max_miles !== undefined) params.max_miles = distance.max_miles;
@@ -181,7 +185,7 @@ export default function LeadsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, q, outcomeFilter, tierFilter, distanceFilter, enrichOnly, sortKey, sortDir, reloadNonce]);
+  }, [page, q, outcomeFilter, tierFilter, distanceFilter, enrichOnly, addedByMe, sortKey, sortDir, reloadNonce]);
 
   // RECOVERY, not just a message. The adminApi interceptor already dropped the
   // dead token, but `AuthContext.user` is React state no 401 ever cleared — so
@@ -200,7 +204,7 @@ export default function LeadsPage() {
   // change, so this effect would also fire on page change and pin the list to
   // page 1 forever; the functional form needs no setter dep. First run is
   // skipped so a deep link like `?p=4` survives mount.
-  const filtersKey = `${q}|${outcomeFilter}|${tierFilter}|${distanceFilter}|${enrichOnly}|${sortKey}|${sortDir}`;
+  const filtersKey = `${q}|${outcomeFilter}|${tierFilter}|${distanceFilter}|${enrichOnly}|${addedByMe}|${sortKey}|${sortDir}`;
   const firstFiltersRun = useRef(true);
   useEffect(() => {
     if (firstFiltersRun.current) {
@@ -266,8 +270,9 @@ export default function LeadsPage() {
   };
 
 
-  const filtersActive =
+  const otherFiltersActive =
     !!q || outcomeFilter !== 'all' || tierFilter !== 'all' || distanceFilter !== 'all' || enrichOnly;
+  const filtersActive = otherFiltersActive || addedByMe;
 
   const head = (
     <header className={styles.pageHead}>
@@ -283,6 +288,14 @@ export default function LeadsPage() {
           <span className={styles.countPill}>
             {total.toLocaleString('en-US')} {total === 1 ? 'lead' : 'leads'}
           </span>
+        )}
+        {/* Hidden, not disabled, for a view-only account: the server refuses
+            the write (403 read_only) and a button that can only fail is noise. */}
+        {!isReadOnly && !demoBlocked && !sessionExpired && (
+          <Link to={consolePath('/admin/leads/new')} className={styles.addBtn}>
+            <Plus size={15} strokeWidth={2} aria-hidden="true" />
+            Add lead
+          </Link>
         )}
       </div>
     </header>
@@ -392,6 +405,15 @@ export default function LeadsPage() {
             onClick={() => setEnrichOnly((v) => !v)}
           >
             Needs enrichment
+          </button>
+
+          <button
+            type="button"
+            className={`${styles.filterChip} ${addedByMe ? styles.filterChipActive : ''}`}
+            aria-pressed={addedByMe}
+            onClick={() => setAddedByMe((v) => !v)}
+          >
+            Added by me
           </button>
 
           <div className={styles.toolbarSpacer} />
@@ -673,11 +695,27 @@ export default function LeadsPage() {
               {!loading && rows.length === 0 && (
                 <tr>
                   <td colSpan={9} className={styles.emptyRow}>
-                    {error
-                      ? 'The list could not be loaded.'
-                      : filtersActive
-                        ? 'No leads match the current filters.'
-                        : 'No leads yet.'}
+                    {error ? (
+                      'The list could not be loaded.'
+                    ) : addedByMe && !otherFiltersActive ? (
+                      // "Mine" with nothing else narrowing it: an invitation,
+                      // not a dead end.
+                      <>
+                        You haven&rsquo;t added any leads yet.
+                        {!isReadOnly && (
+                          <>
+                            {' '}
+                            <Link to={consolePath('/admin/leads/new')} className={styles.emptyLink}>
+                              Add a lead
+                            </Link>
+                          </>
+                        )}
+                      </>
+                    ) : filtersActive ? (
+                      'No leads match the current filters.'
+                    ) : (
+                      'No leads yet.'
+                    )}
                   </td>
                 </tr>
               )}

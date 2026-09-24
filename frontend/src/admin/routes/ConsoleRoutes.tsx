@@ -18,6 +18,7 @@ const ManufacturerFormPage = lazy(() => import('@admin/pages/manufacturers/form'
 const UsersListPage = lazy(() => import('@admin/pages/users/list'));
 const LeadsPage = lazy(() => import('@admin/pages/leads/list'));
 const LeadDetailPage = lazy(() => import('@admin/pages/leads/detail'));
+const AddLeadPage = lazy(() => import('@admin/pages/leads/new'));
 const LeadRepPage = lazy(() => import('@admin/pages/leads/rep'));
 const SupplierDetailPage = lazy(
   () => import("@admin/pages/suppliers/detail"),
@@ -65,6 +66,10 @@ export default function ConsoleRoutes() {
           Project 2 work. */}
       <Route path="users" element={<UsersListPage />} />
       <Route path="leads" element={<LeadsPage />} />
+      {/* Before leads/:id so "new" is never read as a lead id. Staff-only in
+          practice: the page renders a notice under /account and the server
+          refuses the write (require_staff). */}
+      <Route path="leads/new" element={<AddLeadPage />} />
       <Route path="leads/reps/:username" element={<LeadRepPage />} />
       <Route path="leads/:id" element={<LeadDetailPage />} />
       <Route

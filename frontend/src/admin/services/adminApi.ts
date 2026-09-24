@@ -1040,7 +1040,9 @@ export const adminApi = {
     adminClient.post(`/admin/manufacturers/candidates/${encodeURIComponent(candidateId)}/${action}`)
       .then((r) => r.data),
 
-  getLeads: (params: Record<string, string | number | boolean>) =>
+  // `added_by: 'me'` narrows to the leads the signed-in rep added from the
+  // console; the server 422s any other value, so the type admits only that one.
+  getLeads: (params: Record<string, string | number | boolean> & { added_by?: 'me' }) =>
     adminClient
       .get<import('../types/leads').LeadListResponse>('/admin/leads/', { params })
       .then((r) => r.data),
@@ -1048,6 +1050,13 @@ export const adminApi = {
   getLead: (id: string) =>
     adminClient
       .get<import('../types/leads').AdminLeadDetail>(`/admin/leads/${encodeURIComponent(id)}`)
+      .then((r) => r.data),
+
+  // 201 -> the new lead's detail. 409 carries a structured detail
+  // (LeadExistsDetail) — read it with leadForm.readLeadExists, never as prose.
+  createLead: (body: import('../types/leads').LeadCreateBody) =>
+    adminClient
+      .post<import('../types/leads').AdminLeadDetail>('/admin/leads/', body)
       .then((r) => r.data),
 
   updateLead: (id: string, data: Record<string, unknown>) =>

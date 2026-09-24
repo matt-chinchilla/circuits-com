@@ -53,9 +53,8 @@
   flex-shrink: 0;
 }
 
-// A COUNT, not an action: this page has no "New Lead" button (the roster is
-// seeded from seed_data/leads.csv), so the slot the sibling page gives to its
-// primary CTA carries the total instead of nothing.
+// The total sits beside the page's one action. The roster is still seeded from
+// seed_data/leads.csv; "Add lead" is the rep's door for a prospect met on a call.
 .countPill {
   @include a-glass-well;
   padding: 6px 12px;
@@ -444,6 +443,54 @@
   text-align: center;
   color: var(--a-fg3);
   font-size: 13px;
+}
+
+.emptyLink {
+  color: var(--a-primary);
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-radius: 4px;
+    box-shadow: var(--a-focus-ring);
+  }
+}
+
+// ─── Add lead ───────────────────────────────────────────────────────────────
+// The page's primary action — the sibling pages' "New Sponsor" / "New
+// Manufacturer" button, same metrics, so the header reads the same across the
+// catalog. Hidden (not disabled) for a view-only account.
+
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: #ffffff;
+  background: var(--a-primary);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background-color 150ms ease;
+
+  &:hover {
+    background: var(--a-primary-hover);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--a-focus-ring);
+  }
 }
 
 // ─── Demo refusal ───────────────────────────────────────────────────────────

@@ -177,6 +177,8 @@ const TITLE_MAP: Record<string, string> = {
   '/admin/users': 'Users',
   '/admin/manufacturers/new': 'New Manufacturer',
   '/admin/leads': 'Leads',
+  // Else the id-shaped regex below titles it "Lead Detail".
+  '/admin/leads/new': 'Add a lead',
   '/admin/suppliers/new': 'New Supplier',
   '/admin/categories': 'Categories',
   '/admin/sponsors': 'Sponsors',
