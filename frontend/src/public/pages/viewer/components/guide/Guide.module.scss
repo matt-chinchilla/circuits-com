@@ -17,9 +17,6 @@ $ink-2: #565d66; // 6.66:1 on white
 // The "left out" rows and the table's dashes: muted, but still AA — 5.17:1 on
 // white, 4.70:1 on the #f2f4f9 bench (the glyphs' opacity carries the mute).
 $ink-3: #666e77;
-// The refusal samples' text: $error-red on its own 7% tint over the bench is
-// 4.47:1, so the words take a darker red (5.45:1); the rule and tint stay red.
-$refusal-ink: #a93226;
 $rule: #dde2e8;
 $pcb: $executive-blue;
 $trace-rest: #7fb96a;
@@ -46,7 +43,6 @@ $bp-traces: 1100px;
 // own display — so the attribute has to be re-asserted or the fold is a no-op.
 .tree[hidden],
 .outputs[hidden],
-.notes[hidden],
 .tour[hidden] {
   display: none;
 }
@@ -747,194 +743,6 @@ $bp-traces: 1100px;
   }
 }
 
-// ─── Notes ────────────────────────────────────────────────────────────────
-.notes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 26px 48px;
-  margin-top: 20px;
-}
-
-.notesTitle {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-family: $font-heading;
-  font-size: 1.4rem;
-  letter-spacing: -0.015em;
-  color: $ink;
-}
-
-.note {
-  display: grid;
-  grid-template-columns: 28px 1fr;
-  align-content: start;
-  gap: 4px 12px;
-  min-width: 0;
-  padding: 14px 8px 4px 0;
-  scroll-margin-top: 100px;
-  border-top: 1px solid $rule;
-  border-radius: 2px;
-  outline: none;
-  transition: background-color 0.4s ease;
-
-  &[data-lit='true'] {
-    background: linear-gradient(90deg, rgba(68, 189, 19, 0.1), transparent 75%);
-  }
-
-  &:focus-visible {
-    outline: 2px solid $trace-hot;
-    outline-offset: 2px;
-  }
-}
-
-.noteNum {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  margin-top: 1px;
-  font: 600 12px/1 $font-mono;
-  color: $pcb;
-  border: 1px solid $pcb;
-  border-radius: 50%;
-}
-
-.noteTitle {
-  margin: 0;
-  font-size: 1rem;
-  line-height: 1.35;
-  color: $ink;
-}
-
-.noteBody {
-  grid-column: 2;
-  min-width: 0;
-
-  p {
-    max-width: 62ch;
-    margin: 0 0 8px;
-    font-size: 0.94rem;
-    line-height: 1.55;
-    color: $ink-2;
-  }
-
-  code {
-    padding: 1px 5px;
-    font: 0.84rem $font-mono;
-    color: $ink;
-    background: #eef1f5;
-    border-radius: 4px;
-  }
-}
-
-.refusals {
-  margin: 4px 0 8px;
-}
-
-.refusalsSummary {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  font-size: 0.9rem;
-  font-weight: 560;
-  color: $pcb;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-
-  &:focus-visible {
-    outline: 2px solid $trace-hot;
-    outline-offset: 2px;
-    border-radius: 4px;
-  }
-}
-
-.refusalList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-
-  li {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-}
-
-.refusalWhat {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: $ink;
-}
-
-// The same shape the intake's own error takes, so it reads as the real thing.
-.refusalMsg {
-  padding: 8px 12px;
-  font-size: 0.85rem;
-  line-height: 1.45;
-  color: $refusal-ink;
-  background: rgba($error-red, 0.07);
-  border-left: 3px solid $error-red;
-  border-radius: 6px;
-}
-
-.tableWrap {
-  // The containing block for the cells' screen-reader text, which is
-  // absolutely positioned: without it those spans escape the scroller and
-  // widen the page on a phone (measured: body 441px at 390).
-  position: relative;
-  max-width: 100%;
-  margin: 2px 0 10px;
-  overflow-x: auto;
-}
-
-.truth {
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.86rem;
-  color: $ink;
-
-  th,
-  td {
-    padding: 7px 10px;
-    border-bottom: 1px solid $rule;
-    white-space: nowrap;
-  }
-
-  thead th {
-    font-size: 0.74rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: $ink-2;
-    text-align: center;
-  }
-
-  thead th:first-child,
-  tbody th {
-    padding-left: 0;
-    text-align: left;
-    font-weight: 500;
-  }
-
-  tbody th {
-    white-space: normal;
-  }
-
-  td {
-    text-align: center;
-    color: $ink-3;
-  }
-}
-
-.yes {
-  font-size: 1.05rem;
-  color: $trace-hot;
-}
-
 // ─── What happens to the files ────────────────────────────────────────────
 .privacy {
   display: grid;
@@ -1161,11 +969,6 @@ $bp-traces: 1100px;
     display: none;
   }
 
-  // One column of notes, so the table in note 5 keeps all five views on screen.
-  .notes {
-    grid-template-columns: 1fr;
-  }
-
   .tourGrid {
     grid-template-columns: 1.4fr 1fr;
     grid-template-areas:
@@ -1298,33 +1101,6 @@ $bp-traces: 1100px;
   .outImg {
     width: 104px;
     height: 74px;
-  }
-
-  .notes {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
-
-  // Note 5's table takes the width under its number too, so all five views
-  // fit at 360px without a scroller.
-  .tableWrap {
-    width: calc(100% + 40px);
-    max-width: none;
-    margin-left: -40px;
-  }
-
-  .truth {
-    font-size: 0.8rem;
-
-    th,
-    td {
-      padding: 7px 4px;
-    }
-
-    thead th {
-      font-size: 0.62rem;
-      letter-spacing: 0.02em;
-    }
   }
 
   .privacy {

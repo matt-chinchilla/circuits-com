@@ -1,0 +1,475 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// "Notes on what it reads", drawn as the path a drop takes: a copper trace
+// from a "files" net label to a "viewer" one, each rule a numbered pad on it.
+// The pads carry the same numbers as the circled markers on the sheet — those
+// markers scroll here — so the pad is drawn as the sheet's own pad (white,
+// copper ring) with the marker's green number in it.
+//
+// Wide: one row of six stations on one horizontal trace. At and below
+// $bp-path the trace turns vertical, down the left edge (title beside body
+// until a phone, stacked on one). The two long answers fold under the trace.
+
+// The guide's tokens (Guide.module.scss) — the same values, pinned equal by a
+// test, so the notes can never drift from the sheet they footnote.
+$ink: #1a1f23;
+$ink-2: #565d66;
+// Muted but AA: 5.17:1 on white, 4.70:1 on the #f2f4f9 bench.
+$ink-3: #666e77;
+// The refusal samples' text: $error-red on its own 7% tint over the bench is
+// 4.47:1, so the words take a darker red (5.45:1); the rule and tint stay red.
+$refusal-ink: #a93226;
+$rule: #dde2e8;
+$pcb: $executive-blue;
+$trace-rest: #7fb96a;
+$trace-hot: #2e9a0c;
+$copper: #b8912f;
+// The path turns vertical here, a little above the sheet's own break: six
+// columns need ~1240px before a title takes a third line and the bodies stop
+// sharing one baseline.
+$bp-path: 1239px;
+
+$pad: 28px;
+$gap: 20px;
+
+.notes {
+  margin-top: 20px;
+}
+
+// `hidden` is the UA's display:none; re-asserted beside any display this sets.
+.notes[hidden] {
+  display: none;
+}
+
+.heading {
+  margin: 0 0 14px;
+  font-family: $font-heading;
+  font-size: 1.4rem;
+  letter-spacing: -0.015em;
+  color: $ink;
+}
+
+// ─── The trace ────────────────────────────────────────────────────────────
+.flow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.path {
+  display: grid;
+  // Weighted by what each note has to say (note 3 names the file types, note 4
+  // is two figures), so no one column sets the row's height alone.
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.75fr) minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: $gap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.station {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  scroll-margin-top: 100px;
+  outline: none;
+
+  // The copper from this pad's centre to the next one's.
+  &::before {
+    content: '';
+    position: absolute;
+    top: calc(#{$pad} / 2 - 1px);
+    left: calc(#{$pad} / 2);
+    width: calc(100% + #{$gap});
+    height: 2px;
+    background: $trace-rest;
+  }
+
+  // The last run ends at the "viewer" label, at the list's own edge.
+  &:last-child::before {
+    width: calc(100% - #{$pad} / 2);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $trace-hot;
+    outline-offset: 6px;
+    border-radius: 4px;
+  }
+}
+
+.pad {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: $pad;
+  height: $pad;
+  font: 600 12px/1 $font-mono;
+  color: $pcb;
+  background: #fff;
+  border: 2px solid $copper;
+  border-radius: 50%;
+}
+
+// Pointing at a rule, or arriving from its marker on the sheet, lights its pad
+// and the run leaving it: white on the dark PCB green (the bright green under
+// white text would miss AA at this size).
+.station:hover,
+.station[data-lit='true'] {
+  .pad {
+    color: #fff;
+    background: $pcb;
+    border-color: $trace-hot;
+    box-shadow: 0 0 0 4px rgba($nav-blue, 0.18);
+  }
+
+  &::before {
+    background: $trace-hot;
+  }
+}
+
+.station[data-lit='true'] .text {
+  background: rgba($nav-blue, 0.1);
+  box-shadow: 0 0 0 8px rgba($nav-blue, 0.1);
+}
+
+.text {
+  min-width: 0;
+  border-radius: 2px;
+}
+
+.title {
+  // Two lines reserved, so every body on the row starts on one baseline.
+  min-height: 2.6em;
+  margin: 0 0 6px;
+  font-family: $font-heading;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $ink;
+}
+
+.body {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.48;
+  color: $ink-2;
+
+  code {
+    font: 500 0.78rem $font-mono;
+    color: $ink;
+    white-space: nowrap;
+  }
+}
+
+// The limits themselves, in the ink the titles use.
+.figures {
+  font-weight: 600;
+  color: $ink;
+}
+
+// The net labels at the two ends, each with its stub of trace.
+.flag {
+  display: flex;
+  align-items: center;
+  height: $pad;
+
+  &::before,
+  &::after {
+    content: '';
+    display: none;
+    width: 14px;
+    height: 2px;
+    background: $trace-rest;
+  }
+
+  &[data-side='in']::after,
+  &[data-side='out']::before {
+    display: block;
+  }
+
+  svg {
+    display: block;
+    overflow: visible;
+  }
+
+  polygon {
+    fill: #fff;
+    stroke: $pcb;
+    stroke-width: 1;
+  }
+
+  text {
+    font: 600 11px $font-mono;
+    fill: $pcb;
+  }
+}
+
+// ─── The folds under it ───────────────────────────────────────────────────
+.folds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 0 28px;
+  margin-top: 16px;
+}
+
+.more {
+  min-width: 0;
+  border-top: 1px solid $rule;
+}
+
+.moreSummary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 0.9rem;
+  font-weight: 560;
+  color: $pcb;
+  cursor: pointer;
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  // A chevron that turns when the fold opens.
+  &::after {
+    content: '';
+    width: 7px;
+    height: 7px;
+    margin-left: 2px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+  }
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $trace-hot;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+.more[open] > .moreSummary::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+// Which pad the fold answers for: the pad, small.
+.moreTag {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  font: 600 10.5px/1 $font-mono;
+  color: $pcb;
+  background: #fff;
+  border: 1.5px solid $copper;
+  border-radius: 50%;
+}
+
+.moreBody {
+  padding: 2px 0 14px;
+}
+
+.refusalList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+.refusalWhat {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: $ink;
+}
+
+// The same shape the intake's own error takes, so it reads as the real thing.
+.refusalMsg {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: $refusal-ink;
+  background: rgba($error-red, 0.07);
+  border-left: 3px solid $error-red;
+  border-radius: 6px;
+}
+
+.tableWrap {
+  // The containing block for the cells' screen-reader text, which is
+  // absolutely positioned: without it those spans escape the scroller and
+  // widen the page on a phone (measured: body 441px at 390).
+  position: relative;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.truth {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.86rem;
+  color: $ink;
+
+  th,
+  td {
+    padding: 7px 10px;
+    border-bottom: 1px solid $rule;
+    white-space: nowrap;
+  }
+
+  thead th {
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: $ink-2;
+    text-align: center;
+  }
+
+  thead th:first-child,
+  tbody th {
+    padding-left: 0;
+    text-align: left;
+    font-weight: 500;
+  }
+
+  tbody th {
+    white-space: normal;
+  }
+
+  td {
+    text-align: center;
+    color: $ink-3;
+  }
+}
+
+.yes {
+  font-size: 1.05rem;
+  color: $trace-hot;
+}
+
+// Motion only answers the reader: a lit pad and its run ease in.
+@media (prefers-reduced-motion: no-preference) {
+  .pad,
+  .station::before,
+  .text {
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease,
+      box-shadow 0.25s ease,
+      color 0.25s ease;
+  }
+
+  .moreSummary::after {
+    transition: transform 0.2s ease;
+  }
+}
+
+// ─── Narrower: the trace runs down the left edge ──────────────────────────
+@media (max-width: $bp-path) {
+  .flow {
+    display: block;
+  }
+
+  .flag {
+    display: none;
+  }
+
+  .path {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .station {
+    display: grid;
+    grid-template-columns: $pad minmax(0, 1fr);
+    column-gap: 18px;
+    padding-bottom: 20px;
+
+    // From this pad's centre down to the next one's.
+    &::before {
+      top: calc(#{$pad} / 2);
+      left: calc(#{$pad} / 2 - 1px);
+      width: 2px;
+      height: 100%;
+    }
+
+    &:last-child {
+      padding-bottom: 0;
+
+      &::before {
+        display: none;
+      }
+    }
+  }
+
+  // Title beside its body while there is room: the rows stay short.
+  .text {
+    display: grid;
+    grid-template-columns: 14rem minmax(0, 1fr);
+    column-gap: 28px;
+    padding-top: 4px;
+  }
+
+  .title {
+    min-height: 0;
+    margin: 0;
+  }
+}
+
+@include responsive($bp-mobile) {
+  .heading {
+    margin-bottom: 16px;
+    font-size: 1.25rem;
+  }
+
+  .station {
+    column-gap: 14px;
+    padding-bottom: 16px;
+  }
+
+  .text {
+    display: block;
+  }
+
+  .title {
+    margin-bottom: 4px;
+  }
+
+  .folds {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 16px;
+  }
+
+  .truth {
+    font-size: 0.8rem;
+
+    th,
+    td {
+      padding: 7px 4px;
+    }
+
+    thead th {
+      font-size: 0.62rem;
+      letter-spacing: 0.02em;
+    }
+  }
+}
