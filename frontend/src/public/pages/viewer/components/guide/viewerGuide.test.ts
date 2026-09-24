@@ -415,30 +415,42 @@ describe('the tour’s way in', () => {
     ]);
     expect(tour().textContent).not.toContain('Try the example project');
     expect(tour().textContent).toContain(`Pick ${TOUR_REF} on any view`);
+    // The button lands on the panel UNPRICED ("Price the BOM to see its catalog
+    // match"); the pictured catalog section is one click on, and the copy says so.
+    expect(tour().textContent).toContain('once the BOM is priced, what our catalog knows about it');
+    expect(tour().textContent).toContain('the catalog match once the BOM is priced');
     // Exactly one "Try the example project" on the whole intake: the pair's.
     expect(
       [...container.querySelectorAll('button')].filter((b) => b.textContent?.trim() === 'Try the example project'),
     ).toHaveLength(1);
   });
 
-  it('opens the example with U30 in the URL hash — written before the project is handed over', async () => {
-    const seenAtOpen: string[] = [];
-    await mount(createElement(ViewerIntake, { onProject: () => seenAtOpen.push(window.location.hash) }));
+  // The page owns the URL: it focuses the part and mirrors it into the hash
+  // (replaced, not pushed — see viewerPage.test.ts). A hash written here was a
+  // pushed history entry, and a no-op on every visit after the first.
+  it('hands U30 over WITH the project, and writes no history of its own', async () => {
+    const opened: unknown[][] = [];
+    await mount(createElement(ViewerIntake, { onProject: (...args: unknown[]) => opened.push(args) }));
     const fetched = vi.fn(async () => example());
     vi.stubGlobal('fetch', fetched);
     const project = { name: 'stub' };
-    kicad.build.mockResolvedValueOnce(project);
-    await act(async () => {
-      seeLink().click();
-      await new Promise((r) => setTimeout(r, 20));
-    });
+    const before = history.length;
+    for (const visit of [1, 2]) {
+      kicad.build.mockResolvedValueOnce(project);
+      await act(async () => {
+        seeLink().click();
+        await new Promise((r) => setTimeout(r, 20));
+      });
+      expect(opened, `visit ${visit}`).toHaveLength(visit);
+      expect(opened.at(-1), `visit ${visit}`).toEqual([project, TOUR_REF]);
+    }
     expect(fetched).toHaveBeenCalledWith(EXAMPLE_URL);
-    expect(kicad.build).toHaveBeenCalledTimes(1);
-    expect(window.location.hash).toBe(`#${TOUR_REF}`);
-    expect(seenAtOpen).toEqual([`#${TOUR_REF}`]);
+    expect(kicad.build).toHaveBeenCalledTimes(2);
+    expect(window.location.hash).toBe('');
+    expect(history.length).toBe(before);
   });
 
-  it('leaves the hash alone when the example is refused, and when the pair’s own button opens it', async () => {
+  it('hands nothing over when the example is refused, and no part when the pair’s own button opens it', async () => {
     const opened = vi.fn();
     await mount(createElement(ViewerIntake, { onProject: opened }));
     vi.stubGlobal('fetch', async () => example());
@@ -448,16 +460,17 @@ describe('the tour’s way in', () => {
       seeLink().click();
       await new Promise((r) => setTimeout(r, 20));
     });
-    expect(window.location.hash).toBe('');
     expect(container.querySelector('[role="alert"]')?.textContent).toBe('refused');
     expect(opened).not.toHaveBeenCalled();
 
-    kicad.build.mockResolvedValueOnce({ name: 'stub' });
+    const project = { name: 'stub' };
+    kicad.build.mockResolvedValueOnce(project);
     await act(async () => {
       byText('Try the example project')!.click();
       await new Promise((r) => setTimeout(r, 20));
     });
     expect(opened).toHaveBeenCalledTimes(1);
+    expect(opened).toHaveBeenCalledWith(project, undefined);
     expect(window.location.hash).toBe('');
   });
 });

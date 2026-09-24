@@ -5,7 +5,7 @@
 // the reader has already paid for.
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Icon from '@shared/components/Icon';
 import PageHead from '@public/components/PageHead';
 import PageHeaderBand from '@public/components/layout/PageHeaderBand';
@@ -150,6 +150,7 @@ function typingIn(target: EventTarget | null): boolean {
 
 export default function ViewerPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [session, setSession] = useState<DesignSession | null>(() => getDesignSession());
   const [tab, setTab] = useState<Tab>(() => (session ? defaultTab(session) : 'schematic'));
   const [activeSheet, setActiveSheet] = useState<string | undefined>(undefined);
@@ -292,7 +293,18 @@ export default function ViewerPage() {
 
   // The session is opened HERE and only here — never in an effect. React 19's
   // StrictMode double-invokes effects, and openDesign re-parses the schematic.
-  const handleProject = useCallback((project: KicadProject) => {
+  //
+  // `focusRef` (the guide's "See U30 on the example") is held HERE, not only
+  // written to the URL: writing a hash the URL already carries (a second visit,
+  // or a reader already at /viewer#U30) fires nothing, and the part would not
+  // be selected. The hash still mirrors it — REPLACED, so Back leaves the page
+  // instead of just stripping `#U30`.
+  const handleProject = useCallback((project: KicadProject, focusRef?: string) => {
+    if (focusRef != null) {
+      pendingFocus.current = focusRef;
+      const hash = `#${encodeURIComponent(focusRef)}`;
+      if (location.hash !== hash) navigate({ pathname: location.pathname, search: location.search, hash }, { replace: true });
+    }
     const next = openDesign(project);
     setSession(next);
     setTab(defaultTab(next));
@@ -304,7 +316,7 @@ export default function ViewerPage() {
     setPlacementsSeen(false);
     shown.current = { schematic: null, board: null };
     resetBoardView();
-  }, [resetBoardView]);
+  }, [resetBoardView, location, navigate]);
 
   // The intake (with its guide) is far taller than the workspace, so the swap
   // either way would otherwise keep a clamped scroll: a project opened from the
@@ -339,6 +351,10 @@ export default function ViewerPage() {
     // A toast raised a moment ago would otherwise float over the fresh intake.
     setToast(null);
     pendingFocus.current = null;
+    // …and the #ref that named a part of it: left in the URL it would select
+    // that part in whatever project is opened next (after a reload, a bookmark
+    // or a shared link: "U30 — Not in this project"). Replaced, not pushed.
+    if (location.hash !== '') navigate({ pathname: location.pathname, search: location.search }, { replace: true });
     setSelectedRef(null);
     setPlacementsSeen(false);
     shown.current = { schematic: null, board: null };

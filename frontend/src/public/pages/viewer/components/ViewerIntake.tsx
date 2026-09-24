@@ -1,8 +1,9 @@
 // The viewer's intake, which is also its guide: "the project sheet".
 //
 // The whole sheet is the drop zone (a zip of the project folder, or its
-// .kicad_pro / .kicad_sch / .kicad_pcb files). On it: a real KiCad project
-// folder — the example's — with what is read and what is left out, traced to
+// .kicad_pro / .kicad_sch / .kicad_pcb files). On it: an illustrative,
+// generically named KiCad project folder (guideCopy's EXAMPLE_FILES — not the
+// example the button loads), with what is read and what is left out, traced to
 // what each file becomes in the viewer, footnoted with the rules. Below it: the
 // notes, what happens to the files, and a short tour of the one feature worth
 // knowing first.
@@ -53,7 +54,8 @@ const GUIDE_IDS = {
 } as const;
 
 interface ViewerIntakeProps {
-  onProject: (project: KicadProject) => void;
+  /** `focusRef`: the part to land on (the tour's "See U30 on the example"). */
+  onProject: (project: KicadProject, focusRef?: string) => void;
 }
 
 export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
@@ -76,18 +78,18 @@ export default function ViewerIntake({ onProject }: ViewerIntakeProps) {
     setOpenState(next);
   }, []);
 
-  // `focusRef` lands the opened project on one part: it is written to the URL
-  // hash, the page's own `#ref` path (a BOM-row link, a pasted anchor), which
-  // the workspace focuses once its canvas is ready. Written only AFTER the
-  // project read, so a refused drop never leaves a stray `#U30` in the URL.
+  // `focusRef` lands the opened project on one part. It travels WITH the
+  // project, handed over only after the read succeeds: the page (which owns the
+  // URL) focuses it once the canvas is ready and mirrors it into the hash, so a
+  // refused drop never leaves a stray `#U30` behind, and the ref works on every
+  // visit — a hash write that repeats the hash already there fires nothing.
   const read = useCallback(
     async (files: File[], focusRef?: string) => {
       setBusy(true);
       setError(null);
       try {
         const project = await buildProject(files);
-        if (focusRef != null) window.location.hash = encodeURIComponent(focusRef);
-        onProject(project);
+        onProject(project, focusRef);
       } catch (err) {
         setError(err instanceof KicadReadError ? err.message : UNREADABLE_COPY);
       } finally {

@@ -26,6 +26,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type AnyProps = Record<string, never> & Record<string, unknown>;
 
 let hash = '';
+/** What the router was asked to do. A real navigate re-renders with the new
+ *  location; here it moves `hash`, which the next render reads. */
+const navigate = vi.fn((to: { hash?: string }, _opts?: { replace?: boolean }) => {
+  hash = to.hash ?? '';
+});
+/** The part the intake's stub hands over with its project (the guide's tour). */
+let introFocus: string | undefined;
 let session: unknown = null;
 /** What the intake's drop opens next. */
 let reopen: () => unknown = () => makeSession();
@@ -83,6 +90,7 @@ const wb = {
 
 vi.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: '/viewer', search: '', hash, state: null, key: 'k' }),
+  useNavigate: () => navigate,
   // The part panel links to the part page; a plain anchor stands in for the router's.
   Link: (props: AnyProps) => createElement('a', { href: props.to as string, className: props.className as string }, props.children as never),
 }));
@@ -98,7 +106,7 @@ vi.mock('./components/ViewerIntake', () => ({
       {
         type: 'button',
         'data-testid': 'intake',
-        onClick: () => (props.onProject as (p: unknown) => void)({}),
+        onClick: () => (props.onProject as (p: unknown, focusRef?: string) => void)({}, introFocus),
       },
       'drop',
     ),
@@ -436,6 +444,8 @@ async function openSheets() {
 
 beforeEach(() => {
   hash = '';
+  navigate.mockClear();
+  introFocus = undefined;
   session = makeSession();
   reopen = () => makeSession();
   wbCalls.length = 0;
@@ -693,6 +703,71 @@ describe('after the project is closed', () => {
     await click(container.querySelector('[data-testid="intake"]') as HTMLElement);
     await canvasReady();
     expect(canvas.focusRef).toHaveBeenCalledWith('U1', '/r/a');
+  });
+});
+
+// The guide's "See U30 on the example": the part travels WITH the project.
+// It used to be written into the hash by the intake — a pushed entry (Back
+// only stripped it), a no-op on every visit after the first (the hash already
+// said #U30, so nothing fired), and left behind for the next project.
+describe('a part handed over with the project', () => {
+  const intake = () => container.querySelector('[data-testid="intake"]') as HTMLElement;
+
+  it('selects it on every visit, and mirrors it into the URL by REPLACING the entry', async () => {
+    session = null;
+    introFocus = 'U1';
+    await render();
+    for (const visit of [1, 2]) {
+      await click(intake());
+      await canvasReady();
+      expect(canvas.focusRef, `visit ${visit}`).toHaveBeenCalledTimes(visit);
+      expect(canvas.focusRef).toHaveBeenLastCalledWith('U1', '/r/a');
+      await click(byText('Open another'));
+    }
+    const hashWrites = navigate.mock.calls.filter(([to]) => to.hash === '#U1');
+    expect(hashWrites).toHaveLength(2);
+    expect(navigate.mock.calls.every(([, opts]) => opts?.replace === true)).toBe(true);
+  });
+
+  it('still selects it when the URL already names it (no hash change to wait for)', async () => {
+    session = null;
+    hash = '#U1';
+    introFocus = 'U1';
+    await render();
+    await click(intake());
+    await canvasReady();
+    expect(canvas.focusRef).toHaveBeenCalledTimes(1);
+    expect(canvas.focusRef).toHaveBeenCalledWith('U1', '/r/a');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('"Open another" drops the #ref with the project it named, so the next project does not open on it', async () => {
+    session = null;
+    introFocus = 'U1';
+    await render();
+    await click(intake());
+    await canvasReady();
+    expect(hash).toBe('#U1');
+
+    await click(byText('Open another'));
+    expect(hash).toBe('');
+    expect(navigate).toHaveBeenLastCalledWith({ pathname: '/viewer', search: '' }, { replace: true });
+
+    // The reader's own project, opened with no part in mind: nothing selected.
+    introFocus = undefined;
+    canvas.focusRef.mockClear();
+    await click(intake());
+    await canvasReady();
+    expect(canvas.focusRef).not.toHaveBeenCalled();
+  });
+
+  it('leaves the URL alone when nothing was handed over and no #ref is there', async () => {
+    session = null;
+    await render();
+    await click(intake());
+    await canvasReady();
+    await click(byText('Open another'));
+    expect(navigate).not.toHaveBeenCalled();
   });
 });
 
