@@ -263,10 +263,6 @@ class LeadCreate(BaseModel):
         tidy: dict[str, Any] = {}
         for key, value in data.items():
             if isinstance(value, str):
-                # NUL is refused, never stripped: Postgres cannot store it (a
-                # 500 at the probe), and a silent strip could move the key.
-                if "\x00" in value:
-                    raise ValueError(f"{key} must not contain NUL characters")
                 # Invisible format characters (zero-width space, BOM, ...)
                 # pasted from a web page survive strip/NFKC/casefold, so
                 # "Acme<ZWSP>" would key apart from "Acme" and dodge the 409.
@@ -278,6 +274,15 @@ class LeadCreate(BaseModel):
                     value = value.upper()
             tidy[key] = value
         return tidy
+
+    @field_validator("*")
+    @classmethod
+    def _no_nul(cls, value: Any) -> Any:
+        """NUL is refused on its own field, never stripped: Postgres cannot
+        store it (the probe 500ed), and a silent strip could move the key."""
+        if isinstance(value, str) and "\x00" in value:
+            raise ValueError("Remove the hidden control character from this field.")
+        return value
 
     @field_validator("contact_name")
     @classmethod

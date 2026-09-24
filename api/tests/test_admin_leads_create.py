@@ -425,6 +425,8 @@ class TestValidation:
         body = {"company_name": "Acme", field: "Acme\u0000X"}
         resp = client.post(URL, json=body, headers=auth_header())
         assert resp.status_code == 422, resp.text
+        # on the field, so the form pins it there (serverFieldErrors)
+        assert resp.json()["detail"][0]["loc"][-1] == field
         assert db.query(Lead).count() == 0
 
     def test_blank_optionals_become_null_and_zip_plus4_is_fine(
