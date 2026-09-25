@@ -306,7 +306,7 @@
   min-width: 0;
 
   &:hover .contactName,
-  &:hover .contactCompany {
+  &:hover .contactNone {
     color: var(--a-primary);
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -339,12 +339,11 @@
   line-height: 1.3;
 }
 
-// A company-only row: nobody is on file yet, so the COMPANY carries the slot
-// where a person's name would be. Bold, like a name — it is the row's subject.
-.contactCompany {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--a-fg1);
+// A company-only row: nobody is on file yet, and the company is already the
+// next column, so this slot says so quietly instead of repeating the name.
+.contactNone {
+  font-size: 13px;
+  color: var(--a-fg3);
   line-height: 1.3;
 }
 

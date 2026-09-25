@@ -605,11 +605,7 @@ export default function LeadsPage() {
 
                       <td>
                         <Link to={consolePath(`/admin/leads/${lead.id}`)} className={styles.contactLink}>
-                          <LeadAvatar
-                            photoUrl={lead.photo_url}
-                            contactName={lead.contact_name}
-                            companyName={lead.company_name}
-                          />
+                          <LeadAvatar photoUrl={lead.photo_url} contactName={lead.contact_name} />
                           <span className={styles.contactText}>
                             {lead.contact_name ? (
                               <>
@@ -619,8 +615,9 @@ export default function LeadsPage() {
                                 )}
                               </>
                             ) : (
-                              // No person on file yet: the COMPANY carries the row.
-                              <span className={styles.contactCompany}>{lead.company_name}</span>
+                              // Nobody on file yet. The company is one column over;
+                              // repeating it here read as a person by that name.
+                              <span className={styles.contactNone}>No contact yet</span>
                             )}
                           </span>
                         </Link>

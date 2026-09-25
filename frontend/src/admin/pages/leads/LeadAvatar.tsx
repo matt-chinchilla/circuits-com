@@ -1,5 +1,6 @@
-// A lead's picture, or their initials when there is none — the call list's
-// row avatar and the profile's header. Decorative (aria-hidden): the name is
+// A lead's picture, their initials when there is none, or a company mark
+// when nobody is on file yet — the call list's row avatar and the profile's
+// header. Decorative (aria-hidden): the name is
 // always rendered beside it.
 //
 // No .module.scss, like OutcomeDisc: it renders inside several CSS-Module
@@ -11,23 +12,26 @@
 
 import { useState, type CSSProperties } from 'react';
 import { safeImageUrl } from '@shared/utils/url';
+import Icon from '@shared/components/Icon';
 
 import { leadInitials } from './photo';
 
 interface LeadAvatarProps {
   photoUrl: string | null | undefined;
+  /** null = a company-only row: the disc shows a company mark, never letters. */
   contactName: string | null;
-  companyName: string | null;
   /** Diameter in px. 28 = list row, 56 = profile header. */
   size?: number;
 }
 
-export default function LeadAvatar({ photoUrl, contactName, companyName, size = 28 }: LeadAvatarProps) {
+export default function LeadAvatar({ photoUrl, contactName, size = 28 }: LeadAvatarProps) {
   const src = safeImageUrl(photoUrl);
   // A hosted URL that 404s later falls back to the initials, not a broken
   // image glyph. Keyed on the src so a replaced picture gets a fresh chance.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const showPhoto = src !== null && failedSrc !== src;
+  const initials = showPhoto ? null : leadInitials(contactName);
+  const kind = showPhoto ? 'photo' : initials !== null ? 'initials' : 'company';
 
   const box: CSSProperties = {
     display: 'inline-flex',
@@ -43,7 +47,8 @@ export default function LeadAvatar({ photoUrl, contactName, companyName, size = 
     // porcelain card, and the initials disc reads as the same object.
     border: '1px solid var(--a-border)',
     background: 'var(--a-border-soft)',
-    color: 'var(--a-fg2)',
+    // The company mark sits a step quieter than a person's initials.
+    color: kind === 'company' ? 'var(--a-fg3)' : 'var(--a-fg2)',
     fontSize: Math.round(size * 0.38),
     fontWeight: 600,
     lineHeight: 1,
@@ -52,7 +57,7 @@ export default function LeadAvatar({ photoUrl, contactName, companyName, size = 
   };
 
   return (
-    <span aria-hidden="true" style={box} data-lead-avatar={showPhoto ? 'photo' : 'initials'}>
+    <span aria-hidden="true" style={box} data-lead-avatar={kind}>
       {showPhoto ? (
         <img
           src={src}
@@ -64,8 +69,12 @@ export default function LeadAvatar({ photoUrl, contactName, companyName, size = 
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           onError={() => setFailedSrc(src)}
         />
+      ) : initials !== null ? (
+        initials
       ) : (
-        leadInitials(contactName, companyName) ?? '·'
+        // Nobody on file: a company mark, not the company's initials, so the
+        // disc never impersonates a person.
+        <Icon name="buildings" size={Math.round(size * 0.55)} />
       )}
     </span>
   );

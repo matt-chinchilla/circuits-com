@@ -381,12 +381,7 @@ export default function LeadDetailPage() {
               profile. A never-contacted lead has no badge: the status line
               beside it already says so in words. */}
           <span className={styles.avatarWrap}>
-            <LeadAvatar
-              photoUrl={lead.photo_url}
-              contactName={lead.contact_name}
-              companyName={lead.company_name}
-              size={56}
-            />
+            <LeadAvatar photoUrl={lead.photo_url} contactName={lead.contact_name} size={56} />
             {lead.last_outcome && (
               <span className={styles.avatarBadge}>
                 <OutcomeDisc outcome={lead.last_outcome} contactName={lead.contact_name} size={20} />
@@ -396,8 +391,16 @@ export default function LeadDetailPage() {
           <div className={styles.identityText}>
             <h1 className={styles.title}>{headline}</h1>
             <p className={styles.subtitle}>
-              {lead.contact_title ? `${lead.contact_title} · ` : ''}
-              {lead.company_name}
+              {lead.contact_name ? (
+                <>
+                  {lead.contact_title ? `${lead.contact_title} · ` : ''}
+                  {lead.company_name}
+                </>
+              ) : (
+                // The headline IS the company; saying it again here read as a
+                // person by that name.
+                <span className={styles.muted}>No contact on file</span>
+              )}
               {lead.branch_label ? ` · ${lead.branch_label}` : ''}
             </p>
             <p className={styles.statusLine}>

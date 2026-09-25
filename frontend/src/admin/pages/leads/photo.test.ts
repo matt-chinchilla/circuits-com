@@ -8,28 +8,28 @@ const PNG = 'data:image/png;base64,iVBORw0KGgo=';
 
 describe('leadInitials', () => {
   it('takes the first and last word of the person', () => {
-    expect(leadInitials('Ian Locke', 'FDH Electronics')).toBe('IL');
-    expect(leadInitials('Mary Ann de la Cruz', 'X')).toBe('MC');
-    expect(leadInitials('  ada  ', 'X')).toBe('A');
+    expect(leadInitials('Ian Locke')).toBe('IL');
+    expect(leadInitials('Mary Ann de la Cruz')).toBe('MC');
+    expect(leadInitials('  ada  ')).toBe('A');
   });
 
-  it('falls back to the company for a company-only row', () => {
-    expect(leadInitials(null, 'FDH Electronics')).toBe('FE');
-    expect(leadInitials('', 'Lumissil')).toBe('L');
+  it('gives a company-only row NO letters — the avatar shows a company mark instead', () => {
+    expect(leadInitials(null)).toBeNull();
+    expect(leadInitials('')).toBeNull();
   });
 
-  it('leaves a branch in parentheses out of the company', () => {
-    expect(leadInitials(null, 'Bisco Industries (Bohemia)')).toBe('BI');
+  it('leaves a nickname in parentheses out of the name', () => {
+    expect(leadInitials('Robert (Bob) Smith')).toBe('RS');
   });
 
   it('skips punctuation to the first letter or digit of a word', () => {
-    expect(leadInitials('"Doc" O\'Neil', 'X')).toBe('DO');
-    expect(leadInitials(null, '3M Company')).toBe('3C');
+    expect(leadInitials('"Doc" O\'Neil')).toBe('DO');
+    expect(leadInitials('3M Man')).toBe('3M');
   });
 
   it('is null when neither name has anything to show', () => {
-    expect(leadInitials('- .', '()')).toBeNull();
-    expect(leadInitials(null, null)).toBeNull();
+    expect(leadInitials('- .')).toBeNull();
+    expect(leadInitials('()')).toBeNull();
   });
 });
 

@@ -13,13 +13,14 @@ const WORD_START = /[\p{L}\p{N}]/u;
 
 /**
  * Up to two letters for the avatar when there is no picture: the first and
- * last word of the person's name, else of the company (a company-only row is
- * the company's own avatar — the name beside it says which). A branch in
- * parentheses is not part of the name: "Bisco Industries (Bohemia)" → "BI".
- * null when neither name has a letter or digit to show.
+ * last word of the PERSON's name. A company-only row gets none — the avatar
+ * shows a company mark instead, so a row with nobody on file never reads as
+ * a person called "Bisco Industries" (owner, 2026-09-25). A nickname in
+ * parentheses is not part of the name: "Robert (Bob) Smith" → "RS". null
+ * when the name has no letter or digit to show.
  */
-export function leadInitials(contactName: string | null, companyName: string | null): string | null {
-  for (const name of [contactName, companyName]) {
+export function leadInitials(contactName: string | null): string | null {
+  for (const name of [contactName]) {
     const words = (name ?? '')
       .replace(/\([^)]*\)/g, ' ')
       .split(/\s+/)
