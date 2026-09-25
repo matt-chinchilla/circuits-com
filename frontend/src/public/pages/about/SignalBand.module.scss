@@ -1,0 +1,19 @@
+@use '@shared/styles/variables' as *;
+
+// The band spans the Why section's full width between the manifesto and the
+// rail; the page decides its vertical margins. The canvas is transparent, the
+// section's navy shows through.
+.band {
+  position: relative;
+  width: 100%;
+  height: clamp(150px, 19vw, 200px);
+  pointer-events: none;
+
+  canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+}

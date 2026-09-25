@@ -266,3 +266,82 @@ keeps the surface background; buttons inherit `line-height: 1.6` (set `line-heig
 public → public imports only (`pages/join/FounderDiscount`'s `Fire` and
 `pages/join/founderDeal` are public); the two vendor `.js` side-effect imports need their
 `.d.ts` siblings (already present).
+
+---
+
+## Revision 2 (owner, 2026-09-25 19:22): the caustic field is replaced by the signal band
+
+The owner found the green caustic over graphite "foreboding". Four fields were prototyped
+(a keep-out pour, a datasheet page, tier metals, a logic analyzer) and a combined "capture";
+the owner chose the **logic analyzer, refined** ("seems good! implement it"). The prototype is
+`scratchpad/about-ambient-options.html` (artifact https://claude.ai/artifact/AZrZ6Pw18KpqDLht1yss7i, v5).
+
+### What changes on the page
+
+- `.aboutWhy` ground becomes **navy `#0f1721`** (a local custom property `--why-bg` on the
+  section, not a theme token; the whole section, Founder block included, sits on it). The
+  `<CausticField />` and its files (`CausticField.tsx`, `CausticField.module.scss`,
+  `caustic.ts`, `causticField.test.ts`) are DELETED, with every reference and the page test's
+  caustic witnesses.
+- A full-width **`<SignalBand />`** sits BETWEEN the manifesto and the rail: the section's
+  markup becomes `inner(head: h2, display, manifesto)` → `SignalBand` → `inner(rail, Founder
+  block)`, so the band spans the section's full width while the text keeps the 1100px column.
+  Vertical rhythm: `margin: 2.4vw 0 2.6vw` clamped to 24–40px each side; height
+  `clamp(150px, 19vw, 200px)`.
+- Everything else (copy, rail, Founder block, CTA, tests for those) is unchanged.
+
+### `<SignalBand />` — `frontend/src/public/pages/about/SignalBand.tsx`
+
+Contract:
+
+```tsx
+export interface SignalBandProps { className?: string }
+export default function SignalBand(props: SignalBandProps): ReactElement
+```
+
+Renders `<div class="band {className}" aria-hidden="true" data-signal="live"|"still">` with ONE
+`<canvas>` child (created by React is fine here: no GPU context is held). The canvas is
+transparent (`clearRect` each frame); the section's navy shows through.
+
+Pure module `frontend/src/public/pages/about/signalBand.ts` (DOM-free, unit-tested):
+- `NAVY = '15,23,33'` — the rgb of `#0f1721`; a test reads `AboutPage.module.scss` and pins
+  `--why-bg: #0f1721` to it.
+- `BIT = 34` px per bit · `SPEED = 14` px/s roll · `CYCLE = 200` bits · `ACQUIRE_S = 1.6`.
+- `uart(text)` → bits: per char, start `0`, eight data bits LSB first, stop `1`
+  (`uart('A')` is `[0,1,0,0,0,0,0,1,0,1]`).
+- `LANES` (order is display order): `CLK` green, level `k & 1`; `CS` green, `bar: true`
+  (active-low bar drawn over the name), level always `0`; `TX` cyan, an 8N1 frame of
+  `UPDATE` starting at bit 6, idle `1` elsewhere; `RX` cyan, a frame of `FEEDBACK` starting
+  at bit 90; `SDA` cyan, `hash(k * 31 + 977) & 1` with the prototype's integer hash. Levels
+  are periodic in `CYCLE` (`mod(k) = ((k % CYCLE) + CYCLE) % CYCLE`).
+- Colours: green `68,189,19` (the site accent), cyan `95,196,214`; stroke
+  `rgba(<rgb>,.34)`, width 1.2, `lineJoin: 'miter'`; labels `600 10.5px` mono at x = 18,
+  `rgba(255,255,255,.4)`; the waves start at `x0 = 66`; lane amplitude `gap * 0.30` where
+  `gap = height / LANES.length`; the last 22% of the width fades to the ground with a
+  linear gradient of `rgba(NAVY, 0 → 1)`.
+- `paint(ctx, { width, height, dpr, scroll, acq })` draws one frame (labels, clipped waves up
+  to `x0 + (width - x0) * acq`, the fade, and a 1.5px cyan sweep line at the reveal edge
+  while `0 < acq < 1`) — so a happy-dom test with a recording fake 2D context can assert
+  what a frame contains without a real canvas.
+
+Component behaviour (`SignalBand.tsx`):
+- `ResizeObserver` on the host sizes the canvas (`dpr` capped at 2). One `requestAnimationFrame`
+  per tick, 30 fps cap; runs only while intersecting (IntersectionObserver, threshold 0) AND
+  `!document.hidden`; a `destroyed` flag (csFx law) closes every entry point after unmount.
+- Acquisition: `acq` runs 0 → 1 over `ACQUIRE_S` from the FIRST tick after the band is on
+  screen (not from mount), then `scroll += dt * SPEED` with `dt` clamped to 100 ms.
+- `prefers-reduced-motion: reduce` → `data-signal="still"`, one `paint` with `acq = 1`,
+  `scroll = 0`, never a loop. Otherwise `data-signal="live"`.
+- No `will-change`, no CSS `filter`.
+
+Tests (`signalBand.test.ts`, node): uart, lane levels (CLK alternates, CS is 0, TX bits 6..65
+equal `uart('UPDATE')`, idle high outside), NAVY ↔ SCSS pin. (`SignalBand.test.ts`,
+happy-dom, createRoot + act): reduced motion → `data-signal="still"`, exactly one paint, rAF
+never called; motion → `data-signal="live"`, rAF called, unmount cancels; the fake 2D context
+records `strokeStyle`/`fillText` so the five lane names are asserted in a frame.
+
+### Docs
+
+CLAUDE.md gets ONE bullet under Gotchas (About page: the band, the navy ground, the no-dash
+register rule, the Founder price home `founderDeal.ts`, `?founder=1`). The spec's §"Design"
+stays as history; this revision is the current truth.
