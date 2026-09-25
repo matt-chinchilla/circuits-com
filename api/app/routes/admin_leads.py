@@ -32,6 +32,7 @@ from app.services.auth_service import is_viewer, require_staff
 from app.services.lead_distance import distance_from_hq_miles
 from app.services.lead_identity import lead_company_parts, lead_source_key
 from app.services.leads import VALID_OUTCOMES, record_outcome
+from app.utils.image_url import validate_optional_image_url
 
 router = APIRouter(
     prefix="/api/admin/leads",
@@ -90,6 +91,10 @@ def _lead_row(lead: Lead) -> dict:
         "distance_miles": float(lead.distance_miles) if lead.distance_miles is not None else None,
         "contact_name": lead.contact_name,
         "contact_title": lead.contact_title,
+        # The headshot rides the LIST row too — the call list draws it beside
+        # the name. A cropped one is ~10-25 KB, so a 50-row page stays well
+        # under the admin cache's 512 KB persistence ceiling in practice.
+        "photo_url": lead.photo_url,
         "needs_enrichment": lead.needs_enrichment,
         "last_outcome": lead.last_outcome,
         "last_contacted_at": lead.last_contacted_at.isoformat() if lead.last_contacted_at else None,
@@ -254,6 +259,14 @@ class LeadCreate(BaseModel):
     linkedin_url: str | None = Field(default=None, max_length=300)
     hours_tz: str | None = Field(default=None, max_length=40)
     notes: str | None = Field(default=None, max_length=4000)
+    # A data:image/(png|jpeg|webp|gif|avif) URL or http(s) — never
+    # javascript:, never svg (script-capable). utils.image_url is the one rule.
+    photo_url: str | None = None
+
+    @field_validator("photo_url")
+    @classmethod
+    def _photo_is_an_image(cls, value: str | None) -> str | None:
+        return validate_optional_image_url(value)
 
     @model_validator(mode="before")
     @classmethod
@@ -464,6 +477,15 @@ class LeadUpdate(BaseModel):
     linkedin_url: str | None = Field(default=None, max_length=300)
     hours_tz: str | None = Field(default=None, max_length=40)
     notes: str | None = None
+    # null (or "") removes the picture; anything else must be an image URL.
+    photo_url: str | None = None
+
+    @field_validator("photo_url", mode="before")
+    @classmethod
+    def _photo_is_an_image(cls, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return validate_optional_image_url(value) if isinstance(value, str) else value
 
 
 @router.patch("/{lead_id}")

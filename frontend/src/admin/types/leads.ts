@@ -19,6 +19,11 @@ export interface AdminLead {
   distance_miles: number | null;
   contact_name: string | null;
   contact_title: string | null;
+  /** The contact's picture (migration 059): a raster data-URL from the
+   *  cropper or an http(s) URL. Render ONLY through safeImageUrl (LeadAvatar
+   *  does). OPTIONAL as well as nullable: a persisted list payload can
+   *  predate the key, and absent must read as "no picture". */
+  photo_url?: string | null;
   needs_enrichment: boolean;
   last_outcome: LeadOutcome | null;
   last_contacted_at: string | null;
@@ -100,6 +105,7 @@ export interface LeadCreateBody {
   linkedin_url?: string | null;
   hours_tz?: string | null;
   notes?: string | null;
+  photo_url?: string | null;
 }
 
 /** The 409 `detail` of a create that would duplicate a lead. A customer's

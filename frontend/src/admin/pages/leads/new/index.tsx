@@ -24,6 +24,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 import Breadcrumbs from '@admin/components/Breadcrumbs';
+import ImageUploadField from '@admin/components/ImageUploadField';
 import ListSelect, { type ListOption } from '@admin/components/ListSelect/ListSelect';
 import { TextRow } from '@admin/components/ListSelect/PriceRow';
 import { useAuth } from '@admin/contexts/AuthContext';
@@ -72,6 +73,7 @@ const FIELD_ORDER: LeadFormField[] = [
   'city',
   'state',
   'postal_code',
+  'photo_url',
 ];
 
 const fieldId = (field: LeadFormField) => `lead-${field}`;
@@ -677,6 +679,30 @@ function AddLeadForm() {
                 />
               </div>
               <p className={styles.hint}>The ZIP sets the distance from HQ on the call list.</p>
+            </section>
+
+            {/* Optional depth, like everything in this column: a picture is
+                rarely at hand mid-call, and the lead's page takes one later. */}
+            <section className={styles.panel} aria-labelledby="lead-photo-title">
+              <h2 className={styles.panelTitle} id="lead-photo-title">
+                Photo
+              </h2>
+              <ImageUploadField
+                id={fieldId('photo_url')}
+                label="Profile picture"
+                purpose="photo"
+                value={form.photo_url || null}
+                onChange={(next) => {
+                  setForm((prev) => ({ ...prev, photo_url: next }));
+                  setErrors((prev) => (prev.photo_url ? { ...prev, photo_url: undefined } : prev));
+                  setFormError('');
+                }}
+              />
+              {errors.photo_url && (
+                <p id="lead-photo_url-error" className={styles.fieldError} role="alert">
+                  {errors.photo_url}
+                </p>
+              )}
             </section>
           </div>
         </div>

@@ -35,6 +35,7 @@ import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { DISTANCE_CHOICES, distanceParams, formatMiles, type DistanceFilterKey } from '../distance';
 import { OUTCOME_META, OUTCOME_ORDER, outcomeInkVars } from '../outcome';
 import { relativeTime } from '../time';
+import LeadAvatar from '../LeadAvatar';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
 import styles from './LeadsPage.module.scss';
@@ -604,17 +605,24 @@ export default function LeadsPage() {
 
                       <td>
                         <Link to={consolePath(`/admin/leads/${lead.id}`)} className={styles.contactLink}>
-                          {lead.contact_name ? (
-                            <>
-                              <span className={styles.contactName}>{lead.contact_name}</span>
-                              {lead.contact_title && (
-                                <span className={styles.contactTitle}>{lead.contact_title}</span>
-                              )}
-                            </>
-                          ) : (
-                            // No person on file yet: the COMPANY carries the row.
-                            <span className={styles.contactCompany}>{lead.company_name}</span>
-                          )}
+                          <LeadAvatar
+                            photoUrl={lead.photo_url}
+                            contactName={lead.contact_name}
+                            companyName={lead.company_name}
+                          />
+                          <span className={styles.contactText}>
+                            {lead.contact_name ? (
+                              <>
+                                <span className={styles.contactName}>{lead.contact_name}</span>
+                                {lead.contact_title && (
+                                  <span className={styles.contactTitle}>{lead.contact_title}</span>
+                                )}
+                              </>
+                            ) : (
+                              // No person on file yet: the COMPANY carries the row.
+                              <span className={styles.contactCompany}>{lead.company_name}</span>
+                            )}
+                          </span>
                         </Link>
                         {lead.needs_enrichment && (
                           <span className={styles.enrichChip}>needs enrichment</span>

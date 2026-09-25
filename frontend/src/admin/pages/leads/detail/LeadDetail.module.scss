@@ -32,6 +32,22 @@
   min-width: 0;
 }
 
+// The avatar with the outcome disc as a corner badge (the disc carries its own
+// --a-card ring, which is what separates it from the picture).
+.avatarWrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.avatarBadge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: inline-flex;
+  line-height: 0;
+}
+
 .title {
   font-size: 26px;
   font-weight: 700;

@@ -294,10 +294,13 @@
 
 // ─── Contact + company cells ────────────────────────────────────────────────
 
+// Avatar + the name stack, one link. The avatar is a quiet 28px disc (the
+// picture, or neutral initials) — the outcome disc in the first column keeps
+// the colour; this one never competes with it.
 .contactLink {
   display: inline-flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  gap: 10px;
   text-decoration: none;
   color: inherit;
   min-width: 0;
@@ -314,6 +317,13 @@
     outline-offset: 2px;
     border-radius: 3px;
   }
+}
+
+.contactText {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
 .contactName {

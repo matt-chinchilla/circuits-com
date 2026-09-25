@@ -20,14 +20,32 @@ interface ImageUploadFieldProps {
   // host chain the brand-color modal off the same canvas without re-decoding
   // the data-URL. Skipped when the encode fails (onChange never ran).
   onCroppedCanvas?: (canvas: HTMLCanvasElement) => void;
+  // What the image IS. 'logo' (default) is the sponsor/supplier wording —
+  // brand colors, circle or rounded square. 'photo' is a person's headshot
+  // (a lead's picture): same pipeline, no talk of logos or brand colors.
+  purpose?: 'logo' | 'photo';
 }
+
+const COPY = {
+  logo: {
+    cropTitle: undefined, // the cropper's own default ("Position your logo")
+    fetchButton: 'Crop & extract colors',
+    tail: 'Logos crop to a circle or rounded square — pasted URLs are fetched so you can crop & pick brand colors too.',
+  },
+  photo: {
+    cropTitle: 'Position the photo',
+    fetchButton: 'Crop',
+    tail: 'Photos crop to a circle — a pasted image link is fetched so you can crop it too.',
+  },
+} as const;
 
 // Dual-path image input: upload a file (downscaled to a data-URL) OR paste a
 // hosted URL. Both write the same `value`. The preview uses safeImageUrl so a
 // hostile pasted string never reaches an <img src> here either.
 export default function ImageUploadField({
-  id, label, value, onChange, hint, onCroppedCanvas,
+  id, label, value, onChange, hint, onCroppedCanvas, purpose = 'logo',
 }: ImageUploadFieldProps): ReactElement {
+  const copy = COPY[purpose];
   const fileRef = useRef<HTMLInputElement>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +72,7 @@ export default function ImageUploadField({
   // (re-crop stored, fetch pasted URL) land here so the synthesized File stays
   // one definition.
   const openCropperOn = (blob: Blob) => {
-    setPendingFile(new File([blob], 'logo', { type: blob.type || 'image/png' }));
+    setPendingFile(new File([blob], purpose, { type: blob.type || 'image/png' }));
   };
 
   const onPick = (file: File | undefined) => {
@@ -216,20 +234,24 @@ export default function ImageUploadField({
               disabled={fetchingUrl}
               onClick={() => { void fetchAndCrop(true); }}
             >
-              {fetchingUrl ? 'Fetching…' : 'Crop & extract colors'}
+              {fetchingUrl ? 'Fetching…' : copy.fetchButton}
             </button>
           )}
         </div>
       </div>
       {!error && (
         <div className={styles.hint}>
-          {hint ? `${hint} ` : ''}Logos crop to a circle or rounded square — pasted
-          URLs are fetched so you can crop &amp; pick brand colors too.
+          {hint ? `${hint} ` : ''}{copy.tail}
         </div>
       )}
       {error && <div className={styles.error} id={errId} role="alert">{error}</div>}
       {pendingFile && (
-        <LogoCropperModal file={pendingFile} onApply={applyCrop} onCancel={cancelCrop} />
+        <LogoCropperModal
+          file={pendingFile}
+          title={copy.cropTitle}
+          onApply={applyCrop}
+          onCancel={cancelCrop}
+        />
       )}
     </div>
   );

@@ -19,6 +19,7 @@ import { useConsolePath } from '@admin/services/consolePath';
 import { Pencil, X } from 'lucide-react';
 
 import Breadcrumbs from '@admin/components/Breadcrumbs';
+import ImageUploadField from '@admin/components/ImageUploadField';
 import { useAuth } from '@admin/contexts/AuthContext';
 import { adminApi } from '@admin/services/adminApi';
 import type { AdminLeadDetail } from '@admin/types/leads';
@@ -28,8 +29,10 @@ import { classifyLeadsError, SESSION_EXPIRED_MESSAGE } from '../loadError';
 import { OUTCOME_META, outcomeInkVars } from '../outcome';
 import { parseServerTime } from '../time';
 import { provenanceLine } from '../provenance';
+import LeadAvatar from '../LeadAvatar';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
+import { photoError, photoForSave } from '../photo';
 import styles from './LeadDetail.module.scss';
 
 // The writable subset — `LeadUpdate` in routes/admin_leads.py. Anything outside
@@ -42,6 +45,9 @@ interface EnrichForm {
   linkedin_url: string;
   hours_tz: string;
   notes: string;
+  /** '' = no picture. The upload field writes a cropped data-URL or the
+   *  pasted link here; photoError() gates the save. */
+  photo_url: string;
 }
 
 // Server max_lengths, mirrored so the field stops the admin at the same place
@@ -54,6 +60,7 @@ const MAX: Record<keyof EnrichForm, number | undefined> = {
   linkedin_url: 300,
   hours_tz: 40,
   notes: undefined, // Text column — unbounded
+  photo_url: undefined, // not a typed input — photoError() owns its limit
 };
 
 function toForm(lead: AdminLeadDetail): EnrichForm {
@@ -65,6 +72,7 @@ function toForm(lead: AdminLeadDetail): EnrichForm {
     linkedin_url: lead.linkedin_url ?? '',
     hours_tz: lead.hours_tz ?? '',
     notes: lead.notes ?? '',
+    photo_url: lead.photo_url ?? '',
   };
 }
 
@@ -183,6 +191,13 @@ export default function LeadDetailPage() {
 
   const save = async () => {
     if (!id || !form || saving) return;
+    // The server would 422 a pasted non-image link as an array detail; say it
+    // in the field's own words before the round trip instead.
+    const badPhoto = photoError(form.photo_url);
+    if (badPhoto) {
+      setSaveError(badPhoto);
+      return;
+    }
     setSaving(true);
     setSaveError('');
     try {
@@ -194,6 +209,7 @@ export default function LeadDetailPage() {
         linkedin_url: orNull(form.linkedin_url),
         hours_tz: orNull(form.hours_tz),
         notes: orNull(form.notes),
+        photo_url: photoForSave(form.photo_url),
       })) as AdminLeadDetail;
       applyDetail(updated);
       setEditing(false);
@@ -338,7 +354,23 @@ export default function LeadDetailPage() {
 
       <header className={styles.pageHead}>
         <div className={styles.identity}>
-          <OutcomeDisc outcome={lead.last_outcome} contactName={lead.contact_name} size={40} />
+          {/* The picture (or initials), with the outcome disc pinned to its
+              corner — the one geometry that carries an outcome stays on the
+              profile. A never-contacted lead has no badge: the status line
+              beside it already says so in words. */}
+          <span className={styles.avatarWrap}>
+            <LeadAvatar
+              photoUrl={lead.photo_url}
+              contactName={lead.contact_name}
+              companyName={lead.company_name}
+              size={56}
+            />
+            {lead.last_outcome && (
+              <span className={styles.avatarBadge}>
+                <OutcomeDisc outcome={lead.last_outcome} contactName={lead.contact_name} size={20} />
+              </span>
+            )}
+          </span>
           <div className={styles.identityText}>
             <h1 className={styles.title}>{headline}</h1>
             <p className={styles.subtitle}>
@@ -427,6 +459,14 @@ export default function LeadDetailPage() {
                   void save();
                 }}
               >
+                <ImageUploadField
+                  id="lead-photo"
+                  label="Photo"
+                  purpose="photo"
+                  value={form.photo_url || null}
+                  onChange={(next) => setField('photo_url', next)}
+                />
+
                 <div className={styles.formGrid}>
                   {/* Every field is type="text": type="email"/"url"/"tel" makes
                       an HTML5-invalid value kill submit SILENTLY — no onSubmit,

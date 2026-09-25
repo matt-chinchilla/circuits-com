@@ -65,6 +65,13 @@ class Lead(Base):
     linkedin_url = Column(String(300), nullable=True)
     hours_tz = Column(String(40), nullable=True)
     notes = Column(Text, nullable=True)
+    # The contact's headshot (migration 059): a base64 raster data-URL from
+    # the admin cropper (256px square, ≤64 KB) or a pasted http(s) URL — the
+    # Sponsor.image_url / Supplier.logo_url pipeline, because the api
+    # container has no volume to write a file to. Validated on write by
+    # utils.image_url; rendered only through safeImageUrl. STAFF-ONLY like
+    # every other column here — no public or customer serialiser carries it.
+    photo_url = Column(Text, nullable=True)
     # Denorms, written ONLY by services.leads.record_outcome in one txn.
     last_outcome = Column(String(12), nullable=True)
     last_contacted_at = Column(DateTime(timezone=True), nullable=True)

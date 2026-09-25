@@ -321,3 +321,35 @@ describe('the server-side tidy, mirrored', () => {
     expect(validateLeadForm(form({ company_name: 'A', state: 'New York' })).state).toMatch(/two letters/i);
   });
 });
+
+describe('the optional photo', () => {
+  const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+
+  it('is valid when absent, a raster data-URL, or an http(s) link', () => {
+    for (const photo_url of ['', PNG, 'https://cdn.example.com/ada.jpg']) {
+      expect(validateLeadForm(form({ company_name: 'Acme', photo_url })).photo_url).toBeUndefined();
+    }
+  });
+
+  it('refuses a script or svg value on its own field', () => {
+    for (const photo_url of ['javascript:alert(1)', 'data:image/svg+xml;base64,PHN2Zy8+']) {
+      expect(validateLeadForm(form({ company_name: 'Acme', photo_url })).photo_url).toBeTruthy();
+    }
+  });
+
+  it('rides the body only when set, trimmed', () => {
+    expect(buildLeadBody(form({ company_name: 'Acme' }))).not.toHaveProperty('photo_url');
+    expect(buildLeadBody(form({ company_name: 'Acme', photo_url: ` ${PNG} ` })).photo_url).toBe(PNG);
+  });
+
+  it('is not carried to the next contact at the company', () => {
+    expect(carryCompany(form({ company_name: 'Acme', photo_url: PNG })).photo_url).toBe('');
+  });
+
+  it('pins a server 422 on photo_url to its field', () => {
+    const errors = serverFieldErrors({
+      detail: [{ loc: ['body', 'photo_url'], msg: 'Value error, must be an http(s) URL' }],
+    });
+    expect(errors.photo_url).toBe('must be an http(s) URL');
+  });
+});

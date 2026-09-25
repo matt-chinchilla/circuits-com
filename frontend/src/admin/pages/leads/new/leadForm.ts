@@ -12,13 +12,17 @@
 //   • state is upper-cased BEFORE the two-letter rule, so "ny" is fine;
 //   • ZIP is 5 digits or ZIP+4; the two email fields share one loose pattern;
 //   • a contact needs a letter or digit (one that canon() folds away would
-//     take the company-only key yet be stored as a person).
+//     take the company-only key yet be stored as a person);
+//   • the optional photo is a raster data:image URL or http(s), at most the
+//     server's MAX_IMAGE_URL_LEN — ../photo.ts is that rule's one client home.
 //
 // Inputs render as plain text fields with an inputMode and noValidate on the
 // form (the browser's own typed fields swallow submit on a value they
 // dislike — see CLAUDE.md), which is why every check lives here.
 
 import type { AdminLead, LeadCreateBody, LeadExistsDetail, LeadTier } from '@admin/types/leads';
+
+import { photoError, photoForSave } from '../photo';
 
 export type LeadTextField =
   | 'company_name'
@@ -37,9 +41,14 @@ export type LeadTextField =
   | 'hours_tz'
   | 'notes';
 
-export type LeadFormState = Record<LeadTextField, string> & { tier: LeadTier | '' };
+/** `photo_url` is not a typed text field: the upload widget writes a cropped
+ *  data-URL (or the pasted link) into it, and photoError() owns its limit. */
+export type LeadFormState = Record<LeadTextField, string> & {
+  tier: LeadTier | '';
+  photo_url: string;
+};
 
-export type LeadFormField = LeadTextField | 'tier';
+export type LeadFormField = LeadTextField | 'tier' | 'photo_url';
 
 export type LeadFormErrors = Partial<Record<LeadFormField, string>>;
 
@@ -81,6 +90,7 @@ export const EMPTY_LEAD_FORM: LeadFormState = {
   linkedin_url: '',
   hours_tz: '',
   notes: '',
+  photo_url: '',
 };
 
 // Same pattern TEXT as the server. The digit classes are ASCII on both sides
@@ -151,6 +161,9 @@ export function validateLeadForm(form: LeadFormState): LeadFormErrors {
     }
   }
 
+  const photo = photoError(form.photo_url);
+  if (photo) errors.photo_url = photo;
+
   return errors;
 }
 
@@ -163,12 +176,15 @@ export function buildLeadBody(form: LeadFormState): LeadCreateBody {
     if (value) body[field] = value;
   }
   if (form.tier) body.tier = form.tier;
+  const photo = photoForSave(form.photo_url);
+  if (photo) body.photo_url = photo;
   return body;
 }
 
 /**
  * "Save and add another contact": the next person at the same company keeps
- * the company and its address and starts with an empty contact + notes.
+ * the company and its address and starts with an empty contact + notes (and
+ * no photo — a picture is the person's, not the company's).
  */
 export function carryCompany(form: LeadFormState): LeadFormState {
   return {
@@ -208,7 +224,7 @@ export function readLeadExists(status: number | undefined, data: unknown): LeadE
   };
 }
 
-const FORM_FIELDS = new Set<string>([...TEXT_FIELDS, 'tier']);
+const FORM_FIELDS = new Set<string>([...TEXT_FIELDS, 'tier', 'photo_url']);
 
 /**
  * A FastAPI 422 (`detail: [{loc, msg}]`) pinned onto the fields it names. The
