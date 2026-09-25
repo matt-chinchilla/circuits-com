@@ -260,7 +260,7 @@ export default function AboutPage() {
       <PageHeaderBand
         page="about"
         title="About Circuit Center"
-        subtitle="Your trusted directory for all things PCB. Connecting distributors, manufacturers, &amp; engineers since 2026"
+        subtitle="Your trusted directory for all things PCB. Connecting the best distributors, manufacturers, &amp; engineers to make quality products"
       />
 
       {/*
@@ -369,9 +369,9 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* (5) CTA — a person, not a queue */}
+      {/* (5) CTA — one of our people, not a bot */}
       <section className={`${styles.aboutSection} ${styles.aboutCta}`}>
-        <h2 className={styles.aboutSectionTitle}>Reach a person, not a queue.</h2>
+        <h2 className={styles.aboutSectionTitle}>Reach one of our people, not a bot.</h2>
         <p className={styles.aboutCtaSub}>
           Something new ships every day. Tell us what the directory should do next, or ask a rep to
           walk you through a board.

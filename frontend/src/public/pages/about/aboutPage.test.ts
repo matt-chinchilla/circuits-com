@@ -261,7 +261,7 @@ describe('AboutPage', () => {
   it('closes on a person, not a queue', () => {
     render();
     const headings = [...host.querySelectorAll('h2')].map(h => h.textContent);
-    expect(headings).toContain('Reach a person, not a queue.');
+    expect(headings).toContain('Reach one of our people, not a bot.');
     const cta = [...host.querySelectorAll('section')].pop()!;
     expect(cta.querySelector('a[href="/contact"]')?.textContent).toBe('Talk to us');
     expect(cta.querySelector('a[href="/search"]')?.textContent).toBe('Browse parts');
