@@ -124,6 +124,9 @@ export default function ColumnHeader<K extends string>(props: ColumnHeaderProps<
     <th
       ref={containerRef}
       className={cls}
+      // Explicit for the Leads phone layout, which re-displays its table as
+      // cards (Safari drops table semantics on re-displayed table elements).
+      role="columnheader"
       aria-sort={isSortActive ? (props.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <button

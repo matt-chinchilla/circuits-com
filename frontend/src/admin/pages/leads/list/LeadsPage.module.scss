@@ -231,12 +231,24 @@
   border-bottom: none;
 }
 
-.table tbody tr:hover td {
-  background: var(--a-hover);
-}
-
 .row {
   cursor: pointer;
+}
+
+// Hover tints only where a pointer can really hover. On a touch screen a tap
+// leaves :hover stuck on the row and the disc until the next tap elsewhere.
+// The tint sits on the ROW so it fills the whole card in the phone layout too
+// (cells there carry no padding).
+@media (hover: hover) {
+  .table tbody tr:hover {
+    background: var(--a-hover);
+  }
+
+  .discBtn:hover {
+    // Widens the disc's own surface halo rather than adding a new ring —
+    // the PresenceBubbles hover grammar.
+    background: var(--a-border-soft);
+  }
 }
 
 // Visually-hidden but announced — the disc column's header carries no visible
@@ -280,11 +292,7 @@
   line-height: 1;
   cursor: pointer;
 
-  &:hover {
-    // Widens the disc's own surface halo rather than adding a new ring —
-    // the PresenceBubbles hover grammar.
-    background: var(--a-border-soft);
-  }
+  // (hover halo: see the `@media (hover: hover)` block under .row)
 
   &:focus-visible {
     outline: 2px solid var(--a-primary);
@@ -716,6 +724,204 @@
   .inlineSearch {
     min-width: 0;
     flex: 1 1 100%;
+  }
+
+  // ── The call list as cards (the mobile crash fix, 2026-09-25) ────────────
+  //
+  // NO horizontal scroll container at phone widths. The 50-row table used to
+  // sit in the wrapper's overflow-x scroller, a scroller as tall as the table,
+  // and a phone composites every overflowing scroller: the whole table became
+  // one 1075x4169 CSS-px scrolled layer (3225x12507 device px at 3x) that the
+  // page's vertical scroll ran through, and reps' phones crashed scrolling it.
+  // Measured on a 390px phone: composited layer area 457 MB -> 92 MB and touch
+  // hit-regions 4,422 -> 7 with the scroller gone. So each lead stacks into a
+  // card that fits the screen. Above 820px the table (and its scroller, for
+  // the band where it still overflows) is unchanged.
+  //
+  // The table elements are re-displayed, so index.tsx states their ARIA roles
+  // explicitly (Safari drops table semantics on a re-displayed table).
+  // Pinned by phoneLayout.test.ts.
+
+  .tableWrap {
+    overflow: visible;
+  }
+
+  .table {
+    display: block;
+    min-width: 0;
+  }
+
+  .table thead,
+  .table tbody,
+  .table tbody tr {
+    display: block;
+  }
+
+  // The header row becomes wrapping sort chips. ColumnHeader positions its
+  // popover from its <th>'s rect, so a chip opens it exactly as a column
+  // head does.
+  .table thead tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .table th {
+    display: block;
+    padding: 0;
+    border: 1px solid var(--a-border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .table th > button {
+    padding: 7px 12px;
+  }
+
+  // Nothing to sort in these two: the disc column's header is screen-reader
+  // text (every disc carries its own label) and Attempts has no sort.
+  .table .discHead,
+  .table .numHead {
+    display: none;
+  }
+
+  // One lead, one card:
+  //   (disc)  Contact · title ................ Last outcome
+  //           Company [branch] ....................... When
+  //           City, ST | 12 mi   Tier M   Ring 2   Attempts 3
+  // The two right-hand cells get 8rem of room, so the contact and company
+  // lines break where the card says whatever the name length.
+  .table tbody .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 10px;
+    row-gap: 4px;
+    position: relative;
+    padding: 12px 12px 12px 62px;
+    border-bottom: 1px solid var(--a-border-soft);
+
+    // A zero-height full-width item that puts the details on their own line.
+    &::after {
+      content: '';
+      order: 5;
+      flex-basis: 100%;
+      height: 0;
+    }
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  .table tbody .row td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+  }
+
+  // The disc keeps its 44px tap target, pinned level with the first line.
+  .table tbody .row .discCell {
+    position: absolute;
+    left: 10px;
+    top: 7px;
+  }
+
+  .table .cellContact {
+    order: 1;
+    flex: 1 1 calc(100% - 8rem);
+    min-width: 0;
+  }
+
+  .table .cellOutcome {
+    order: 2;
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .table .cellCompany {
+    order: 3;
+    flex: 1 1 calc(100% - 8rem);
+    min-width: 0;
+    color: var(--a-fg2);
+  }
+
+  .table .cellWhen {
+    order: 4;
+    flex: 0 0 auto;
+    margin-left: auto;
+    font-size: 12px;
+  }
+
+  .table .cellLocation,
+  .table .cellTier,
+  .table .cellRing,
+  .table .cellAttempts {
+    font-size: 12px;
+    color: var(--a-fg3);
+  }
+
+  .table .cellLocation {
+    order: 6;
+  }
+
+  // Without their column heads, the bare values need their names back.
+  .table .cellTier {
+    order: 7;
+
+    &::before {
+      content: 'Tier ';
+    }
+  }
+
+  .table .cellRing {
+    order: 8;
+
+    &::before {
+      content: 'Ring ';
+    }
+  }
+
+  .table .cellAttempts {
+    order: 9;
+
+    &::before {
+      content: 'Attempts ';
+    }
+  }
+
+  // An empty detail (just the muted dash) says nothing on a card — drop it.
+  // (The outcome cell's muted "Uncontacted" is a word, so it stays.)
+  .table tbody .row .cellTier:has(> .muted:only-child),
+  .table tbody .row .cellRing:has(> .muted:only-child),
+  .table tbody .row .cellLocation:has(> .muted:only-child),
+  .table tbody .row .cellAttempts:has(> .muted:only-child),
+  .table tbody .row .cellWhen:has(> .muted:only-child) {
+    display: none;
+  }
+
+  // First-paint skeletons take the card's shape: disc + two bars.
+  .table tbody .skelRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .table tbody .skelRow td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border-bottom: none;
+
+    &:nth-child(n + 4) {
+      display: none;
+    }
+  }
+
+  .table tbody .emptyRow {
+    display: block;
   }
 }
 

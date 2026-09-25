@@ -448,10 +448,10 @@ export default function LeadsPage() {
         )}
 
         <div className={styles.tableWrap}>
-          <table className={styles.table} aria-busy={loading || undefined}>
-            <thead>
-              <tr>
-                <th className={styles.discHead}>
+          <table className={styles.table} role="table" aria-busy={loading || undefined}>
+            <thead role="rowgroup">
+              <tr role="row">
+                <th className={styles.discHead} role="columnheader">
                   <span className={styles.srOnly}>Call outcome</span>
                 </th>
                 <ColumnHeader
@@ -512,7 +512,9 @@ export default function LeadsPage() {
                   onSort={handleSort}
                   sortLabels={{ asc: 'A → Z', desc: 'Z → A' }}
                 />
-                <th className={styles.numHead}>Attempts</th>
+                <th className={styles.numHead} role="columnheader">
+                  Attempts
+                </th>
                 <ColumnHeader
                   kind="sort-only"
                   label="When"
@@ -524,7 +526,7 @@ export default function LeadsPage() {
                 />
               </tr>
             </thead>
-            <tbody className={refreshing ? styles.bodyRefreshing : undefined}>
+            <tbody role="rowgroup" className={refreshing ? styles.bodyRefreshing : undefined}>
               {initialLoading &&
                 SKELETON_INDEXES.map((i) => (
                   <tr key={`skel-${i}`} className={styles.skelRow} aria-hidden="true">
@@ -569,6 +571,7 @@ export default function LeadsPage() {
                     <tr
                       key={lead.id}
                       className={styles.row}
+                      role="row"
                       onClick={(e) => {
                         // The disc is a button and the contact name is a link;
                         // neither should also trigger the row navigation.
@@ -576,7 +579,7 @@ export default function LeadsPage() {
                         navigate(consolePath(`/admin/leads/${lead.id}`));
                       }}
                     >
-                      <td className={styles.discCell}>
+                      <td className={styles.discCell} role="cell">
                         <button
                           type="button"
                           className={styles.discBtn}
@@ -603,7 +606,7 @@ export default function LeadsPage() {
                         </button>
                       </td>
 
-                      <td>
+                      <td className={styles.cellContact} role="cell">
                         <Link to={consolePath(`/admin/leads/${lead.id}`)} className={styles.contactLink}>
                           <LeadAvatar photoUrl={lead.photo_url} contactName={lead.contact_name} />
                           <span className={styles.contactText}>
@@ -626,14 +629,14 @@ export default function LeadsPage() {
                         )}
                       </td>
 
-                      <td>
+                      <td className={styles.cellCompany} role="cell">
                         <span className={styles.companyName}>{lead.company_name}</span>
                         {lead.branch_label && (
                           <span className={styles.branchChip}>{lead.branch_label}</span>
                         )}
                       </td>
 
-                      <td>
+                      <td className={styles.cellTier} role="cell">
                         {lead.tier ? (
                           <span className={styles.tierChip}>{lead.tier}</span>
                         ) : (
@@ -641,7 +644,7 @@ export default function LeadsPage() {
                         )}
                       </td>
 
-                      <td className={styles.numCell}>
+                      <td className={`${styles.numCell} ${styles.cellRing}`} role="cell">
                         {lead.ring ? (
                           lead.ring === 'UNVERIFIED' ? (
                             <span className={styles.ringUnverified}>unverified</span>
@@ -653,7 +656,7 @@ export default function LeadsPage() {
                         )}
                       </td>
 
-                      <td>
+                      <td className={styles.cellLocation} role="cell">
                         {place ? (
                           <>
                             {place}
@@ -671,7 +674,7 @@ export default function LeadsPage() {
                         )}
                       </td>
 
-                      <td>
+                      <td className={styles.cellOutcome} role="cell">
                         {meta ? (
                           // Word AND glyph, never colour alone (the CVD rule
                           // recorded in outcome.ts).
@@ -684,7 +687,7 @@ export default function LeadsPage() {
                         )}
                       </td>
 
-                      <td className={styles.numCell}>
+                      <td className={`${styles.numCell} ${styles.cellAttempts}`} role="cell">
                         {lead.contact_attempts > 0 ? (
                           lead.contact_attempts
                         ) : (
@@ -692,7 +695,7 @@ export default function LeadsPage() {
                         )}
                       </td>
 
-                      <td className={styles.whenCell}>
+                      <td className={`${styles.whenCell} ${styles.cellWhen}`} role="cell">
                         {when ?? <span className={styles.muted}>&mdash;</span>}
                       </td>
                     </tr>
@@ -700,8 +703,8 @@ export default function LeadsPage() {
                 })}
 
               {!loading && rows.length === 0 && (
-                <tr>
-                  <td colSpan={9} className={styles.emptyRow}>
+                <tr role="row">
+                  <td colSpan={9} className={styles.emptyRow} role="cell">
                     {error ? (
                       'The list could not be loaded.'
                     ) : addedByMe && !otherFiltersActive ? (
