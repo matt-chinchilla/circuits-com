@@ -184,7 +184,7 @@ function StatTicker({ value, suffix }: StatTickerProps) {
 /**
  * The Founder's Deal — the page's one bold element, in the Join page's Founder
  * material (black dotted slab, brand-red palette) with both Founder badges at
- * hero scale. Its lip catches fire the first time the block is properly in
+ * hero scale (96px, the right column). Its lip catches fire the first time the block is properly in
  * view and keeps burning; that ignition is the only orchestrated moment here.
  */
 function FounderDeal() {
@@ -210,8 +210,8 @@ function FounderDeal() {
         role="img"
         aria-label="Founder&rsquo;s Badge, pulsing and burning variants"
       >
-        <glow-badge size={64} scheme={scheme} glow={2} speed={3} />
-        <fire-badge badge="true" size={64} scheme={scheme} intensity={1.6} opacity={1} sparks="true" />
+        <glow-badge size={96} scheme={scheme} glow={2} speed={3} />
+        <fire-badge badge="true" size={96} scheme={scheme} intensity={1.6} opacity={1} sparks="true" />
       </span>
       <h3 className={styles.founderTitle}>Founders are appreciated like they can&rsquo;t believe.</h3>
       <div className={styles.founderCopy}>

@@ -436,12 +436,16 @@
   overflow: visible;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  // The badge pair holds the whole right column at hero scale, centred on the
+  // copy: the block is the page's one bold element, and a 64px pair tucked in
+  // the corner left the right two thirds of a 1100px slab empty (measured
+  // 2026-09-25).
   grid-template-areas:
     'tag badges'
     'title badges'
-    'copy copy'
-    'actions actions';
-  column-gap: 24px;
+    'copy badges'
+    'actions badges';
+  column-gap: 48px;
   padding: 26px 32px 34px;
   background-color: #101314;
   background-image: radial-gradient(circle, rgba(255, 255, 255, 0.13) 1px, transparent 1px);
@@ -483,11 +487,12 @@
 
 .founderBadges {
   grid-area: badges;
-  align-self: start;
+  align-self: center;
+  justify-self: end;
   display: inline-flex;
   align-items: center;
-  gap: 18px;
-  margin-top: 4px;
+  gap: 28px;
+  padding-right: 8px;
 
   @include responsive($bp-mobile) {
     justify-self: start;

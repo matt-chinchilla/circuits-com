@@ -211,14 +211,14 @@ describe('AboutPage', () => {
     expect(host.querySelector('ul a[href="/contact"]')?.textContent).toBe('contact page');
   });
 
-  it('renders the Founder block: both badges at 64px, the three Founder prices, and both links', () => {
+  it('renders the Founder block: both badges at 96px, the three Founder prices, and both links', () => {
     render();
     const glow = host.querySelectorAll('glow-badge');
     const fire = host.querySelectorAll('fire-badge');
     expect(glow).toHaveLength(1);
     expect(fire).toHaveLength(1);
-    expect(glow[0].getAttribute('size')).toBe('64');
-    expect(fire[0].getAttribute('size')).toBe('64');
+    expect(glow[0].getAttribute('size')).toBe('96');
+    expect(fire[0].getAttribute('size')).toBe('96');
     expect(fire[0].getAttribute('badge')).toBe('true');
     expect(fire[0].getAttribute('sparks')).toBe('true');
     const pair = glow[0].parentElement!;
