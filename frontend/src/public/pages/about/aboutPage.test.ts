@@ -382,8 +382,10 @@ describe('AboutPage.module.scss', () => {
     expect(lip).toContain('height: 2px;');
   });
 
-  it('paints the static fallback under [data-caustic=\'static\']', () => {
-    const fallback = squash(block(SCSS, ".aboutWhyField[data-caustic='static'] {"));
+  it("the field's own stylesheet paints the static fallback under [data-caustic='static'] (the page has no copy)", () => {
+    expect(SCSS).not.toContain("data-caustic");
+    const fieldScss = readFileSync(join(__dirname, 'CausticField.module.scss'), 'utf8');
+    const fallback = squash(block(fieldScss, "&[data-caustic='static'] {"));
     expect(fallback).toMatch(/radial-gradient\(.*var\(--theme-accent\) 14%/);
     expect(fallback).toMatch(/radial-gradient\(.*var\(--theme-accent\) 10%/);
     expect(fallback).toContain('var(--theme-nav-bg)');

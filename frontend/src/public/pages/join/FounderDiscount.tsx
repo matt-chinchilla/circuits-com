@@ -16,7 +16,7 @@ import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type 
 import TierBannerRibbon from '@public/components/widgets/TierBannerRibbon';
 import { BADGE_SCHEMES } from '@shared/types/badge';
 import styles from './JoinPage.module.scss';
-import './fireEdge/fire-edge.vendor.js';
+import { Fire } from './fireEdge/Fire';
 import '@shared/components/FounderBadge/fireBadge/fire-badge.vendor.js';
 import '@shared/components/FounderBadge/glowBadge/glow-badge.vendor.js';
 
@@ -26,53 +26,6 @@ const FOUNDER_PERKS = [
   'Priority placement on the "Local Businesses" map',
   'Access to all future badge-drops for Suppliers & Users',
 ];
-
-interface FireProps {
-  on: boolean;
-  mode?: 'lip' | 'line' | 'sweep';
-  delay?: string | number;
-  dur?: string | number;
-  scale?: string | number;
-  blend?: 'add' | 'over';
-  intensity?: string | number;
-  scheme?: 'orange' | 'red';
-  x1?: string | number;
-  y1?: string | number;
-  x2?: string | number;
-  y2?: string | number;
-  coals?: boolean;
-  sustain?: string | number;
-  hold?: string | number;
-  linger?: string | number;
-  linear?: boolean;
-}
-
-/** Thin wrapper over the vendored element — every attribute spelled the way
- *  the design's own `Fire` helper spells it, defaults included. */
-export function Fire(p: FireProps) {
-  return (
-    <fire-edge
-      active={p.on ? 'true' : 'false'}
-      mode={p.mode}
-      delay={p.delay}
-      duration={p.dur}
-      scale={p.scale}
-      blend={p.blend || 'add'}
-      intensity={p.intensity || 1}
-      scheme={p.scheme || 'orange'}
-      x1={p.x1}
-      y1={p.y1}
-      x2={p.x2}
-      y2={p.y2}
-      coals={p.coals ? 'true' : 'false'}
-      sustain={p.sustain || 0}
-      hold={p.hold || 1}
-      linger={p.linger || 0}
-      linear={p.linear ? 'true' : 'false'}
-      aria-hidden="true"
-    />
-  );
-}
 
 // Rounded circle-check — inherits the card's ink. (Same glyph the tier cards
 // draw; kept local so this module does not import back into the page.)

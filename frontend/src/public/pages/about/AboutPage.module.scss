@@ -285,16 +285,6 @@
   }
 }
 
-// The page's own fallback for the field: two soft accent pools over the
-// ground, so the section never reads as a flat slab when WebGL is absent or
-// lost (CausticField sets data-caustic="static" on those paths).
-.aboutWhyField[data-caustic='static'] {
-  background:
-    radial-gradient(60% 50% at 18% 30%, color-mix(in srgb, var(--theme-accent) 14%, transparent), transparent 70%),
-    radial-gradient(50% 45% at 82% 75%, color-mix(in srgb, var(--theme-accent) 10%, transparent), transparent 70%),
-    var(--theme-nav-bg);
-}
-
 .aboutWhyInner {
   position: relative;
   z-index: 1;
