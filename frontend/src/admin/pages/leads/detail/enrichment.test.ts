@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AdminLeadDetail, EnrichmentCandidate } from '@admin/types/leads';
+import type { AdminLeadDetail, EnrichmentCandidate, EnrichmentKind } from '@admin/types/leads';
 
 import {
   confidenceLabel,
   domainSourceNote,
   enrichmentCreateBody,
   enrichmentPatch,
+  enrichmentView,
   isThisLeadsContact,
   patternExample,
   readEnrichmentFailure,
+  searchedNote,
 } from './enrichment';
 
 function candidate(patch: Partial<EnrichmentCandidate> = {}): EnrichmentCandidate {
@@ -208,5 +210,50 @@ describe('readEnrichmentFailure', () => {
       retry: true,
     });
     expect(readEnrichmentFailure(undefined, undefined).retry).toBe(true);
+  });
+});
+
+/** Owner, 2026-09-25: "prevent people from searching companies that have
+ *  already been searched for" — the button exists only while the server
+ *  says a search would still spend on something. */
+describe('enrichmentView', () => {
+  const view = (pending: EnrichmentKind[], name: string | null = 'Ian Locke') =>
+    enrichmentView({ pending }, name);
+
+  it('offers the company search, and no list, before anyone has searched', () => {
+    expect(view(['domain-search', 'email-finder'])).toEqual({
+      showResults: false,
+      searchLabel: 'Search Hunter',
+    });
+    expect(view(['domain-search'], null).searchLabel).toBe('Search Hunter');
+  });
+
+  it('shows the stored list and NO button once everything is stored', () => {
+    expect(view([])).toEqual({ showResults: true, searchLabel: null });
+  });
+
+  it('shows the stored company and offers only the new person', () => {
+    expect(view(['email-finder'])).toEqual({
+      showResults: true,
+      searchLabel: 'Look up Ian Locke\u2019s address',
+    });
+  });
+});
+
+describe('searchedNote', () => {
+  it('says who spent the credit and on which Eastern day', () => {
+    // 01:30 UTC on the 26th is still the 25th in New York.
+    const r = { searched_by: 'anthony', searched_at: '2026-09-26T01:30:00+00:00' };
+    expect(searchedNote(r)).toBe('Searched Sep 25, 2026 by anthony');
+    expect(searchedNote(r, 'anthony')).toBe('Searched Sep 25, 2026 by you');
+    expect(searchedNote(r, 'daniel')).toBe('Searched Sep 25, 2026 by anthony');
+  });
+
+  it('degrades without a name or a date, and is null before any search', () => {
+    expect(searchedNote({ searched_by: null, searched_at: '2026-09-25T15:00:00Z' })).toBe(
+      'Searched Sep 25, 2026',
+    );
+    expect(searchedNote({ searched_by: 'anthony', searched_at: null })).toBe('Searched by anthony');
+    expect(searchedNote({ searched_by: null, searched_at: null })).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -117,3 +118,32 @@ class LeadContact(Base):
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False, index=True)
 
     lead = relationship("Lead", back_populates="contacts")
+
+
+class LeadEnrichmentSearch(Base):
+    """One Hunter search, kept forever (migration 060, owner ask 2026-09-25:
+    "prevent people from searching companies that have already been searched
+    for"). Every search spends a credit, so a company's answer is written once
+    and read by every lead at that domain — branch rows included — from then
+    on. No TTL: the rule is PREVENT, not throttle.
+
+    `kind` is 'domain-search' (key = the domain) or 'email-finder' (key =
+    "domain|normalised full name"); UNIQUE(kind, key) is the arbiter when two
+    reps click at once. `payload` is the mapped JSON the route returns, never
+    Hunter's raw body and never decorated per lead.
+
+    NO foreign key to leads, on purpose: a company is searched once for ALL
+    its rows, and an FK would drag this table toward the reseed TRUNCATE graph
+    (test_leads_schema.py). `searched_by` is a free-string username, like
+    `leads.created_by`."""
+
+    __tablename__ = "lead_enrichment_searches"
+    __table_args__ = (UniqueConstraint("kind", "key", name="uq_lead_enrichment_searches_kind_key"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    kind = Column(String(20), nullable=False)
+    # A domain is <= 253; a finder key adds "|" and a name <= 120.
+    key = Column(String(400), nullable=False)
+    payload = Column(Text, nullable=False)
+    searched_by = Column(String(120), nullable=True)
+    searched_at = Column(DateTime(timezone=True), default=_now, nullable=False)

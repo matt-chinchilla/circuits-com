@@ -210,6 +210,24 @@ def test_lead_created_by_is_free_string_not_fk():
     assert col.type.length >= 120
 
 
+def test_enrichment_searches_stand_alone():
+    """Migration 060: a Hunter search is kept per DOMAIN, not per lead — one
+    company search serves every branch row — so the table has NO foreign key
+    at all (to leads or anything else), `searched_by` is a free string like
+    `leads.created_by`, and it sits outside the reseed TRUNCATE graph."""
+    t = Base.metadata.tables["lead_enrichment_searches"]
+    assert not t.foreign_keys
+    assert "lead_enrichment_searches" not in _truncate_cascade_closure()
+    assert t.c.searched_by.type.length >= 120
+    assert t.c.key.type.length >= 253 + 1 + 120  # domain | a LeadCreate-sized name
+    uniques = [
+        c
+        for c in t.constraints
+        if getattr(c, "columns", None) and {col.name for col in c.columns} == {"kind", "key"}
+    ]
+    assert uniques, "UNIQUE(kind, key) is what stops a second stored search"
+
+
 def test_length_contracts():
     m = Base.metadata.tables["manufacturers"]
     assert m.c.canonical_key.type.length >= 220

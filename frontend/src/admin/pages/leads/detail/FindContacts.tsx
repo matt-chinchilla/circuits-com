@@ -1,12 +1,18 @@
 // "Find contacts" — who works at this lead's company, from Hunter, for the rep
-// to REVIEW. Nothing is written by the search; a candidate reaches the roster
-// only when the rep picks "Use for this lead" (the ordinary PATCH) or "Add as
-// a lead" (the ordinary POST, with its identity rules and 409s).
+// to REVIEW. A candidate reaches the roster only when the rep picks "Use for
+// this lead" (the ordinary PATCH) or "Add as a lead" (the ordinary POST, with
+// its identity rules and 409s).
+//
+// Each company is searched ONCE (owner, 2026-09-25: "prevent people from
+// searching companies that have already been searched for"). The panel opens
+// on the STORED answer (GET, which never calls Hunter); the Search button
+// appears only while the server reports something still `pending`, and the
+// server refuses a repeat search on its own — the missing button is a
+// courtesy, not the block. A branch row of an already-searched company opens
+// straight onto its results with "Searched <date> by <name>".
 //
 // Hidden entirely when the server has no HUNTER_API_KEY: the status read 404s
-// and the panel renders nothing (QuotePanel's posture for Stripe). The search
-// itself is a click, never automatic — each one spends a Hunter credit (the
-// server caches a domain's answer for a day, so a re-open is free).
+// and the panel renders nothing (QuotePanel's posture for Stripe).
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -30,9 +36,11 @@ import {
   domainSourceNote,
   enrichmentCreateBody,
   enrichmentPatch,
+  enrichmentView,
   isThisLeadsContact,
   patternExample,
   readEnrichmentFailure,
+  searchedNote,
   type EnrichmentFailure,
   type EnrichmentField,
 } from './enrichment';
@@ -41,6 +49,8 @@ import styles from './FindContacts.module.scss';
 
 interface Props {
   lead: AdminLeadDetail;
+  /** The signed-in username — "Searched … by you". */
+  viewer?: string | null;
   /** A candidate was written onto this lead; `fields` are the ones it filled. */
   onApplied: (detail: AdminLeadDetail, fields: EnrichmentField[]) => void;
   onSessionExpired: () => void;
@@ -53,12 +63,15 @@ interface RowState {
   error?: string;
 }
 
-type Phase = 'idle' | 'loading' | 'done' | 'failed';
+// loading = reading the stored answer (free); searching = a POST in flight.
+type Phase = 'loading' | 'ready' | 'searching' | 'failed';
 
-export default function FindContacts({ lead, onApplied, onSessionExpired }: Props) {
+export default function FindContacts({ lead, viewer, onApplied, onSessionExpired }: Props) {
   const consolePath = useConsolePath();
   const [configured, setConfigured] = useState(false);
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [failedAction, setFailedAction] = useState<'load' | 'search'>('load');
+  const [reloads, setReloads] = useState(0);
   const [result, setResult] = useState<LeadEnrichment | null>(null);
   const [failure, setFailure] = useState<EnrichmentFailure | null>(null);
   // Keyed by address — the one field every candidate has.
@@ -81,15 +94,57 @@ export default function FindContacts({ lead, onApplied, onSessionExpired }: Prop
     };
   }, []);
 
-  // A refusal like "add its website first" is answered by editing the lead;
-  // once any field the domain comes from changes, offer the search again.
-  const domainInputs = [lead.website, lead.sales_email, lead.contact_email, lead.manufacturer_id]
+  const fail = (err: unknown, action: 'load' | 'search') => {
+    const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+    if (status === 401 || status === 403) {
+      const known = classifyLeadsError(err, '');
+      if (known.kind === 'session') {
+        onSessionExpired();
+        return;
+      }
+    }
+    setFailure(readEnrichmentFailure(status, axios.isAxiosError(err) ? err.response?.data : undefined));
+    setFailedAction(action);
+    setPhase('failed');
+  };
+
+  // The stored answer — free, so it is read on open. Read again when a field
+  // the search depends on changes: a refusal like "add its website first" is
+  // answered by editing the lead, and a new contact name may need its own
+  // lookup.
+  const searchInputs = [
+    lead.website,
+    lead.sales_email,
+    lead.contact_email,
+    lead.contact_name,
+    lead.manufacturer_id,
+  ]
     .map((v) => v ?? '')
     .join('|');
   useEffect(() => {
-    setPhase((prev) => (prev === 'failed' ? 'idle' : prev));
+    if (!configured) return;
+    let cancelled = false;
     setFailure(null);
-  }, [domainInputs]);
+    // A re-read after an edit keeps the list on screen until the answer lands.
+    setPhase((prev) => (prev === 'ready' ? prev : 'loading'));
+    adminApi
+      .getLeadEnrichment(lead.id)
+      .then((found) => {
+        if (cancelled) return;
+        setResult(found);
+        setPhase('ready');
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setResult(null);
+        fail(err, 'load');
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `fail` is left out on purpose: it is recreated each render and reads
+    // only props, so depending on its identity would re-read every render.
+  }, [configured, lead.id, searchInputs, reloads]);
 
   if (!configured) return null;
 
@@ -114,26 +169,24 @@ export default function FindContacts({ lead, onApplied, onSessionExpired }: Prop
         : prev,
     );
 
+  // The only call that spends a credit — and the server spends it only on
+  // what is not stored yet.
   const search = async () => {
-    setPhase('loading');
+    setPhase('searching');
     setFailure(null);
     setRows({});
     try {
-      const found = await adminApi.getLeadEnrichment(lead.id);
+      const found = await adminApi.searchLeadEnrichment(lead.id);
       setResult(found);
-      setPhase('done');
+      setPhase('ready');
     } catch (err) {
-      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-      if (status === 401 || status === 403) {
-        const known = classifyLeadsError(err, '');
-        if (known.kind === 'session') {
-          onSessionExpired();
-          return;
-        }
-      }
-      setFailure(readEnrichmentFailure(status, axios.isAxiosError(err) ? err.response?.data : undefined));
-      setPhase('failed');
+      fail(err, 'search');
     }
+  };
+
+  const retry = () => {
+    if (failedAction === 'search') void search();
+    else setReloads((n) => n + 1);
   };
 
   const failMessage = (err: unknown, fallback: string): string => {
@@ -275,8 +328,25 @@ export default function FindContacts({ lead, onApplied, onSessionExpired }: Prop
 
   const suggestion = result?.contact_email_suggestion ?? null;
   const people = result?.candidates.length ?? 0;
+  const view = result ? enrichmentView(result, lead.contact_name) : null;
+  const showResults = result != null && view?.showResults === true && phase !== 'loading';
+  // The spend button: only while something is pending, and not beside a
+  // failure that has its own "Try again".
+  const searchLabel = phase === 'ready' || phase === 'searching' ? (view?.searchLabel ?? null) : null;
   const example = result ? patternExample(result.pattern, result.domain) : null;
   const sourceNote = result ? domainSourceNote(result.domain_source) : null;
+  const searched = result ? searchedNote(result, viewer) : null;
+
+  const searchButton = searchLabel && (
+    <button
+      type="button"
+      className={`${pageStyles.btn} ${pageStyles.btnGhost}`}
+      disabled={phase === 'searching'}
+      onClick={() => void search()}
+    >
+      {searchLabel}
+    </button>
+  );
 
   return (
     <section className={pageStyles.panel} aria-labelledby="find-contacts-title">
@@ -287,24 +357,19 @@ export default function FindContacts({ lead, onApplied, onSessionExpired }: Prop
         <span className={styles.attribution}>via Hunter</span>
       </div>
       <div className={pageStyles.panelBody}>
-        {phase === 'idle' && (
+        {searchButton && !showResults && (
           <div className={styles.intro}>
             <p className={styles.lede}>
-              Look up people at this company and their work addresses. Nothing is saved until you
-              choose someone.
+              Look up people at this company and their work addresses. A company is searched once
+              and the answer is kept for everyone; nothing on this lead changes until you choose
+              someone.
             </p>
-            <button
-              type="button"
-              className={`${pageStyles.btn} ${pageStyles.btnGhost}`}
-              onClick={() => void search()}
-            >
-              Search Hunter
-            </button>
+            {searchButton}
           </div>
         )}
 
         <p className={styles.status} role="status" aria-live="polite">
-          {phase === 'loading' ? 'Searching Hunter…' : ''}
+          {phase === 'searching' ? 'Searching Hunter…' : ''}
         </p>
 
         {phase === 'failed' && failure && (
@@ -314,7 +379,7 @@ export default function FindContacts({ lead, onApplied, onSessionExpired }: Prop
               <button
                 type="button"
                 className={`${pageStyles.btn} ${pageStyles.btnGhost}`}
-                onClick={() => void search()}
+                onClick={retry}
               >
                 Try again
               </button>
@@ -322,7 +387,7 @@ export default function FindContacts({ lead, onApplied, onSessionExpired }: Prop
           </div>
         )}
 
-        {phase === 'done' && result && (
+        {showResults && result && (
           <>
             <p className={styles.summary}>
               <span>
@@ -332,7 +397,21 @@ export default function FindContacts({ lead, onApplied, onSessionExpired }: Prop
               </span>
               {sourceNote && <span className={styles.summaryNote}>{sourceNote}</span>}
               {example && <span className={styles.summaryNote}>usually {example}</span>}
+              {searched && (
+                <span className={styles.summaryNote} data-searched-note="">
+                  {searched}
+                </span>
+              )}
             </p>
+
+            {searchButton && (
+              <div className={styles.intro}>
+                <p className={styles.lede}>
+                  {lead.contact_name ?? 'This contact'}&rsquo;s own address has not been looked up.
+                </p>
+                {searchButton}
+              </div>
+            )}
 
             {suggestion && (
               <div className={styles.suggestion}>

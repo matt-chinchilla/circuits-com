@@ -46,7 +46,7 @@ repo (`~/circuits-backups/`).
 |---|---|---|---|
 | `circuitcenter pull` | prod → local | **whole database** | Drop local, restore prod dump. Local-only anything is gone (backed up first). |
 | `circuits pull` | prod → local | reporting + catalog | **Additive** for catalog (natural keys, upsert; local-only rows survive); reporting tables (`page_views`, `messages`) are replaced because prod is the truth for them. Does NOT move users. |
-| `circuits pull --users` | prod → local | registered customers + the leads reps added and their call outcomes | **Additive**. Users: `role='user'` only, upserted on `lower(email)`. Leads: the staff roster's CRM state (outcomes, notes, enrichment edits, photos) and every console-added lead, upserted on `source_key`, plus `lead_contacts` by their own uuid; customer-private prospects stay on prod; `manufacturer_id` travels by name. Staff rows are never touched — local admin passwords are deliberately not prod's. Company links travel by NAME. Opt-in because it carries real addresses and password hashes onto a dev machine. |
+| `circuits pull --users` | prod → local | registered customers + the leads reps added and their call outcomes | **Additive**. Users: `role='user'` only, upserted on `lower(email)`. Leads: the staff roster's CRM state (outcomes, notes, enrichment edits, photos) and every console-added lead, upserted on `source_key`, plus `lead_contacts` by their own uuid; customer-private prospects stay on prod; `manufacturer_id` travels by name. Hunter searches already made (`lead_enrichment_searches`) upsert on `(kind, key)`, so a company searched on prod is not searched again locally. Staff rows are never touched — local admin passwords are deliberately not prod's. Company links travel by NAME. Opt-in because it carries real addresses and password hashes onto a dev machine. |
 | `circuits push` | local → prod | **catalog only** | **Additive** upsert by natural keys; never deletes; asks for confirmation before touching prod. Reporting deliberately cannot be pushed. |
 
 `circuits pull` / `circuits push` share one transfer pair —
@@ -64,7 +64,7 @@ idempotent, so an interrupted run loses nothing and a re-run converges.
 | `circuits pull` | Both pulls: reporting, then catalog. |
 | `circuits pull --reporting` | Just `page_views` + `messages` (the standing post-deploy rule). |
 | `circuits pull --catalog` | Just the catalog upsert (after import runs on prod). |
-| `circuits pull --users` | Registered customers, plus the leads reps added and their outcomes. NOT part of the default run. |
+| `circuits pull --users` | Registered customers, plus the leads reps added, their outcomes, and the Hunter searches already made. NOT part of the default run. |
 | `circuits push` | Export the local catalog, confirm, load into prod. Reminders print for the seo-manifest regen (new part pages need it) and the manufacturer relink (next deploy). |
 | `circuits --fakeuser --up [N]` | Raise the admin presence-fake count (0–10). |
 | `circuits --fakeuser --down [N]` | Lower it; **bare `--down` clears everything** (count and named individuals). |

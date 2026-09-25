@@ -4,7 +4,7 @@ from .bom_share import BomShare
 from .calendar_event import CalendarEvent, CalendarReminderSend
 from .category import Category
 from .expense import Expense
-from .lead import Lead, LeadContact
+from .lead import Lead, LeadContact, LeadEnrichmentSearch
 from .manufacturer import Manufacturer, ManufacturerAlias, ManufacturerMergeCandidate
 from .message import Message
 from .outbound_click import OutboundClick
@@ -47,4 +47,5 @@ __all__ = [
     "SponsorBilling",
     "SponsorPayment",
     "BillingAudit",
+    "LeadEnrichmentSearch",
 ]

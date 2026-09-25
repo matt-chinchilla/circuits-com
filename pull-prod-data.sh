@@ -8,6 +8,7 @@
 #                                    # survive; prod is NEVER written)
 #   ./pull-prod-data.sh --users      # REGISTERED CUSTOMERS (upserted by email) + the
 #                                   #   leads reps added and every call outcome (by source_key)
+#                                   #   + every Hunter search already made (by kind + key)
 #                                   # customers are upserted by
 #                                    # email (additive; staff rows untouched)
 #
@@ -258,6 +259,51 @@ SQL
      SELECT count(*) AS added_by_reps FROM leads WHERE user_id IS NULL AND created_by IS NOT NULL; \
      SELECT count(*) AS outcomes_local FROM lead_contacts; \
      SELECT count(*) AS leads_with_an_outcome FROM leads WHERE user_id IS NULL AND last_outcome IS NOT NULL;"
+
+  # ── Hunter searches already made (migration 060, owner ask 2026-09-25) ──
+  # A search on prod spent a credit; knowing it here stops a local "Search
+  # Hunter" spending another on the same company. Keyed by (kind, key) — the
+  # domain, or "domain|name" — with no FK and no surrogate, so the rows travel
+  # as they are and prod's answer wins a conflict. Skipped (not failed) while
+  # prod predates 060, so a pull before that deploy still brings the leads.
+  echo "SELECT to_regclass('public.lead_enrichment_searches') IS NOT NULL;" > "$TMP/has_searches.sql"
+  push_key
+  has_searches="$("${SSH[@]}" "cd /opt/circuits-com && sudo docker compose exec -T db \
+    psql -U circuits -d circuits -tA -v ON_ERROR_STOP=1 -f -" < "$TMP/has_searches.sql")"
+  if [ "$(echo "$has_searches" | tr -d '[:space:]')" = "t" ]; then
+    echo "==> hunter searches pull (upsert by kind + key)"
+    cat > "$TMP/searches_query.sql" <<'SQL'
+COPY (
+  SELECT kind, key, payload, searched_by, searched_at
+  FROM lead_enrichment_searches
+  ORDER BY searched_at
+) TO STDOUT
+SQL
+    push_key
+    "${SSH[@]}" "cd /opt/circuits-com && sudo docker compose exec -T db \
+      psql -U circuits -d circuits -q -v ON_ERROR_STOP=1 -f -" \
+      < "$TMP/searches_query.sql" > "$TMP/searches.tsv"
+    echo "    $(wc -l < "$TMP/searches.tsv") search(es) on prod"
+    {
+      echo "BEGIN;"
+      echo "CREATE TEMP TABLE searches_in (kind text, key text, payload text, searched_by text, searched_at timestamptz);"
+      echo "COPY searches_in FROM STDIN;"
+      cat "$TMP/searches.tsv"
+      printf '%s\n' '\.'
+      echo "SET search_path = public;"
+      echo "INSERT INTO lead_enrichment_searches (id, kind, key, payload, searched_by, searched_at)"
+      echo "  SELECT gen_random_uuid(), i.kind, i.key, i.payload, i.searched_by, i.searched_at FROM searches_in i"
+      echo "  ON CONFLICT (kind, key) DO UPDATE SET payload = EXCLUDED.payload,"
+      echo "    searched_by = EXCLUDED.searched_by, searched_at = EXCLUDED.searched_at;"
+      echo "COMMIT;"
+    } | docker compose -f "$REPO_DIR/docker-compose.yml" exec -T db \
+          psql -U circuits -d circuits -v ON_ERROR_STOP=1 > /dev/null
+    docker compose -f "$REPO_DIR/docker-compose.yml" exec -T db \
+      psql -U circuits -d circuits -c \
+      "SELECT kind, count(*) AS searches_local FROM lead_enrichment_searches GROUP BY kind ORDER BY kind;"
+  else
+    echo "==> hunter searches: prod has no lead_enrichment_searches yet (pre-060) — skipped"
+  fi
 fi
 
 echo "done."

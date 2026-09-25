@@ -1,9 +1,12 @@
-"""Contact enrichment — GET /api/admin/leads/{id}/enrichment (Hunter.io).
+"""Contact enrichment (Hunter.io) — GET /api/admin/leads/{id}/enrichment reads
+the STORED answer and never calls Hunter; POST …/enrichment/search calls it
+only for what is not stored yet (migration 060, owner 2026-09-25: "prevent
+people from searching companies that have already been searched for").
 
-The route READS: it asks Hunter and returns candidates, and the rep applies one
-through the existing PATCH/POST. These tests play Hunter with an
-httpx.MockTransport (the fake_stripe idea — real httpx, no network), so the
-request the service builds is asserted, not assumed.
+Neither route writes a lead: the rep applies a candidate through the existing
+PATCH/POST. These tests play Hunter with an httpx.MockTransport (the
+fake_stripe idea — real httpx, no network), so the request the service builds
+is asserted, not assumed.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ import httpx
 import pytest
 
 from app.config import settings
-from app.models import Lead, LeadContact, Manufacturer, User
+from app.models import Lead, LeadContact, LeadEnrichmentSearch, Manufacturer, User
 from app.services import lead_enrichment as le
 from tests.test_admin_leads import leads_db  # noqa: F401 — the seeded roster fixture
 
@@ -80,13 +83,6 @@ class FakeHunter:
         return [r for r in self.requests if r.url.path == f"/v2/{path}"]
 
 
-@pytest.fixture(autouse=True)
-def _fresh_cache():
-    le.clear_cache()
-    yield
-    le.clear_cache()
-
-
 @pytest.fixture
 def hunter(monkeypatch):
     fake = FakeHunter()
@@ -109,7 +105,18 @@ def _placeholder(db) -> Lead:
 
 
 def _get(client, headers, lead: Lead):
+    """The free read — never calls Hunter."""
     return client.get(f"{URL}{lead.id}/enrichment", headers=headers)
+
+
+def _search(client, headers, lead: Lead):
+    """The spend — calls Hunter for whatever is not stored yet."""
+    return client.post(f"{URL}{lead.id}/enrichment/search", headers=headers)
+
+
+def _rows(db) -> list[LeadEnrichmentSearch]:
+    db.expire_all()
+    return db.query(LeadEnrichmentSearch).order_by(LeadEnrichmentSearch.kind).all()
 
 
 # ── Domain derivation (pure) ────────────────────────────────────────────────
@@ -262,13 +269,17 @@ class TestMappers:
         assert le.email_suggestion({}) is None
 
 
-# ── The route ───────────────────────────────────────────────────────────────
+# ── The routes ──────────────────────────────────────────────────────────────
 
 
 class TestUnconfigured:
-    def test_no_key_404s_both_routes_and_calls_nobody(
-        self, client, leads_db, auth_header, monkeypatch
-    ):  # noqa: F811
+    def test_no_key_404s_every_route_and_calls_nobody(
+        self,
+        client,
+        leads_db,
+        auth_header,
+        monkeypatch,  # noqa: F811
+    ):
         fake = FakeHunter()
         monkeypatch.setattr(settings, "HUNTER_API_KEY", None)
         real = le.make_client
@@ -276,28 +287,84 @@ class TestUnconfigured:
             le, "make_client", lambda k, t=None: real(k, httpx.MockTransport(fake.handler))
         )
         h = auth_header()
+        lead = _lead(leads_db)
+        lead.website = "fdh.com"
+        leads_db.commit()
         assert client.get(f"{URL}enrichment/status", headers=h).status_code == 404
-        assert _get(client, h, _lead(leads_db)).status_code == 404
+        assert _get(client, h, lead).status_code == 404
+        assert _search(client, h, lead).status_code == 404
         monkeypatch.setattr(settings, "HUNTER_API_KEY", "   ")
         assert client.get(f"{URL}enrichment/status", headers=h).status_code == 404
+        assert _search(client, h, lead).status_code == 404
         assert fake.requests == []
+        assert _rows(leads_db) == []
 
     def test_status_says_configured_without_spending_a_credit(
-        self, client, leads_db, auth_header, hunter
-    ):  # noqa: F811
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
         r = client.get(f"{URL}enrichment/status", headers=auth_header())
         assert r.status_code == 200
         assert r.json() == {"configured": True, "provider": "hunter"}
         assert hunter.requests == []
 
 
+class TestTheReadIsFree:
+    def test_get_on_a_fresh_company_says_unsearched_and_calls_nobody(
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
+        lead = _lead(leads_db)
+        lead.website = "https://www.fdh.com/"
+        leads_db.commit()
+        r = _get(client, auth_header(), lead)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert (body["domain"], body["domain_source"]) == ("fdh.com", "website")
+        assert body["configured"] is True
+        assert body["searched"] is False
+        # Ian Locke is named with no address: a search would spend on both.
+        assert body["pending"] == ["domain-search", "email-finder"]
+        assert (body["searched_by"], body["searched_at"]) == (None, None)
+        assert body["candidates"] == []
+        assert body["contact_email_suggestion"] is None
+        assert hunter.requests == []
+        assert _rows(leads_db) == []
+
+    def test_get_after_a_search_returns_the_stored_answer_without_calling(
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
+        lead = _lead(leads_db)
+        lead.website = "fdh.com"
+        lead.contact_email = "ian@fdh.com"
+        leads_db.commit()
+        h = auth_header()
+        searched = _search(client, h, lead).json()
+        calls = len(hunter.requests)
+        assert calls == 1
+        read = _get(client, h, lead).json()
+        assert read == searched
+        assert read["searched"] is True
+        assert len(hunter.requests) == calls
+
+
 class TestSearch:
-    def test_domain_search_request_and_answer(self, client, leads_db, auth_header, hunter):  # noqa: F811
+    def test_domain_search_request_answer_and_row(self, client, leads_db, auth_header, hunter):  # noqa: F811
         lead = _lead(leads_db)
         lead.website = "https://www.fdh.com/"
         lead.contact_email = "ian@fdh.com"  # a known address: no Email Finder call
         leads_db.commit()
-        r = _get(client, auth_header(), lead)
+        r = _search(client, auth_header(), lead)
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["provider"] == "hunter"
@@ -306,6 +373,10 @@ class TestSearch:
         assert body["organization"] == "Acme"
         assert body["pattern"] == "{first}"
         assert body["lead_id"] == str(lead.id)
+        assert body["searched"] is True
+        assert body["pending"] == []
+        assert body["searched_by"] == "admin"
+        assert body["searched_at"]
         assert body["contact_email_suggestion"] is None
         assert [c["email"] for c in body["candidates"]] == ["ciaran@acme.com"]
         assert body["candidates"][0]["existing_lead_id"] is None
@@ -317,12 +388,16 @@ class TestSearch:
         assert req.headers["X-API-KEY"] == KEY
         assert KEY not in str(req.url)
 
+        (row,) = _rows(leads_db)
+        assert (row.kind, row.key, row.searched_by) == ("domain-search", "fdh.com", "admin")
+        assert row.searched_at is not None
+
     def test_a_named_contact_without_an_address_also_asks_the_email_finder(
         self,
         client,
-        leads_db,
+        leads_db,  # noqa: F811
         auth_header,
-        hunter,  # noqa: F811
+        hunter,
     ):
         lead = _lead(leads_db)
         lead.website = "fdh.com"
@@ -339,7 +414,7 @@ class TestSearch:
                 }
             },
         )
-        body = _get(client, auth_header(), lead).json()
+        body = _search(client, auth_header(), lead).json()
         (finder,) = hunter.calls("email-finder")
         assert dict(finder.url.params) == {"domain": "fdh.com", "full_name": "Ian Locke"}
         s = body["contact_email_suggestion"]
@@ -347,19 +422,29 @@ class TestSearch:
         # The lead IS Ian Locke — the suggestion is marked as this very lead.
         assert s["existing_lead_id"] == str(lead.id)
         assert body["suggestion_error"] is None
+        assert body["pending"] == []
 
     def test_a_placeholder_does_not_ask_the_email_finder(
-        self, client, leads_db, auth_header, hunter
-    ):  # noqa: F811
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
         lead = _placeholder(leads_db)
         lead.website = "acme-interconnect.com"
         leads_db.commit()
-        assert _get(client, auth_header(), lead).status_code == 200
+        assert _get(client, auth_header(), lead).json()["pending"] == ["domain-search"]
+        assert _search(client, auth_header(), lead).status_code == 200
         assert hunter.calls("email-finder") == []
 
     def test_the_manufacturer_website_is_the_last_resort(
-        self, client, leads_db, auth_header, hunter
-    ):  # noqa: F811
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
         lead = _lead(leads_db, "Lumissil", "Kim Ray")
         mfr = Manufacturer(
             id=uuid.uuid4(),
@@ -375,16 +460,20 @@ class TestSearch:
         leads_db.commit()
         body = _get(client, auth_header(), lead).json()
         # contact_email outranks the manufacturer; same domain either way here.
-        assert body["domain"] == "lumissil.com"
+        assert (body["domain"], body["domain_source"]) == ("lumissil.com", "contact_email")
         lead.contact_email = None
         leads_db.commit()
-        le.clear_cache()
         body = _get(client, auth_header(), lead).json()
         assert (body["domain"], body["domain_source"]) == ("lumissil.com", "manufacturer")
+        assert hunter.requests == []
 
     def test_a_candidate_already_on_the_roster_is_marked(
-        self, client, leads_db, auth_header, hunter
-    ):  # noqa: F811
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
         placeholder = _placeholder(leads_db)  # Acme Interconnect
         placeholder.website = "acme-interconnect.com"
         ian = _lead(leads_db)  # a roster row at ANOTHER company must not match
@@ -434,7 +523,7 @@ class TestSearch:
         )
         got = {
             c["email"]: c["existing_lead_id"]
-            for c in _get(client, auth_header(), placeholder).json()["candidates"]
+            for c in _search(client, auth_header(), placeholder).json()["candidates"]
         }
         assert got["ciaran@acme.com"] == str(colleague.id)  # by name
         assert got["dana@acme-interconnect.com"] == str(by_email.id)  # by address
@@ -442,20 +531,194 @@ class TestSearch:
         assert str(ian.id) not in got.values()
 
 
+class TestTheBlock:
+    """The owner's rule, enforced on the server: a company searched once is
+    never searched again — by this lead, a branch row, or anyone else."""
+
+    def _ready(self, db, website="fdh.com"):
+        lead = _lead(db)
+        lead.website = website
+        lead.contact_email = "ian@fdh.com"
+        db.commit()
+        return lead
+
+    def test_a_second_search_calls_nothing(self, client, leads_db, auth_header, hunter):  # noqa: F811
+        lead = self._ready(leads_db)
+        h = auth_header()
+        first = _search(client, h, lead)
+        assert first.status_code == 200
+        assert len(hunter.requests) == 1
+        second = _search(client, h, lead)
+        assert second.status_code == 200
+        assert second.json() == first.json()
+        assert second.json()["searched"] is True
+        assert len(hunter.requests) == 1
+        assert len(_rows(leads_db)) == 1
+
+    def test_any_lead_on_the_same_domain_is_blocked_too(
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
+        self._ready(leads_db)
+        other = _lead(leads_db, "FDH Electronics", "Nathan Little")
+        other.website = "https://www.FDH.com/contact"
+        other.contact_email = "nathan@fdh.com"
+        leads_db.commit()
+        h = auth_header()
+        _search(client, h, _lead(leads_db))
+        assert len(hunter.requests) == 1
+        before = _get(client, h, other).json()
+        assert before["searched"] is True  # the branch row sees it with no button
+        assert before["searched_by"] == "admin"
+        after = _search(client, h, other).json()
+        assert len(hunter.requests) == 1
+        assert [c["email"] for c in after["candidates"]] == ["ciaran@acme.com"]
+
+    def test_another_rep_is_blocked_and_sees_who_searched(
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
+        lead = self._ready(leads_db)
+        _search(client, auth_header(), lead)
+        rep = leads_db.query(User).filter_by(username="admin").first()
+        rep.username = "anthony"
+        leads_db.commit()
+        body = _search(client, auth_header(), lead).json()
+        assert len(hunter.requests) == 1
+        assert body["searched_by"] == "admin"
+
+    def test_an_empty_answer_is_stored_too(self, client, leads_db, auth_header, hunter):  # noqa: F811
+        lead = self._ready(leads_db)
+        hunter.domain_reply = (200, _domain_payload([]))
+        h = auth_header()
+        body = _search(client, h, lead).json()
+        assert (body["candidates"], body["searched"]) == ([], True)
+        _search(client, h, lead)
+        assert len(hunter.calls("domain-search")) == 1
+
+    def test_an_error_is_not_stored(self, client, leads_db, auth_header, hunter):  # noqa: F811
+        lead = self._ready(leads_db)
+        hunter.domain_reply = (500, {"errors": []})
+        h = auth_header()
+        assert _search(client, h, lead).status_code == 502
+        assert _rows(leads_db) == []
+        assert _get(client, h, lead).json()["searched"] is False
+        hunter.domain_reply = (200, _domain_payload([CIARAN]))
+        assert _search(client, h, lead).status_code == 200
+        assert len(hunter.calls("domain-search")) == 2
+        assert len(_rows(leads_db)) == 1
+
+    def test_finder_rows_are_keyed_by_domain_and_folded_name(
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
+        ian = _lead(leads_db)
+        ian.website = "fdh.com"
+        leads_db.commit()
+        h = auth_header()
+        _search(client, h, ian)
+        assert [(r.kind, r.key) for r in _rows(leads_db)] == [
+            ("domain-search", "fdh.com"),
+            ("email-finder", "fdh.com|ian locke"),
+        ]
+        # A DIFFERENT person at the stored company: only their own lookup runs.
+        nathan = _lead(leads_db, "FDH Electronics", "Nathan Little")
+        nathan.website = "fdh.com"
+        leads_db.commit()
+        pending = _get(client, h, nathan).json()["pending"]
+        assert pending == ["email-finder"]
+        _search(client, h, nathan)
+        assert len(hunter.calls("domain-search")) == 1
+        (_, nathan_call) = hunter.calls("email-finder")
+        assert nathan_call.url.params["full_name"] == "Nathan Little"
+        # The same person, typed differently, is the search already made.
+        ian.contact_name = "  IAN   locke "
+        leads_db.commit()
+        assert _get(client, h, ian).json()["searched"] is True
+        _search(client, h, ian)
+        assert len(hunter.calls("email-finder")) == 2
+
+    def test_a_failed_finder_keeps_the_company_list_and_stays_pending(
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,  # noqa: F811
+    ):
+        lead = _lead(leads_db)
+        lead.website = "fdh.com"
+        leads_db.commit()
+        hunter.finder_reply = (500, {"errors": []})
+        h = auth_header()
+        r = _search(client, h, lead)
+        assert r.status_code == 200
+        body = r.json()
+        assert len(body["candidates"]) == 1
+        assert body["contact_email_suggestion"] is None
+        assert body["suggestion_error"] == "Hunter didn't answer; try again in a minute."
+        assert (body["searched"], body["pending"]) == (False, ["email-finder"])
+        # A retry spends only on the person, never the company again.
+        hunter.finder_reply = (200, {"data": {"email": None, "score": None}})
+        retry = _search(client, h, lead).json()
+        assert (retry["searched"], retry["suggestion_error"]) == (True, None)
+        assert len(hunter.calls("domain-search")) == 1
+        assert len(hunter.calls("email-finder")) == 2
+
+    def test_stored_answers_are_never_decorated(self, client, leads_db, auth_header, hunter):  # noqa: F811
+        """The route stamps existing_lead_id per lead; the stored answer must
+        stay undecorated or the NEXT lead would inherit this one's marks."""
+        import json
+
+        lead = _lead(leads_db)
+        lead.website = "fdh.com"
+        hunter.finder_reply = (
+            200,
+            {"data": {"first_name": "Ian", "last_name": "Locke", "email": "ian@fdh.com"}},
+        )
+        leads_db.commit()
+        _search(client, auth_header(), lead)
+        for row in _rows(leads_db):
+            assert "existing_lead_id" not in row.payload, row.kind
+        company = json.loads(_rows(leads_db)[0].payload)
+        assert set(company) == {"organization", "pattern", "candidates"}
+
+    def test_a_racing_second_store_keeps_the_first(self, leads_db):  # noqa: F811
+        le._store(leads_db, le.DOMAIN_SEARCH, "fdh.com", {"candidates": ["first"]}, "anthony")
+        le._store(leads_db, le.DOMAIN_SEARCH, "fdh.com", {"candidates": ["second"]}, "daniel")
+        (row,) = _rows(leads_db)
+        assert (row.searched_by, row.payload) == ("anthony", '{"candidates": ["first"]}')
+
+
 class TestRefusals:
+    @pytest.mark.parametrize("call", [_get, _search])
     def test_no_domain_is_a_named_422_and_spends_nothing(
-        self, client, leads_db, auth_header, hunter
-    ):  # noqa: F811
-        r = _get(client, auth_header(), _lead(leads_db))
+        self,
+        client,
+        leads_db,
+        auth_header,
+        hunter,
+        call,  # noqa: F811
+    ):
+        r = call(client, auth_header(), _lead(leads_db))
         assert r.status_code == 422
         assert r.json()["detail"]["code"] == "no_domain"
         assert hunter.requests == []
 
-    def test_free_mail_only_is_a_named_422(self, client, leads_db, auth_header, hunter):  # noqa: F811
+    @pytest.mark.parametrize("call", [_get, _search])
+    def test_free_mail_only_is_a_named_422(self, client, leads_db, auth_header, hunter, call):  # noqa: F811
         lead = _lead(leads_db)
         lead.sales_email = "fdh.sales@gmail.com"
         leads_db.commit()
-        r = _get(client, auth_header(), lead)
+        r = call(client, auth_header(), lead)
         assert r.status_code == 422
         assert r.json()["detail"]["code"] == "free_mail_domain"
         assert hunter.requests == []
@@ -476,172 +739,101 @@ class TestRefusals:
     def test_provider_trouble_is_a_502_with_a_reason(
         self,
         client,
-        leads_db,
+        leads_db,  # noqa: F811
         auth_header,
         hunter,
         reply,
-        reason,  # noqa: F811
+        reason,
     ):
         lead = _lead(leads_db)
         lead.website = "fdh.com"
         leads_db.commit()
         hunter.domain_reply = reply
-        r = _get(client, auth_header(), lead)
+        r = _search(client, auth_header(), lead)
         assert r.status_code == 502
         detail = r.json()["detail"]
         assert detail["code"] == "provider_unavailable"
         assert detail["reason"] == reason
         assert detail["message"]
         assert KEY not in r.text
-
-    def test_a_failed_email_finder_keeps_the_company_list(
-        self, client, leads_db, auth_header, hunter
-    ):  # noqa: F811
-        lead = _lead(leads_db)
-        lead.website = "fdh.com"
-        leads_db.commit()
-        hunter.finder_reply = (500, {"errors": []})
-        r = _get(client, auth_header(), lead)
-        assert r.status_code == 200
-        assert len(r.json()["candidates"]) == 1
-        assert r.json()["contact_email_suggestion"] is None
-        assert r.json()["suggestion_error"] == "Hunter didn't answer; try again in a minute."
+        assert _rows(leads_db) == []
 
     def test_an_email_finder_404_is_simply_no_match(self, client, leads_db, auth_header, hunter):  # noqa: F811
         lead = _lead(leads_db)
         lead.website = "fdh.com"
         leads_db.commit()
         hunter.finder_reply = (404, {"errors": [{"id": "not_found"}]})
-        body = _get(client, auth_header(), lead).json()
+        body = _search(client, auth_header(), lead).json()
         assert body["contact_email_suggestion"] is None
         assert body["suggestion_error"] is None
+        assert body["searched"] is True
 
     def test_a_viewer_is_refused(self, client, leads_db, auth_header, hunter):  # noqa: F811
         lead = _lead(leads_db)
+        lead.website = "fdh.com"
         admin = leads_db.query(User).filter_by(username="admin").first()
         admin.role = "viewer"
         leads_db.commit()
         h = auth_header()
         assert _get(client, h, lead).json()["detail"] == "no_leads_access"
+        assert _search(client, h, lead).status_code == 403
         assert client.get(f"{URL}enrichment/status", headers=h).status_code == 403
         assert hunter.requests == []
+        assert _rows(leads_db) == []
 
-    def test_a_customers_private_lead_is_404(self, client, leads_db, auth_header, hunter):  # noqa: F811
+    @pytest.mark.parametrize("call", [_get, _search])
+    def test_a_customers_private_lead_is_404(self, client, leads_db, auth_header, hunter, call):  # noqa: F811
         lead = _lead(leads_db)
         lead.user_id = uuid.uuid4()
         lead.website = "fdh.com"
         leads_db.commit()
-        assert _get(client, auth_header(), lead).status_code == 404
+        assert call(client, auth_header(), lead).status_code == 404
         assert hunter.requests == []
 
 
-class TestReadOnly:
-    def test_the_route_writes_nothing(self, client, leads_db, auth_header, hunter):  # noqa: F811
+class TestNoLeadIsWritten:
+    def _snapshot(self, db, lead_id):
+        db.expire_all()
+        lead = db.get(Lead, lead_id)
+        return (
+            lead.updated_at,
+            lead.contact_name,
+            lead.contact_email,
+            lead.needs_enrichment,
+            db.query(Lead).count(),
+            db.query(LeadContact).count(),
+        )
+
+    def test_the_read_writes_nothing_at_all(self, client, leads_db, auth_header, hunter):  # noqa: F811
         lead = _placeholder(leads_db)
         lead.website = "acme-interconnect.com"
         leads_db.commit()
-        leads_db.refresh(lead)
-        before = (
-            lead.updated_at,
-            lead.contact_name,
-            lead.contact_email,
-            lead.needs_enrichment,
-            leads_db.query(Lead).count(),
-            leads_db.query(LeadContact).count(),
-        )
+        before = self._snapshot(leads_db, lead.id)
         assert _get(client, auth_header(), lead).status_code == 200
-        leads_db.expire_all()
-        lead = leads_db.get(Lead, lead.id)
-        after = (
-            lead.updated_at,
-            lead.contact_name,
-            lead.contact_email,
-            lead.needs_enrichment,
-            leads_db.query(Lead).count(),
-            leads_db.query(LeadContact).count(),
-        )
-        assert after == before
+        assert self._snapshot(leads_db, lead.id) == before
+        assert _rows(leads_db) == []
 
-    def test_the_route_holds_no_write_calls(self):
-        """Belt and braces: the handler's source never adds, commits or sets."""
+    def test_the_search_writes_only_its_own_row(self, client, leads_db, auth_header, hunter):  # noqa: F811
+        lead = _placeholder(leads_db)
+        lead.website = "acme-interconnect.com"
+        leads_db.commit()
+        before = self._snapshot(leads_db, lead.id)
+        assert _search(client, auth_header(), lead).status_code == 200
+        assert self._snapshot(leads_db, lead.id) == before
+        assert len(_rows(leads_db)) == 1
+
+    def test_the_read_holds_no_write_calls(self):
+        """Belt and braces: the GET handler and the service read it calls
+        never add, commit or set — and never open a Hunter client."""
         import inspect
 
         from app.routes import admin_leads
 
-        src = inspect.getsource(admin_leads.lead_enrichment_candidates)
-        for verb in ("db.add", "db.commit", "db.delete", "setattr(", "db.flush"):
-            assert verb not in src, verb
-
-
-class TestCache:
-    def _ready(self, db, website="fdh.com"):
-        lead = _lead(db)
-        lead.website = website
-        lead.contact_email = "ian@fdh.com"
-        db.commit()
-        return lead
-
-    def test_a_second_open_spends_no_credit(self, client, leads_db, auth_header, hunter):  # noqa: F811
-        lead = self._ready(leads_db)
-        h = auth_header()
-        first = _get(client, h, lead).json()
-        second = _get(client, h, lead).json()
-        assert first == second
-        assert len(hunter.calls("domain-search")) == 1
-
-    def test_the_cache_is_per_domain_and_shared_across_leads(
-        self, client, leads_db, auth_header, hunter
-    ):  # noqa: F811
-        self._ready(leads_db)
-        other = _lead(leads_db, "FDH Electronics", "Nathan Little")
-        other.website = "https://www.fdh.com"
-        other.contact_email = "nathan@fdh.com"
-        leads_db.commit()
-        h = auth_header()
-        _get(client, h, _lead(leads_db))
-        _get(client, h, other)
-        assert len(hunter.calls("domain-search")) == 1
-
-    def test_an_empty_answer_is_cached_too(self, client, leads_db, auth_header, hunter):  # noqa: F811
-        lead = self._ready(leads_db)
-        hunter.domain_reply = (200, _domain_payload([]))
-        h = auth_header()
-        assert _get(client, h, lead).json()["candidates"] == []
-        _get(client, h, lead)
-        assert len(hunter.calls("domain-search")) == 1
-
-    def test_an_error_is_not_cached(self, client, leads_db, auth_header, hunter):  # noqa: F811
-        lead = self._ready(leads_db)
-        hunter.domain_reply = (500, {"errors": []})
-        h = auth_header()
-        assert _get(client, h, lead).status_code == 502
-        hunter.domain_reply = (200, _domain_payload([CIARAN]))
-        assert _get(client, h, lead).status_code == 200
-        assert len(hunter.calls("domain-search")) == 2
-
-    def test_entries_expire_after_a_day(self, client, leads_db, auth_header, hunter, monkeypatch):  # noqa: F811
-        lead = self._ready(leads_db)
-        clock = [1000.0]
-        monkeypatch.setattr(le.time, "monotonic", lambda: clock[0])
-        h = auth_header()
-        _get(client, h, lead)
-        clock[0] += le.CACHE_TTL_SECONDS - 1
-        _get(client, h, lead)
-        assert len(hunter.calls("domain-search")) == 1
-        clock[0] += 2
-        _get(client, h, lead)
-        assert len(hunter.calls("domain-search")) == 2
-
-    def test_one_leads_decoration_never_leaks_into_the_cache(
-        self, client, leads_db, auth_header, hunter
-    ):  # noqa: F811
-        """The route stamps existing_lead_id per lead; the cached answer must
-        stay undecorated or the NEXT lead would inherit this one's marks."""
-        lead = self._ready(leads_db)
-        _get(client, auth_header(), lead)
-        hit, value = le._cache_get(("domain-search", "fdh.com"))
-        assert hit
-        assert all("existing_lead_id" not in c for c in value["candidates"])
+        for fn in (admin_leads.lead_enrichment_candidates, le.stored_enrichment, le._stored):
+            src = inspect.getsource(fn)
+            for verb in ("db.add", "db.commit", "db.delete", "setattr(", "db.flush", "db.execute"):
+                assert verb not in src, (fn.__name__, verb)
+            assert "make_client" not in src, fn.__name__
 
 
 class TestLogHygiene:
@@ -651,7 +843,7 @@ class TestLogHygiene:
         leads_db.commit()
         hunter.domain_reply = (401, {"errors": [{"id": "authentication_failed"}]})
         with caplog.at_level(logging.DEBUG):
-            _get(client, auth_header(), lead)
+            _search(client, auth_header(), lead)
         assert caplog.records, "the failure should be logged"
         assert all(KEY not in r.getMessage() for r in caplog.records)
 
@@ -660,9 +852,9 @@ class TestTheWayOutOfNoDomain:
     def test_a_patched_website_is_what_the_search_uses_and_never_rekeys(
         self,
         client,
-        leads_db,
+        leads_db,  # noqa: F811
         auth_header,
-        hunter,  # noqa: F811
+        hunter,
     ):
         """The 422 says "add its website first" — so the lead's page must be
         able to: LeadUpdate takes `website`, and the next search uses it."""
@@ -673,7 +865,7 @@ class TestTheWayOutOfNoDomain:
         r = client.patch(f"{URL}{lead.id}", json={"website": "https://www.acme-ic.com"}, headers=h)
         assert r.status_code == 200
         assert r.json()["website"] == "https://www.acme-ic.com"
-        body = _get(client, h, lead).json()
+        body = _search(client, h, lead).json()
         assert (body["domain"], body["domain_source"]) == ("acme-ic.com", "website")
         leads_db.expire_all()
         assert leads_db.get(Lead, lead.id).source_key == key

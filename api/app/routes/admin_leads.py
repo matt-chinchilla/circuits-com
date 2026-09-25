@@ -496,12 +496,15 @@ class LeadUpdate(BaseModel):
 
 # ── Contact enrichment (Hunter.io, 2026-09-25) ──────────────────────────────
 #
-# READ-ONLY by design: these routes ask the provider and return candidates;
-# nothing here writes a row. The rep applies a candidate through the doors
-# above — PATCH fills a placeholder, POST adds a sibling lead — so identity,
-# the 409s and `created_by` are exactly what every hand-added lead gets.
-# Key-gated like the Stripe routes: no HUNTER_API_KEY, no route (404), and
-# the client hides the panel on that 404.
+# Candidates only: no route here writes a lead. The rep applies a candidate
+# through the doors above — PATCH fills a placeholder, POST adds a sibling
+# lead — so identity, the 409s and `created_by` are exactly what every
+# hand-added lead gets. What IS written is the search itself
+# (`lead_enrichment_searches`, migration 060): GET reads the stored answer and
+# never calls Hunter; POST …/enrichment/search calls Hunter only for what is
+# not stored yet (owner, 2026-09-25: "prevent people from searching companies
+# that have already been searched for"). Key-gated like the Stripe routes: no
+# HUNTER_API_KEY, no route (404), and the client hides the panel on that 404.
 
 
 def _hunter_key() -> str:
@@ -537,36 +540,25 @@ def _roster_index(db: Session, lead: Lead) -> tuple[dict[str, str], dict[str, st
     return by_key, by_email
 
 
-@router.get("/{lead_id}/enrichment")
-def lead_enrichment_candidates(
-    lead_id: str,
-    db: Session = Depends(get_db),
-    user: User = Depends(require_leads_access),
-) -> dict:
-    """Who works at this lead's company (Hunter Domain Search), and — when the
-    lead names a contact with no address yet — that person's likely address
-    (Email Finder). 422 `no_domain` / `free_mail_domain` when there is no
-    company domain to ask about; 502 `provider_unavailable` when Hunter
-    errs, times out or is out of credits."""
-    key = _hunter_key()
-    lead = _get_lead(db, lead_id)
+def _enrichment_inputs(db: Session, lead: Lead) -> dict[str, str | None]:
     manufacturer_website = (
         db.query(Manufacturer.website).filter(Manufacturer.id == lead.manufacturer_id).scalar()
         if lead.manufacturer_id
         else None
     )
-    try:
-        result = lead_enrichment.enrich(
-            api_key=key,
-            website=lead.website,
-            sales_email=lead.sales_email,
-            contact_name=lead.contact_name,
-            contact_email=lead.contact_email,
-            manufacturer_website=manufacturer_website,
-        )
-    except lead_enrichment.EnrichmentError as exc:
-        raise HTTPException(exc.status, detail=exc.detail()) from None
+    return {
+        "website": lead.website,
+        "sales_email": lead.sales_email,
+        "contact_name": lead.contact_name,
+        "contact_email": lead.contact_email,
+        "manufacturer_website": manufacturer_website,
+    }
 
+
+def _decorated(db: Session, lead: Lead, result: dict[str, Any]) -> dict[str, Any]:
+    """Mark each candidate already on this company's roster. Done per
+    request, never stored — the stored answer is shared by every lead at the
+    domain, and one lead's marks must not become another's."""
     by_key, by_email = _roster_index(db, lead)
 
     def on_list(candidate: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -581,6 +573,47 @@ def lead_enrichment_candidates(
     result["contact_email_suggestion"] = on_list(result["contact_email_suggestion"])
     result["lead_id"] = str(lead.id)
     return result
+
+
+@router.get("/{lead_id}/enrichment")
+def lead_enrichment_candidates(
+    lead_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_leads_access),
+) -> dict:
+    """What is already known about this lead's company — the STORED answer,
+    or `searched: false` with the kinds a search would spend on (`pending`).
+    Never calls Hunter and never writes, so opening a lead costs nothing.
+    422 `no_domain` / `free_mail_domain` when there is no company domain."""
+    _hunter_key()
+    lead = _get_lead(db, lead_id)
+    try:
+        result = lead_enrichment.stored_enrichment(db, **_enrichment_inputs(db, lead))
+    except lead_enrichment.EnrichmentError as exc:
+        raise HTTPException(exc.status, detail=exc.detail()) from None
+    return _decorated(db, lead, result)
+
+
+@router.post("/{lead_id}/enrichment/search")
+def search_lead_enrichment(
+    lead_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_leads_access),
+) -> dict:
+    """Search Hunter for this lead's company (Domain Search) and — when the
+    lead names a contact with no address yet — that person (Email Finder),
+    but ONLY for what is not stored yet; each answer is stored with the
+    actor. Already searched → the stored answer, and Hunter is not called.
+    422 as GET; 502 `provider_unavailable` when Hunter errs, times out or is
+    out of credits (and nothing is stored)."""
+    key = _hunter_key()
+    lead = _get_lead(db, lead_id)
+    inputs = _enrichment_inputs(db, lead)
+    try:
+        result = lead_enrichment.search_enrichment(db, api_key=key, actor=_actor(user), **inputs)
+    except lead_enrichment.EnrichmentError as exc:
+        raise HTTPException(exc.status, detail=exc.detail()) from None
+    return _decorated(db, lead, result)
 
 
 @router.patch("/{lead_id}")

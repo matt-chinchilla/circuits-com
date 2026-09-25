@@ -116,8 +116,9 @@ export type LeadExistsDetail =
   | { code: 'lead_exists_private' };
 
 /** One person (or company address) Hunter knows at the lead's domain — the
- *  candidate shape of GET /api/admin/leads/{id}/enrichment. Nothing here is
- *  stored until the rep applies it through the ordinary PATCH or POST. */
+ *  candidate shape of GET /api/admin/leads/{id}/enrichment. The SEARCH is
+ *  stored (migration 060); the lead changes only when the rep applies a
+ *  candidate through the ordinary PATCH or POST. */
 export interface EnrichmentCandidate {
   first_name: string | null;
   last_name: string | null;
@@ -142,11 +143,25 @@ export interface EnrichmentCandidate {
 
 export type EnrichmentDomainSource = 'website' | 'sales_email' | 'contact_email' | 'manufacturer';
 
+/** The two stored Hunter searches: the company (Domain Search) and one named
+ *  person at it (Email Finder). */
+export type EnrichmentKind = 'domain-search' | 'email-finder';
+
+/** GET …/enrichment (the stored answer, free) and POST …/enrichment/search
+ *  (spends a credit only for what is not stored yet) share this shape. */
 export interface LeadEnrichment {
   provider: 'hunter';
+  configured: true;
   lead_id: string;
   domain: string;
   domain_source: EnrichmentDomainSource;
+  /** Nothing left that a search would spend on — `pending` is empty. */
+  searched: boolean;
+  /** What a search would still spend a credit on, company first. */
+  pending: EnrichmentKind[];
+  /** Who searched this company, and when (ISO) — null until someone has. */
+  searched_by: string | null;
+  searched_at: string | null;
   organization: string | null;
   /** Hunter's address pattern, e.g. "{first}.{last}". */
   pattern: string | null;

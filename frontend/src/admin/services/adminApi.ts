@@ -1064,8 +1064,11 @@ export const adminApi = {
 
   // "Find contacts" (Hunter). 404 = no HUNTER_API_KEY on this server — the
   // panel hides itself on any failure of the status read, like QuotePanel.
-  // Both are READS: nothing is written until the rep applies a candidate
-  // through updateLead / createLead.
+  // getLeadEnrichment is the STORED answer and never calls Hunter; only
+  // searchLeadEnrichment spends a credit, and only for a company (or person)
+  // nobody has searched yet — the server refuses to search one twice. A lead
+  // changes only when the rep applies a candidate through updateLead /
+  // createLead.
   getLeadEnrichmentStatus: () =>
     adminClient
       .get<{ configured: true; provider: string }>('/admin/leads/enrichment/status')
@@ -1074,6 +1077,13 @@ export const adminApi = {
   getLeadEnrichment: (id: string) =>
     adminClient
       .get<import('../types/leads').LeadEnrichment>(`/admin/leads/${encodeURIComponent(id)}/enrichment`)
+      .then((r) => r.data),
+
+  searchLeadEnrichment: (id: string) =>
+    adminClient
+      .post<import('../types/leads').LeadEnrichment>(
+        `/admin/leads/${encodeURIComponent(id)}/enrichment/search`,
+      )
       .then((r) => r.data),
 
   recordLeadOutcome: (id: string, data: { outcome: string; sale_tier?: string | null; note?: string | null }) =>

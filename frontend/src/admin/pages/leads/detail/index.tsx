@@ -661,6 +661,7 @@ export default function LeadDetailPage() {
           <FindContacts
             key={lead.id}
             lead={lead}
+            viewer={user?.username ?? null}
             onApplied={applyEnrichment}
             onSessionExpired={() => setSessionExpired(true)}
           />

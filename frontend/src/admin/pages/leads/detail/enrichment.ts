@@ -15,7 +15,10 @@ import type {
   EnrichmentCandidate,
   EnrichmentDomainSource,
   LeadCreateBody,
+  LeadEnrichment,
 } from '@admin/types/leads';
+
+import { formatEasternDate } from '../provenance';
 
 import {
   EMPTY_LEAD_FORM,
@@ -203,4 +206,43 @@ export function readEnrichmentFailure(status: number | undefined, data: unknown)
   if (status === 422 && message) return { message, retry: false };
   if (status === 502 && message) return { message, retry: detail?.reason !== 'quota' };
   return { message: "Hunter didn't answer; try again in a minute.", retry: true };
+}
+
+/** What the panel shows for a lead, decided by the server's `pending` list —
+ *  the searches that would still spend a Hunter credit. */
+export interface EnrichmentView {
+  /** The company has been searched: show its stored list. */
+  showResults: boolean;
+  /** The one button that would spend a credit, or null when everything this
+   *  lead needs is stored — the server refuses to search a company twice
+   *  (owner, 2026-09-25), so no button is offered either. */
+  searchLabel: string | null;
+}
+
+export function enrichmentView(
+  result: Pick<LeadEnrichment, 'pending'>,
+  contactName: string | null,
+): EnrichmentView {
+  if (result.pending.includes('domain-search')) {
+    return { showResults: false, searchLabel: 'Search Hunter' };
+  }
+  if (result.pending.includes('email-finder')) {
+    // The company is stored (a branch row, say); only this person is new.
+    return { showResults: true, searchLabel: `Look up ${contactName ?? 'this contact'}\u2019s address` };
+  }
+  return { showResults: true, searchLabel: null };
+}
+
+/** "Searched Sep 25, 2026 by anthony" — who spent the credit, and when
+ *  (Eastern day, like the lead's "Added by" line). "you" for the viewer. */
+export function searchedNote(
+  result: Pick<LeadEnrichment, 'searched_by' | 'searched_at'>,
+  viewer?: string | null,
+): string | null {
+  const day = formatEasternDate(result.searched_at);
+  const by = (result.searched_by ?? '').trim();
+  const who = by && viewer && viewer === by ? 'you' : by;
+  if (day && who) return `Searched ${day} by ${who}`;
+  if (day) return `Searched ${day}`;
+  return who ? `Searched by ${who}` : null;
 }
