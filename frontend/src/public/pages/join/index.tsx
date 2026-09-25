@@ -18,6 +18,7 @@ import { api } from "@public/services/api";
 import { chargedMonthly } from "@public/services/checkoutPrice";
 import TierBannerRibbon, { type SponsorTierId } from "@public/components/widgets/TierBannerRibbon";
 import FounderDiscount, { Fire } from "./FounderDiscount";
+import { FOUNDER_DEAL_USD } from "./founderDeal";
 import ExclusiveBuy from "./ExclusiveBuy";
 import ExclusiveCheckoutModal from "./ExclusiveCheckoutModal";
 import {
@@ -59,9 +60,10 @@ interface JoinTier {
   price: string | null;
   /** The Founder's Deal price, struck in beside the list price once the
    *  Founder band is open. Silver is null — the probe's charged `price_usd`.
-   *  Gold/Platinum are card DISPLAY literals; what is charged comes from the
-   *  server's sales_pricing.FOUNDER_USD, and api/tests/test_sales_pricing.py
-   *  (test_founder_literals_match_the_join_page) pins these two to it. */
+   *  Gold/Platinum are card DISPLAY literals from ./founderDeal (the one home
+   *  the About page reads too); what is charged comes from the server's
+   *  sales_pricing.FOUNDER_USD, and api/tests/test_sales_pricing.py
+   *  (test_founder_literals_match_the_join_page) pins all three to it. */
   fd: string | null;
   ribbon: string;
   el: string;
@@ -90,7 +92,7 @@ const JOIN_TIERS: JoinTier[] = [
     id: "gold",
     name: "Gold",
     price: "$2,500",
-    fd: "$2,100",
+    fd: FOUNDER_DEAL_USD.gold,
     ribbon: "Pro",
     el: "Au",
     lead: "Everything in Silver, plus…",
@@ -106,7 +108,7 @@ const JOIN_TIERS: JoinTier[] = [
     id: "platinum",
     name: "Platinum",
     price: "$10,000",
-    fd: "$8,500",
+    fd: FOUNDER_DEAL_USD.platinum,
     ribbon: "Enterprise",
     el: "Pt",
     lead: "Everything in Gold, plus…",
@@ -309,7 +311,9 @@ export default function JoinPage() {
   // Founder's Discount band. `fdLive` trails `fdOpen` by one frame — the price
   // burns start only once the band has actually opened, so the two fires run
   // in step.
-  const [fdOpen, setFdOpen] = useState(false);
+  // `?founder=1` (the About page's "Claim the Founder's Deal") lands with the
+  // band already open.
+  const [fdOpen, setFdOpen] = useState(params.founder === true);
   const [fdLive, setFdLive] = useState(false);
   // The SAME gate <fire-edge> reads at ignition (reduced motion): where the
   // canvas will not start, the static slash stands in — decided once, at the
@@ -396,7 +400,7 @@ export default function JoinPage() {
     if (Object.keys(params).length === 0) return;
     setSearchParams(
       prev => {
-        for (const k of ["code", "tier", "slot", "welcome", "released", "card"]) prev.delete(k);
+        for (const k of ["code", "tier", "slot", "welcome", "released", "card", "founder"]) prev.delete(k);
         return prev;
       },
       { replace: true },

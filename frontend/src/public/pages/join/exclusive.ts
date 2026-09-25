@@ -97,6 +97,8 @@ export interface JoinParams {
   welcome?: ExclusiveTier;
   released?: boolean;
   card?: 'updated';
+  /** `?founder=1` — arrive with the Founder's Discount band open. */
+  founder?: true;
 }
 
 const MAX_PARAM = 64;
@@ -119,6 +121,7 @@ export function readJoinParams(search: string): JoinParams {
   if (isExclusiveTier(welcome)) out.welcome = welcome;
   if (q.get('released') === '1') out.released = true;
   if (q.get('card') === 'updated') out.card = 'updated';
+  if (q.get('founder') === '1') out.founder = true;
   return out;
 }
 

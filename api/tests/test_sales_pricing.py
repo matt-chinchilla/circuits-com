@@ -76,11 +76,13 @@ def test_coupon_naming():
 
 
 def test_founder_literals_match_the_join_page():
-    """Cross-language guard: the Join cards advertise JOIN_TIERS.fd; it must equal what we charge."""
+    """Cross-language guard: the site advertises the Founder's Deal from ONE home,
+    frontend founderDeal.ts (the Join cards and the About page both read it); every
+    tier it names must equal what we charge."""
     src = (
-        pathlib.Path(__file__).parents[2] / "frontend/src/public/pages/join/index.tsx"
+        pathlib.Path(__file__).parents[2] / "frontend/src/public/pages/join/founderDeal.ts"
     ).read_text()
-    gold = re.search(r'id:\s*"gold".*?fd:\s*"\$([\d,]+)"', src, re.S).group(1)
-    plat = re.search(r'id:\s*"platinum".*?fd:\s*"\$([\d,]+)"', src, re.S).group(1)
-    assert int(gold.replace(",", "")) == sp.FOUNDER_USD["gold"]
-    assert int(plat.replace(",", "")) == sp.FOUNDER_USD["platinum"]
+    for tier in ("silver", "gold", "platinum"):
+        m = re.search(rf"{tier}:\s*'\$([\d,]+)'", src)
+        assert m, f"founderDeal.ts has no {tier} price"
+        assert int(m.group(1).replace(",", "")) == sp.FOUNDER_USD[tier], tier

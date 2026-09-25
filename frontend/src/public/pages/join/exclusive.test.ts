@@ -129,6 +129,13 @@ describe('readJoinParams', () => {
     expect(readJoinParams('?code=%20%20&slot=')).toEqual({});
   });
 
+  it('reads ?founder=1 (the About page link) and nothing else as founder', () => {
+    expect(readJoinParams('?founder=1')).toEqual({ founder: true });
+    expect(readJoinParams('?founder=2')).toEqual({});
+    expect(readJoinParams('?founder=true')).toEqual({});
+    expect(readJoinParams('?founder=')).toEqual({});
+  });
+
   it('refuses an absurdly long code or slot', () => {
     expect(readJoinParams(`?code=${'A'.repeat(65)}`)).toEqual({});
     expect(readJoinParams(`?slot=${'a'.repeat(65)}`)).toEqual({});
