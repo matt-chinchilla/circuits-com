@@ -21,7 +21,7 @@ says "For over two decades …" must be replaced. It has to harp on:
 Also: "spruce up" the About page so it WOWs a prospect a sales rep sends there; shaders /
 fun animations welcome (owner rule 2026-09-23: Figma-sourced, shaders only where organic).
 
-Not in scope: How It Works copy, the stats strip (live `/api/stats` figures), the header
+Not in scope: How It Works (except its "Connect" body, which loses its dash: `Click through to the distributor of your choice in a new tab. We never gate the buy link, so your relationship stays with them.`), the stats strip (live `/api/stats` figures), the header
 band, any deploy (owner playtests localhost first — phase-gated builds rule).
 
 ## Design (Fable, 2026-09-25)
@@ -95,6 +95,10 @@ above the headline and the two buttons go full-width.
 
 ### Copy (verbatim — the implementer types exactly this; curly quotes as HTML entities)
 
+**Register rule (owner, 2026-09-25 15:40): no em dashes or en dashes anywhere in the page's
+visible copy, How It Works included; every sentence reads like spoken, grammatical language,
+never like an agent's reply.** The stats strip's `—` placeholder is a glyph, not a statement.
+
 Section heading (h2): `Why Circuit Center?`
 
 Display line: `The places engineers look for parts stopped competing years ago. We didn’t.`
@@ -112,12 +116,12 @@ Rail rows (claim → body):
    supplier can be as findable as the largest.`
 2. `We only grow when you do` →
    `There is no other path. Circuit Center is a small, personable company, and every bit of
-   our growth is downstream of our customers’ growth. That is why the standard for quality
-   and for the customer experience here is set higher than almost any industry bothers to.`
+   our growth is downstream of our customers’ growth. That is why we hold ourselves to a
+   standard for quality and customer experience that almost no industry bothers to reach.`
 3. `Useful feedback gets paid` →
-   `Tell us what would make the directory work harder for you. When it is useful we pay for
-   it, in money and in benefits tailored to your company: a company page designed for you
-   on Circuit Center, or an engineer’s time on your data pipeline, at no charge.`
+   `Tell us what would make the directory work harder for you. When it is useful, we pay for
+   it, in money and in benefits tailored to your company, like a company page designed for
+   you on Circuit Center or an engineer’s time on your data pipeline, at no charge.`
 4. `Something new ships every day` →
    `The site changes daily. If you want something it does not do yet, tell us on the
    [contact page] and a person will answer.` (`contact page` is a `<Link to="/contact">`.)
