@@ -1,8 +1,12 @@
 @use '@shared/styles/variables' as *;
 
-// The field fills its positioned parent. The static fallback (no WebGL, a
-// lost context, reduced motion decided at the JS seam) is two soft accent
-// pools over the ground — so the section never reads as a flat black slab.
+// The field fills its positioned parent. On the webgl path the component
+// appends a <canvas> backed at half resolution; the browser's smooth upscale
+// is invisible on soft light, and the ground below shows until the first
+// frame lands. The static fallback (no WebGL, a shader that will not
+// compile, a lost context) is two soft accent pools over the ground — so the
+// section never reads as a flat black slab. Reduced motion is NOT static: it
+// keeps the canvas and paints one still frame.
 .field {
   position: absolute;
   inset: 0;
