@@ -1,0 +1,24 @@
+@use '@shared/styles/variables' as *;
+
+// The field fills its positioned parent. The static fallback (no WebGL, a
+// lost context, reduced motion decided at the JS seam) is two soft accent
+// pools over the ground — so the section never reads as a flat black slab.
+.field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--theme-nav-bg);
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  &[data-caustic='static'] {
+    background:
+      radial-gradient(60% 50% at 18% 30%, color-mix(in srgb, var(--theme-accent) 14%, transparent), transparent 70%),
+      radial-gradient(50% 45% at 82% 75%, color-mix(in srgb, var(--theme-accent) 10%, transparent), transparent 70%),
+      var(--theme-nav-bg);
+  }
+}
