@@ -1,0 +1,223 @@
+@use '@shared/styles/variables' as *;
+@use '@shared/styles/mixins' as *;
+
+// "Find contacts" — a quiet list inside the profile's standard glass panel
+// (panel/btn/link come from LeadDetail.module.scss). Every colour is an admin
+// token, so porcelain and dark both follow the .admin cascade.
+
+.attribution {
+  font-size: 12px;
+  color: var(--a-fg3);
+  letter-spacing: 0.01em;
+}
+
+.intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lede {
+  margin: 0;
+  font-size: 13px;
+  color: var(--a-fg2);
+  max-width: 52ch;
+}
+
+// Always mounted so a screen reader hears "Searching…" arrive; empty
+// otherwise, and then it takes no room.
+.status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--a-fg3);
+
+  &:empty {
+    display: none;
+  }
+}
+
+.failure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.failureText {
+  margin: 0;
+  font-size: 13px;
+  color: var(--a-danger-text);
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-fg1);
+}
+
+.summaryNote {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--a-fg3);
+}
+
+.suggestion {
+  margin: 0 0 16px;
+  padding: 10px 12px 2px;
+  border: 1px solid var(--a-border-soft);
+  border-radius: 8px;
+}
+
+.suggestionHead {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-fg2);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+// Who, then how to reach them, stacked on the left; what to do on the right.
+// The profile's main column is ~600px beside the history rail, so a third
+// track would squeeze the address. On a phone the actions drop underneath.
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'who actions'
+    'reach actions'
+    'error error';
+  align-items: center;
+  gap: 4px 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--a-border-soft);
+
+  .list > &:first-child {
+    border-top: none;
+  }
+
+  @include responsive($bp-admin-mobile) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'who'
+      'reach'
+      'actions'
+      'error';
+  }
+}
+
+.who {
+  grid-area: who;
+}
+
+.reach {
+  grid-area: reach;
+}
+
+.who,
+.reach {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg1);
+}
+
+.nameGeneric {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--a-fg3);
+}
+
+.position {
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+.emailLine,
+.extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+  font-size: 13px;
+
+  a {
+    overflow-wrap: anywhere;
+  }
+}
+
+.trust {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--a-fg3);
+  white-space: nowrap;
+}
+
+.actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  @include responsive($bp-admin-mobile) {
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+}
+
+.actionBtn {
+  padding: 7px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.state {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--a-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-primary);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
+.stateMuted {
+  font-size: 12px;
+  color: var(--a-fg3);
+}
+
+.rowError {
+  grid-area: error;
+  margin: 0;
+  font-size: 12px;
+  color: var(--a-danger-text);
+}

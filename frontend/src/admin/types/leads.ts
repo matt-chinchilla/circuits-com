@@ -114,3 +114,46 @@ export interface LeadCreateBody {
 export type LeadExistsDetail =
   | { code: 'lead_exists'; lead_id: string; company_name: string; contact_name: string | null }
   | { code: 'lead_exists_private' };
+
+/** One person (or company address) Hunter knows at the lead's domain — the
+ *  candidate shape of GET /api/admin/leads/{id}/enrichment. Nothing here is
+ *  stored until the rep applies it through the ordinary PATCH or POST. */
+export interface EnrichmentCandidate {
+  first_name: string | null;
+  last_name: string | null;
+  /** null for a generic address (sales@) — it names nobody, so it offers no
+   *  "use" or "add" action. */
+  full_name: string | null;
+  email: string;
+  position: string | null;
+  phone: string | null;
+  linkedin_url: string | null;
+  /** Hunter's 0-100 confidence (Domain Search) or score (Email Finder). */
+  confidence: number | null;
+  /** Hunter's verification status: valid | accept_all | unknown | … */
+  verification: string | null;
+  /** personal | generic */
+  kind: string | null;
+  source: 'hunter';
+  /** A roster lead at this company that already IS this person (by name or
+   *  by address) — possibly the lead being viewed. */
+  existing_lead_id: string | null;
+}
+
+export type EnrichmentDomainSource = 'website' | 'sales_email' | 'contact_email' | 'manufacturer';
+
+export interface LeadEnrichment {
+  provider: 'hunter';
+  lead_id: string;
+  domain: string;
+  domain_source: EnrichmentDomainSource;
+  organization: string | null;
+  /** Hunter's address pattern, e.g. "{first}.{last}". */
+  pattern: string | null;
+  candidates: EnrichmentCandidate[];
+  /** The lead's own contact, looked up by name (Email Finder) — only when
+   *  the lead names someone with no address on file. */
+  contact_email_suggestion: EnrichmentCandidate | null;
+  /** Set when that second lookup failed but the company list arrived. */
+  suggestion_error: string | null;
+}

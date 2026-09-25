@@ -602,3 +602,30 @@ def test_the_sales_settings_stay_off_the_frontend():
         frontend = _service_block(path, "frontend")
         for name in SALES_SETTINGS[1:]:
             assert name not in frontend, f"{path.name}: {name} leaked into the frontend service"
+
+
+# ── Lead enrichment (2026-09-25) ────────────────────────────────────────────
+# Hunter.io powers the Leads CRM's "Find contacts". Same allowlist rule: a key
+# written into /opt/circuits-com/.env but absent from the api block would
+# leave the panel hidden forever on a box that believes it is configured.
+
+
+def test_both_compose_files_pass_the_hunter_key_through():
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        block = _service_block(path, "api")
+        assert re.search(r"^\s*HUNTER_API_KEY:\s*\$\{HUNTER_API_KEY:-\}\s*$", block, re.M), (
+            f"{path.name}: the api service must pass HUNTER_API_KEY through from the host "
+            "with an EMPTY default (empty = enrichment off, the routes 404)."
+        )
+
+
+def test_the_hunter_key_reaches_only_the_api_service():
+    """The key spends the account's monthly credits; nothing but the api's
+    enrichment route uses it, so no other container should hold it."""
+    for path in (DEV_COMPOSE, PROD_COMPOSE):
+        live = [ln for ln in path.read_text().splitlines() if not ln.strip().startswith("#")]
+        assert sum("HUNTER_API_KEY:" in ln for ln in live) == 1, path.name
+
+
+def test_the_hunter_key_defaults_to_off_in_settings():
+    assert Settings.model_fields["HUNTER_API_KEY"].default is None

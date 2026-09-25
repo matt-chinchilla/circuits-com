@@ -1062,6 +1062,20 @@ export const adminApi = {
   updateLead: (id: string, data: Record<string, unknown>) =>
     adminClient.patch(`/admin/leads/${encodeURIComponent(id)}`, data).then((r) => r.data),
 
+  // "Find contacts" (Hunter). 404 = no HUNTER_API_KEY on this server — the
+  // panel hides itself on any failure of the status read, like QuotePanel.
+  // Both are READS: nothing is written until the rep applies a candidate
+  // through updateLead / createLead.
+  getLeadEnrichmentStatus: () =>
+    adminClient
+      .get<{ configured: true; provider: string }>('/admin/leads/enrichment/status')
+      .then((r) => r.data),
+
+  getLeadEnrichment: (id: string) =>
+    adminClient
+      .get<import('../types/leads').LeadEnrichment>(`/admin/leads/${encodeURIComponent(id)}/enrichment`)
+      .then((r) => r.data),
+
   recordLeadOutcome: (id: string, data: { outcome: string; sale_tier?: string | null; note?: string | null }) =>
     adminClient
       .post<import('../types/leads').AdminLeadDetail>(`/admin/leads/${encodeURIComponent(id)}/contacts`, data)

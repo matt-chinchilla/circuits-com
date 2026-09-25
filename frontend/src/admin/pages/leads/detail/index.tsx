@@ -33,6 +33,8 @@ import LeadAvatar from '../LeadAvatar';
 import OutcomeDisc from '../OutcomeDisc';
 import OutcomeMenu from '../OutcomeMenu';
 import { photoError, photoForSave } from '../photo';
+import FindContacts from './FindContacts';
+import type { EnrichmentField } from './enrichment';
 import styles from './LeadDetail.module.scss';
 
 // The writable subset — `LeadUpdate` in routes/admin_leads.py. Anything outside
@@ -45,6 +47,9 @@ interface EnrichForm {
   linkedin_url: string;
   hours_tz: string;
   notes: string;
+  /** The COMPANY's site — editable here because "Find contacts" searches its
+   *  domain, and a lead without one has nothing to search. */
+  website: string;
   /** '' = no picture. The upload field writes a cropped data-URL or the
    *  pasted link here; photoError() gates the save. */
   photo_url: string;
@@ -59,6 +64,7 @@ const MAX: Record<keyof EnrichForm, number | undefined> = {
   contact_email: 200,
   linkedin_url: 300,
   hours_tz: 40,
+  website: 200,
   notes: undefined, // Text column — unbounded
   photo_url: undefined, // not a typed input — photoError() owns its limit
 };
@@ -72,6 +78,7 @@ function toForm(lead: AdminLeadDetail): EnrichForm {
     linkedin_url: lead.linkedin_url ?? '',
     hours_tz: lead.hours_tz ?? '',
     notes: lead.notes ?? '',
+    website: lead.website ?? '',
     photo_url: lead.photo_url ?? '',
   };
 }
@@ -189,6 +196,20 @@ export default function LeadDetailPage() {
     if (!editing) setForm(toForm(detail));
   };
 
+  // "Find contacts" wrote a candidate onto this lead. The fields it filled are
+  // taken into an OPEN edit form too — otherwise the (empty) draft would
+  // overwrite them on the next Save — while the rest of the draft is kept.
+  const applyEnrichment = (detail: AdminLeadDetail, fields: EnrichmentField[]) => {
+    setLead(detail);
+    const fresh = toForm(detail);
+    setForm((prev) => {
+      if (!prev || !editing) return fresh;
+      const next = { ...prev };
+      for (const field of fields) next[field] = fresh[field];
+      return next;
+    });
+  };
+
   const save = async () => {
     if (!id || !form || saving) return;
     // The server would 422 a pasted non-image link as an array detail; say it
@@ -209,6 +230,7 @@ export default function LeadDetailPage() {
         linkedin_url: orNull(form.linkedin_url),
         hours_tz: orNull(form.hours_tz),
         notes: orNull(form.notes),
+        website: orNull(form.website),
         photo_url: photoForSave(form.photo_url),
       })) as AdminLeadDetail;
       applyDetail(updated);
@@ -525,6 +547,18 @@ export default function LeadDetailPage() {
                     />
                   </label>
                   <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Company website</span>
+                    <input
+                      type="text"
+                      inputMode="url"
+                      className={styles.input}
+                      maxLength={MAX.website}
+                      placeholder="acme.com"
+                      value={form.website}
+                      onChange={(e) => setField('website', e.target.value)}
+                    />
+                  </label>
+                  <label className={styles.field}>
                     <span className={styles.fieldLabel}>Hours / time zone</span>
                     <input
                       type="text"
@@ -619,6 +653,14 @@ export default function LeadDetailPage() {
               </dl>
             )}
           </section>
+
+          {/* ── Find contacts (hidden without a Hunter key) ────────────── */}
+          <FindContacts
+            key={lead.id}
+            lead={lead}
+            onApplied={applyEnrichment}
+            onSessionExpired={() => setSessionExpired(true)}
+          />
 
           {/* ── Company ─────────────────────────────────────────────────── */}
           <section className={styles.panel}>

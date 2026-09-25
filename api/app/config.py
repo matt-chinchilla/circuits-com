@@ -189,6 +189,16 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_PUBLIC_KEY: str | None = None
 
+    # HUNTER_API_KEY — Hunter.io (Domain Search + Email Finder), the provider
+    # behind the Leads CRM's "Find contacts" (services/lead_enrichment.py).
+    # Same secrecy as STRIPE_SECRET_KEY: server side ONLY — never a template,
+    # a JSON response, a log line or the Vite build. It is sent as the
+    # X-API-KEY header, never in a query string, so it cannot land in an
+    # httpx/nginx URL log. None = the feature is off: the enrichment routes
+    # 404 and the panel hides itself (the Stripe posture). Each search spends
+    # a credit from the account's monthly allowance.
+    HUNTER_API_KEY: str | None = None
+
     # Who onboards self-serve Silver buyers. Stamped into Sponsor.sold_by by
     # the checkout webhook so the dashboard's sales-reps chart credits the
     # partners desk for deals it onboards, not only deals it closes by hand.

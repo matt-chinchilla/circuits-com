@@ -25,9 +25,11 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db.session import get_db
 from app.models import Lead, LeadContact, Manufacturer
 from app.models.user import User
+from app.services import lead_enrichment
 from app.services.auth_service import is_viewer, require_staff
 from app.services.lead_distance import distance_from_hq_miles
 from app.services.lead_identity import lead_company_parts, lead_source_key
@@ -477,6 +479,10 @@ class LeadUpdate(BaseModel):
     linkedin_url: str | None = Field(default=None, max_length=300)
     hours_tz: str | None = Field(default=None, max_length=40)
     notes: str | None = None
+    # The company's site. Editable since "Find contacts" (2026-09-25): the
+    # search needs a domain, and its refusal tells the rep to add one. Not
+    # identity — source_key is company + contact — so a PATCH never re-keys.
+    website: str | None = Field(default=None, max_length=200)
     # null (or "") removes the picture; anything else must be an image URL.
     photo_url: str | None = None
 
@@ -486,6 +492,95 @@ class LeadUpdate(BaseModel):
         if isinstance(value, str) and not value.strip():
             return None
         return validate_optional_image_url(value) if isinstance(value, str) else value
+
+
+# ── Contact enrichment (Hunter.io, 2026-09-25) ──────────────────────────────
+#
+# READ-ONLY by design: these routes ask the provider and return candidates;
+# nothing here writes a row. The rep applies a candidate through the doors
+# above — PATCH fills a placeholder, POST adds a sibling lead — so identity,
+# the 409s and `created_by` are exactly what every hand-added lead gets.
+# Key-gated like the Stripe routes: no HUNTER_API_KEY, no route (404), and
+# the client hides the panel on that 404.
+
+
+def _hunter_key() -> str:
+    key = (settings.HUNTER_API_KEY or "").strip()
+    if not key:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not Found")
+    return key
+
+
+@router.get("/enrichment/status")
+def enrichment_status(user: User = Depends(require_leads_access)) -> dict:
+    """200 when "Find contacts" can run, 404 when it cannot (no key). Spends
+    no credit — it never calls the provider."""
+    _hunter_key()
+    return {"configured": True, "provider": lead_enrichment.PROVIDER}
+
+
+def _roster_index(db: Session, lead: Lead) -> tuple[dict[str, str], dict[str, str]]:
+    """This company's roster rows, keyed two ways — by the identity key each
+    row would take today (the _find_enriched rule) and by contact email — so
+    a candidate already on the list is shown as "on the list" with its link
+    instead of inviting a POST that would 409."""
+    by_key: dict[str, str] = {}
+    by_email: dict[str, str] = {}
+    rows = (
+        db.query(Lead).filter(Lead.company_slug == lead.company_slug, Lead.user_id.is_(None)).all()
+    )
+    for row in rows:
+        if row.contact_name:
+            by_key.setdefault(lead_source_key(row.company_name, row.contact_name), str(row.id))
+        if row.contact_email:
+            by_email.setdefault(row.contact_email.strip().lower(), str(row.id))
+    return by_key, by_email
+
+
+@router.get("/{lead_id}/enrichment")
+def lead_enrichment_candidates(
+    lead_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_leads_access),
+) -> dict:
+    """Who works at this lead's company (Hunter Domain Search), and — when the
+    lead names a contact with no address yet — that person's likely address
+    (Email Finder). 422 `no_domain` / `free_mail_domain` when there is no
+    company domain to ask about; 502 `provider_unavailable` when Hunter
+    errs, times out or is out of credits."""
+    key = _hunter_key()
+    lead = _get_lead(db, lead_id)
+    manufacturer_website = (
+        db.query(Manufacturer.website).filter(Manufacturer.id == lead.manufacturer_id).scalar()
+        if lead.manufacturer_id
+        else None
+    )
+    try:
+        result = lead_enrichment.enrich(
+            api_key=key,
+            website=lead.website,
+            sales_email=lead.sales_email,
+            contact_name=lead.contact_name,
+            contact_email=lead.contact_email,
+            manufacturer_website=manufacturer_website,
+        )
+    except lead_enrichment.EnrichmentError as exc:
+        raise HTTPException(exc.status, detail=exc.detail()) from None
+
+    by_key, by_email = _roster_index(db, lead)
+
+    def on_list(candidate: dict[str, Any] | None) -> dict[str, Any] | None:
+        if candidate is None:
+            return None
+        existing = by_email.get(candidate["email"].lower())
+        if existing is None and candidate["full_name"]:
+            existing = by_key.get(lead_source_key(lead.company_name, candidate["full_name"]))
+        return {**candidate, "existing_lead_id": existing}
+
+    result["candidates"] = [on_list(c) for c in result["candidates"]]
+    result["contact_email_suggestion"] = on_list(result["contact_email_suggestion"])
+    result["lead_id"] = str(lead.id)
+    return result
 
 
 @router.patch("/{lead_id}")

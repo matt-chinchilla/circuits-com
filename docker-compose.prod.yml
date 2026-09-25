@@ -130,6 +130,10 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       # Onboarding rep credited (Sponsor.sold_by) for self-serve checkout sales.
       SELF_SERVE_ONBOARDING_REP: ${SELF_SERVE_ONBOARDING_REP:-Daniel}
+      # Hunter.io key for the Leads CRM's "Find contacts". Host secret in
+      # /opt/circuits-com/.env, never git; empty = the feature is off. A change
+      # needs `up -d --force-recreate api`, like every value in this block.
+      HUNTER_API_KEY: ${HUNTER_API_KEY:-}
       # Gold & Platinum sales (spec 2026-09-23). Defaults MIRROR config.py —
       # an empty default would overwrite it (the allowlist gotcha).
       # APP_BASE_URL is the origin of Checkout return URLs and card links;
