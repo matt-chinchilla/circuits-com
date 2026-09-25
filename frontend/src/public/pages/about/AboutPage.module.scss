@@ -8,8 +8,10 @@
 //     IntersectionObserver-driven .seen fade-in with staggered --i delay.
 // (3) .statsSection — full-bleed dark gradient strip, PCB silkscreen grid
 //     overlay, 4 stat tiles with rAF-tickered tabular numerals.
-// (4) .whySection — 2-col grid of value-prop cards with hover lift.
-// (5) .ctaSection — title + sub + two buttons (primary + ghost).
+// (4) .aboutWhy — full-bleed graphite over <CausticField/>: manifesto, the
+//     commitments rail, and the Founder's Deal block (the Join page's Founder
+//     material, ported — not imported). Spec 2026-09-25-about-page-design.md.
+// (5) .aboutCta — title + sub + two buttons (primary + ghost).
 
 // ─── Page root ──────────────────────────────────────────────────────────────
 
@@ -264,73 +266,343 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
-// ─── (4) Why grid — 4 value-prop cards, 2-col, hover lift ─────────────────
+// ─── (4) Why — graphite ground, caustic field, manifesto + rail + Founder ─
 
-.aboutWhyInner {
-  text-align: center;
-}
-
-.aboutWhyLead {
-  font-size: 1.05rem;
-  color: var(--fg2);
-  line-height: 1.65;
-  max-width: 70ch;
-  margin: 0 auto 36px;
-}
-
-.aboutWhyGrid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  text-align: left;
-  opacity: 0;
-  transform: translateY(12px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+// Full-bleed. The field is absolutely positioned behind everything, so the
+// section is its containing block and clips it; the content sits in a
+// stacking layer above (.aboutWhyInner). Left-aligned on purpose — a manifesto
+// reads as a voice, not a poster.
+.aboutWhy {
+  position: relative;
+  overflow: hidden;
+  background: var(--theme-nav-bg);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 88px 20px 96px;
+  color: rgba(244, 245, 247, 0.78);
 
   @include responsive($bp-mobile) {
-    grid-template-columns: 1fr;
+    padding: 64px 16px 72px;
   }
 }
 
-.aboutWhy.seen .aboutWhyGrid {
-  opacity: 1;
-  transform: translateY(0);
+// The page's own fallback for the field: two soft accent pools over the
+// ground, so the section never reads as a flat slab when WebGL is absent or
+// lost (CausticField sets data-caustic="static" on those paths).
+.aboutWhyField[data-caustic='static'] {
+  background:
+    radial-gradient(60% 50% at 18% 30%, color-mix(in srgb, var(--theme-accent) 14%, transparent), transparent 70%),
+    radial-gradient(50% 45% at 82% 75%, color-mix(in srgb, var(--theme-accent) 10%, transparent), transparent 70%),
+    var(--theme-nav-bg);
 }
 
-.aboutWhyCard {
-  background: #fff;
-  border-radius: 10px;
-  padding: 24px 26px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: transform 0.25s, box-shadow 0.25s;
+.aboutWhyInner {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  text-align: left;
+}
 
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+.aboutWhyTitle {
+  font-family: $font-heading;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--theme-accent);
+  margin: 0 0 14px;
+  line-height: 1.3;
+}
+
+.aboutWhyDisplay {
+  font-family: $font-heading;
+  font-size: clamp(1.9rem, 3.6vw, 2.9rem);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.08;
+  color: #fff;
+  max-width: 22ch;
+  margin: 0 0 22px;
+  text-wrap: balance;
+}
+
+.aboutWhyManifesto {
+  font-size: 1.08rem;
+  line-height: 1.6;
+  max-width: 64ch;
+  margin: 0 0 48px;
+}
+
+// Commitments rail: [pad | claim | body]. A 1px accent trace runs down the
+// pad column from ring to ring (each row draws the segment to the next), and
+// every row carries a 10px ring — a via on a trace, not a numbered step.
+.whyRail {
+  list-style: none;
+  margin: 0 0 64px;
+  padding: 0;
+}
+
+.whyRow {
+  --pad-top: 30px; // row padding (22px) + half the claim's first line (13px) − half the ring (5px)
+
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1.6fr);
+  column-gap: 24px;
+  align-items: start;
+  padding: 22px 0;
+
+  // Trace segment: from this ring's bottom to the next row's ring top.
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 13.5px;
+    top: calc(var(--pad-top) + 10px);
+    bottom: calc(-1 * var(--pad-top));
+    width: 1px;
+    background: color-mix(in srgb, var(--theme-accent) 60%, transparent);
+    pointer-events: none;
   }
 
-  h3 {
-    font-family: $font-heading;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--fg1);
-    margin: 0 0 8px;
+  @include responsive($bp-mobile) {
+    grid-template-columns: 28px minmax(0, 1fr);
+    column-gap: 14px;
+    row-gap: 8px;
   }
+}
+
+.whyPad {
+  grid-column: 1;
+  justify-self: center;
+  width: 10px;
+  height: 10px;
+  margin-top: calc(var(--pad-top) - 22px);
+  border: 1.5px solid var(--theme-accent);
+  border-radius: 50%;
+  background: var(--theme-nav-bg);
+  box-sizing: border-box;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.whyClaim {
+  grid-column: 2;
+  font-family: $font-heading;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #fff;
+  margin: 0;
+}
+
+.whyBody {
+  grid-column: 3;
+  font-size: 1rem;
+  line-height: 1.6;
+  max-width: 58ch;
+  margin: 0;
+
+  @include responsive($bp-mobile) {
+    grid-column: 2;
+  }
+}
+
+.whyLink {
+  color: var(--theme-accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--theme-accent) 45%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.2s ease;
+
+  &:focus-visible {
+    outline: 2px solid var(--theme-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+// Hover tints are desktop-only: pointer hover synthesis fires on touch and
+// would leave a ring or link lit after a tap.
+@media (hover: hover) {
+  .whyRow:hover .whyPad {
+    background: var(--theme-accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--theme-accent) 18%, transparent);
+  }
+
+  .whyLink:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+// Founder's Deal block — the Join page's `.tier.fd` material restated locally
+// (JoinPage.module.scss is the Join page's, never imported here): black dotted
+// slab, red top metal, the --tc palette. overflow stays VISIBLE — the fire
+// badge's canvas reaches 2.4× the pin above it and the lip overscans the rim.
+.founderBlock {
+  --tc: #e8695c;
+  --tc-bright: #ffb59f;
+  --tc-deep: #c0392b;
+
+  position: relative;
+  overflow: visible;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'tag badges'
+    'title badges'
+    'copy copy'
+    'actions actions';
+  column-gap: 24px;
+  padding: 26px 32px 34px;
+  background-color: #101314;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.13) 1px, transparent 1px);
+  background-size: 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 3px solid var(--tc);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 20px 50px -20px color-mix(in srgb, var(--tc) 45%, transparent);
+
+  @include responsive($bp-mobile) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'tag'
+      'badges'
+      'title'
+      'copy'
+      'actions';
+    padding: 22px 20px 30px;
+  }
+}
+
+// The header band's REV-A designator, in the Founder red.
+.founderTag {
+  grid-area: tag;
+  justify-self: start;
+  align-self: start;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--tc);
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--tc) 50%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--tc) 10%, transparent);
+}
+
+.founderBadges {
+  grid-area: badges;
+  align-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 4px;
+
+  @include responsive($bp-mobile) {
+    justify-self: start;
+    margin: 22px 0 4px;
+  }
+}
+
+.founderTitle {
+  grid-area: title;
+  font-family: $font-heading;
+  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  color: #fff;
+  margin: 18px 0 0;
+  text-wrap: balance;
+}
+
+.founderCopy {
+  grid-area: copy;
+  max-width: 64ch;
 
   p {
-    font-size: 0.95rem;
-    color: var(--fg2);
-    line-height: 1.55;
-    margin: 0;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: rgba(244, 245, 247, 0.78);
+    margin: 14px 0 0;
   }
 }
 
-.aboutWhyIcon {
-  display: inline-block;
-  font-size: 1.6rem;
-  margin-bottom: 10px;
-  line-height: 1;
+.founderActions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 26px;
+
+  @include responsive($bp-mobile) {
+    flex-direction: column;
+
+    > * {
+      width: 100%;
+    }
+  }
+}
+
+// Primary, in the Founder red (white on --tc-deep is 5.4:1). Scoped under
+// .founderActions on purpose: the shared .glowBtn base sits LATER in this file
+// with the same specificity and its `border: … transparent` shorthand would
+// otherwise wipe these border colours (it did — the ghost lost its outline).
+.founderActions .founderBtn {
+  background: var(--tc-deep);
+  color: #fff;
+  border-color: var(--tc-deep);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--tc-deep) 35%, transparent);
+
+  &:focus-visible {
+    outline: 2px solid var(--tc-bright);
+    outline-offset: 2px;
+  }
+}
+
+// Ghost on the dark slab.
+.founderActions .founderBtnGhost {
+  background: transparent;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
+
+  &:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.7);
+    outline-offset: 2px;
+  }
+}
+
+@media (hover: hover) {
+  .founderActions .founderBtn:hover {
+    border-color: var(--tc-bright);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--tc) 45%, transparent);
+  }
+
+  .founderActions .founderBtnGhost:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+// Burning lip — a 2px anchor on the bottom rim; the <fire-edge lip> inside
+// paints the particle fire (overscan) along it. Same geometry as the Join
+// band's .fdFire.
+.founderFire {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  pointer-events: none;
+
+  :global(fire-edge) {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+  }
 }
 
 // ─── (5) CTA — title + sub + two buttons ──────────────────────────────────
@@ -385,10 +657,12 @@
   color: #fff;
   box-shadow: 0 4px 14px rgba(168, 141, 46, 0.35);
 
-  &:hover {
-    background: var(--sponsor-gold-light);
-    transform: translateY(-1px);
-    box-shadow: 0 8px 22px rgba(196, 165, 58, 0.45);
+  @media (hover: hover) {
+    &:hover {
+      background: var(--sponsor-gold-light);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 22px rgba(196, 165, 58, 0.45);
+    }
   }
 }
 
@@ -397,10 +671,12 @@
   color: var(--fg1);
   border-color: rgba(0, 0, 0, 0.18);
 
-  &:hover {
-    background: var(--theme-accent-soft);
-    color: var(--theme-accent);
-    border-color: var(--theme-accent);
+  @media (hover: hover) {
+    &:hover {
+      background: var(--theme-accent-soft);
+      color: var(--theme-accent);
+      border-color: var(--theme-accent);
+    }
   }
 }
 

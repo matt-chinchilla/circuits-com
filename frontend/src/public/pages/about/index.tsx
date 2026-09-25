@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import PageHead from "@public/components/PageHead";
 import { STATIC_PAGE_SEO } from "@public/services/seoRoutes";
@@ -7,7 +7,12 @@ import PageHeaderBand from '@public/components/layout/PageHeaderBand'
 import Icon from '@shared/components/Icon'
 import { api } from '@public/services/api'
 import type { SiteStats } from '@public/types/stats'
+import { BADGE_SCHEMES } from '@shared/types/badge'
+import { Fire } from '@public/pages/join/FounderDiscount'
+import { FOUNDER_DEAL_USD } from '@public/pages/join/founderDeal'
 import { NO_VALUE, STAT_TILES, compactCount } from './siteStats'
+import CausticField from './CausticField'
+import { useFounderBlock } from './useFounderBlock'
 import styles from './AboutPage.module.scss'
 
 const ABOUT_STEPS = [
@@ -30,32 +35,57 @@ const ABOUT_STEPS = [
     num: '03',
     title: 'Connect',
     description:
-      'Click through to the distributor of your choice in a new tab. We never gate the buy-link — your relationship is with them.',
+      'Click through to the distributor of your choice in a new tab. We never gate the buy link, so your relationship stays with them.',
   },
 ] as const
 
-const ABOUT_WHY = [
+// The commitments are NOT a sequence — no numbers, no order implied beyond
+// reading order. Bodies are JSX so the curly apostrophes stay entities and the
+// last row can carry its link.
+const WHY_RAIL: ReadonlyArray<{ claim: string; body: ReactNode }> = [
   {
-    icon: 'target',
-    title: 'One table, every distributor',
-    body: 'Stop opening seven tabs. We pull stock and pricing from Digi-Key, Mouser, Arrow, Avnet, Newark, RS, and Future side-by-side.',
+    claim: 'A way up for the businesses still growing',
+    body: (
+      <>
+        Our pricing is set for a distributor&rsquo;s first marketing dollar, not its hundredth. The
+        BOM tool, the in-browser Design Viewer and the live comparison table exist so a small
+        supplier can be as findable as the largest.
+      </>
+    ),
   },
   {
-    icon: 'file-text',
-    title: 'Datasheets, not marketing copy',
-    body: "Every part page links to the manufacturer's authoritative datasheet. We surface the package, lifecycle status, and MOQ — not fluff.",
+    claim: 'We only grow when you do',
+    body: (
+      <>
+        There is no other path. Circuit Center is a small, personable company, and every bit of our
+        growth is downstream of our customers&rsquo; growth. That is why we hold ourselves to a
+        standard for quality and customer experience that almost no industry bothers to reach.
+      </>
+    ),
   },
   {
-    icon: 'door-open',
-    title: 'No gatekeeping',
-    body: "Buy-links open the distributor in a new tab. No login walls, no quote forms, no waiting on a sales rep. You're in control of the relationship.",
+    claim: 'Useful feedback gets paid',
+    body: (
+      <>
+        Tell us what would make the directory work harder for you. When it is useful, we pay for
+        it, in money and in benefits tailored to your company, like a company page designed for you
+        on Circuit Center or an engineer&rsquo;s time on your data pipeline, at no charge.
+      </>
+    ),
   },
   {
-    icon: 'gear',
-    title: 'Built by engineers',
-    body: 'Founded by hardware folks who got tired of bouncing between distributor portals at 1 a.m. trying to BOM a board.',
+    claim: 'Something new ships every day',
+    body: (
+      <>
+        The site changes daily. If you want something it does not do yet, tell us on the{' '}
+        <Link to="/contact" className={styles.whyLink}>
+          contact page
+        </Link>{' '}
+        and a person will answer.
+      </>
+    ),
   },
-] as const
+]
 
 // Triggers the staggered card fade-in on mount. Previously gated by an
 // IntersectionObserver to defer the animation until the section scrolled
@@ -151,10 +181,71 @@ function StatTicker({ value, suffix }: StatTickerProps) {
   )
 }
 
+/**
+ * The Founder's Deal — the page's one bold element, in the Join page's Founder
+ * material (black dotted slab, brand-red palette) with both Founder badges at
+ * hero scale. Its lip catches fire the first time the block is properly in
+ * view and keeps burning; that ignition is the only orchestrated moment here.
+ */
+function FounderDeal() {
+  const blockRef = useRef<HTMLDivElement | null>(null)
+  const { ignited, onScreen } = useFounderBlock(blockRef)
+  const [schemeIx, setSchemeIx] = useState(0)
+
+  // Both badges step through the enamel colours together every 3s — the Join
+  // page's rhythm — but only while someone can see them.
+  useEffect(() => {
+    if (!onScreen) return undefined
+    const id = window.setInterval(() => setSchemeIx((i) => (i + 1) % BADGE_SCHEMES.length), 3000)
+    return () => window.clearInterval(id)
+  }, [onScreen])
+
+  const scheme = BADGE_SCHEMES[schemeIx]
+
+  return (
+    <div ref={blockRef} className={styles.founderBlock}>
+      <span className={styles.founderTag}>Fd &middot; Founder&rsquo;s Deal</span>
+      <span
+        className={styles.founderBadges}
+        role="img"
+        aria-label="Founder&rsquo;s Badge, pulsing and burning variants"
+      >
+        <glow-badge size={64} scheme={scheme} glow={2} speed={3} />
+        <fire-badge badge="true" size={64} scheme={scheme} intensity={1.6} opacity={1} sparks="true" />
+      </span>
+      <h3 className={styles.founderTitle}>Founders are appreciated like they can&rsquo;t believe.</h3>
+      <div className={styles.founderCopy}>
+        <p>
+          Interest in Circuit Center has outrun every expectation we set for it, so the
+          Founder&rsquo;s Deal is open for a limited time only. Join while it is and you keep the
+          Founder&rsquo;s Badge beside your name, first access to everything that ships after, and
+          the price you joined at, for as long as you stay.
+        </p>
+        <p>
+          Silver is {FOUNDER_DEAL_USD.silver} a month, Gold is {FOUNDER_DEAL_USD.gold} and Platinum
+          is {FOUNDER_DEAL_USD.platinum}. That number never goes up.
+        </p>
+      </div>
+      <div className={styles.founderActions}>
+        <Link to="/join?founder=1" className={`${styles.glowBtn} ${styles.founderBtn}`}>
+          Claim the Founder&rsquo;s Deal
+        </Link>
+        <Link to="/contact" className={`${styles.glowBtn} ${styles.founderBtnGhost}`}>
+          Talk to us
+        </Link>
+      </div>
+      {/* Burning lip — a 2px anchor on the bottom rim; the <fire-edge lip>
+          inside paints the particle fire, exactly as the Join band's .fdFire. */}
+      <span className={styles.founderFire} aria-hidden="true">
+        <Fire on={ignited} mode="lip" delay="0" dur="2" scale="16" sustain="0.35" />
+      </span>
+    </div>
+  )
+}
+
 export default function AboutPage() {
   const [stepsRef, stepsSeen] = useInView<HTMLElement>()
   const [statsRef, statsSeen] = useInView<HTMLElement>()
-  const [whyRef, whySeen] = useInView<HTMLElement>()
   const stats = useSiteStats()
 
   return (
@@ -248,45 +339,49 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* (4) Why — 4 value-prop cards in 2-col grid */}
-      <section
-        ref={whyRef}
-        className={`${styles.aboutSection} ${styles.aboutWhy} ${whySeen ? styles.seen : ''}`}
-      >
+      {/* (4) Why — full-bleed graphite over the caustic light field: the
+          manifesto, the commitments rail, then the Founder's Deal. No
+          entrance animation; the Founder block's ignition is the moment. */}
+      <section className={styles.aboutWhy} aria-labelledby="about-why-title">
+        <CausticField className={styles.aboutWhyField} />
         <div className={styles.aboutWhyInner}>
-          <h2 className={styles.aboutSectionTitle}>Why Circuit Center?</h2>
-          <p className={styles.aboutWhyLead}>
-            For over two decades, Circuit Center has been the go-to resource for engineers and
-            purchasing managers sourcing integrated circuits, semiconductors, passive components,
-            and modules. We don&rsquo;t sell parts &mdash; we make them findable.
+          <h2 id="about-why-title" className={styles.aboutWhyTitle}>
+            Why Circuit Center?
+          </h2>
+          <p className={styles.aboutWhyDisplay}>
+            The places engineers look for parts stopped competing years ago. We didn&rsquo;t.
           </p>
-          <div className={styles.aboutWhyGrid}>
-            {ABOUT_WHY.map((card) => (
-              <article key={card.title} className={styles.aboutWhyCard}>
-                <span className={styles.aboutWhyIcon} aria-hidden="true">
-                  <Icon name={card.icon} />
-                </span>
-                <h3>{card.title}</h3>
-                <p>{card.body}</p>
-              </article>
+          <p className={styles.aboutWhyManifesto}>
+            Circuit Center is new. It started in 2026, after two decades of the same few part-data
+            aggregators going uncontested and growing comfortable. We don&rsquo;t sell parts. We make
+            them findable, and we build the tools the incumbents never bothered to.
+          </p>
+          <ul className={styles.whyRail}>
+            {WHY_RAIL.map((row) => (
+              <li key={row.claim} className={styles.whyRow}>
+                <span className={styles.whyPad} aria-hidden="true" />
+                <h3 className={styles.whyClaim}>{row.claim}</h3>
+                <p className={styles.whyBody}>{row.body}</p>
+              </li>
             ))}
-          </div>
+          </ul>
+          <FounderDeal />
         </div>
       </section>
 
-      {/* (5) CTA — primary "Join" + ghost "Browse Parts" */}
+      {/* (5) CTA — a person, not a queue */}
       <section className={`${styles.aboutSection} ${styles.aboutCta}`}>
-        <h2 className={styles.aboutSectionTitle}>Ready to Get Listed?</h2>
+        <h2 className={styles.aboutSectionTitle}>Reach a person, not a queue.</h2>
         <p className={styles.aboutCtaSub}>
-          Distributors and authorized resellers — join our directory and put your stock in front of
-          buyers who are actively searching for components today.
+          Something new ships every day. Tell us what the directory should do next, or ask a rep to
+          walk you through a board.
         </p>
         <div className={styles.aboutCtaActions}>
-          <Link to="/join" className={`${styles.glowBtn} ${styles.glowBtnGold}`}>
-            Join as Distributor →
+          <Link to="/contact" className={`${styles.glowBtn} ${styles.glowBtnGold}`}>
+            Talk to us
           </Link>
           <Link to="/search" className={`${styles.glowBtn} ${styles.glowBtnGhost}`}>
-            Browse Parts
+            Browse parts
           </Link>
         </div>
       </section>
