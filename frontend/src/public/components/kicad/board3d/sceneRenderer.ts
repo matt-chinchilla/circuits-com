@@ -35,6 +35,12 @@ type RoomModule = typeof import('three/examples/jsm/environments/RoomEnvironment
 
 export type ViewName = 'top' | 'bottom' | 'reset';
 
+/** The board's own axes: x and y its edges as KiCad draws them, z its normal. */
+export type SpinAxis = 'x' | 'y' | 'z';
+/** A running spin. `direction: 1` about z turns the board the way the load
+ *  orbit does on screen; -1 is the other way. */
+export interface Spin { readonly axis: SpinAxis; readonly direction: 1 | -1 }
+
 /** Where the label's anchor landed on the canvas, in CSS pixels from its top
  *  left. `visible` is false while the anchor faces away from the camera (the
  *  part is on the far side of the board) or lies off the canvas. */
@@ -74,6 +80,17 @@ export interface SceneRenderer {
    *  that has no notion of an incremental turn ignores the keys rather than
    *  forcing every fake in a test to implement it. */
   orbit?(azimuthDeg: number, elevationDeg: number): void;
+  /** Turn the MODEL about one of its own axes at the load orbit's pace until
+   *  told otherwise (owner, 2026-09-24: the orbit must be restartable, on every
+   *  axis). The running axis and direction again stops it, another switches,
+   *  null stops. A drag, a view, a flip or an orbit step stops it exactly as
+   *  they stop the load orbit; reduced motion does not, the reader asked for
+   *  this one. Optional, like `orbit`. */
+  spin?(axis: SpinAxis | null, direction?: 1 | -1): void;
+  spinning?(): Spin | null;
+  /** Who to tell when the spin starts, switches or stops — whoever stopped
+   *  it, a drag included, so a pressed Spin button can let go. */
+  onSpinChange?(handler: ((spin: Spin | null) => void) | null): void;
   pause(): void;
   resume(): void;
   dispose(): void;
@@ -183,6 +200,9 @@ export function deferTeardown(fn: () => void, scheduler: TeardownScheduler = win
 }
 
 const DEG = Math.PI / 180;
+const TURN = 2 * Math.PI;
+/** An angle kept inside [0, 2π): a spin left running must not grow without bound. */
+const wrapTurn = (a: number) => ((a % TURN) + TURN) % TURN;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 /** Width / height, never divided by zero (happy-dom and a collapsed host lay out nothing). */
 const aspectOf = (el: HTMLElement) => Math.max(1, el.clientWidth) / Math.max(1, el.clientHeight);
@@ -432,6 +452,19 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
   let flipStart = 0;
   let flipFrom = 0;
 
+  let spin: Spin | null = null;
+  let spinHandler: ((next: Spin | null) => void) | null = null;
+
+  /** The one place the spin changes: a spin ends the load orbit (never both
+   *  at once), and the host hears of every change, whoever made it. */
+  function setSpin(next: Spin | null): void {
+    if (next === spin || (next != null && spin != null && next.axis === spin.axis && next.direction === spin.direction)) return;
+    spin = next;
+    if (next != null) autoOrbit = false;
+    spinHandler?.(next);
+    wake();
+  }
+
   /** Where the camera is, as (azimuth, elevation, distance) around the target.
    *  DERIVED every time rather than remembered: once the visitor drags, the
    *  controls own the camera, and a remembered angle would be a lie. */
@@ -456,7 +489,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     controls.update();
   }
 
-  const moving = (now: number) => autoOrbit || flipping || now < settleUntil;
+  const moving = (now: number) => autoOrbit || flipping || spin != null || now < settleUntil;
 
   function wake(): void {
     if (disposed || paused || ticking || frame !== 0 || renderer == null) return;
@@ -497,6 +530,18 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       const o = orbitOf();
       placeCamera(o.az + ORBIT.autoDegPerSec * dt, o.el, o.dist);
     }
+    if (spin != null && model != null) {
+      // The load orbit raises the camera's azimuth, which `placeCamera` measures
+      // from +y toward +x: clockwise seen from above. The board seen from that
+      // camera turns the other way — positive about +z — so a z spin of +1
+      // raises rotation.z. Face-down (a flip), the normal points at -z and the
+      // same rise would turn it backwards on screen, so the sign follows the
+      // normal's world z, which is cos x · cos y for three's XYZ order.
+      const r = model.rotation;
+      const facing = spin.axis === 'z' && Math.cos(r.x) * Math.cos(r.y) < 0 ? -1 : 1;
+      r[spin.axis] = wrapTurn(r[spin.axis] + spin.direction * facing * ORBIT.autoDegPerSec * DEG * dt);
+    }
+    // After the spin: a flip in flight sets its own axis outright each frame.
     if (flipping && model != null) {
       if (flipStart === 0) flipStart = now;
       const t = clamp((now - flipStart) / FLIP_MS, 0, 1);
@@ -590,6 +635,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
    *  a view that keeps drifting under the visitor's hand is the classic demo bug. */
   const onStart = (): void => {
     autoOrbit = false;
+    setSpin(null);
   };
 
   /** The finish's texture, made on first use. */
@@ -882,7 +928,8 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     async mount(element, board, quality) {
       host = element;
       reducedMotion = options.reducedMotion ?? prefersReducedMotion();
-      autoOrbit = !reducedMotion;
+      // A spin asked for before the meshes existed outranks the load orbit.
+      autoOrbit = !reducedMotion && spin == null;
       const [T, orbit, room] = await Promise.all([
         import('three'),
         import('three/examples/jsm/controls/OrbitControls.js'),
@@ -1029,6 +1076,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     setView(view) {
       if (camera == null || controls == null) return;
       autoOrbit = false;
+      setSpin(null);
       if (view === 'reset') {
         if (model != null) model.rotation.set(0, 0, 0);
         flipping = false;
@@ -1042,6 +1090,7 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     flip() {
       if (model == null || flipping) return;
       autoOrbit = false;
+      setSpin(null);
       if (reducedMotion) {
         model.rotation[longAxis] = (model.rotation[longAxis] + Math.PI) % (2 * Math.PI);
         onChange();
@@ -1056,9 +1105,23 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
     orbit(azimuthDeg, elevationDeg) {
       if (camera == null) return;
       autoOrbit = false;
+      setSpin(null);
       const o = orbitOf();
       placeCamera(o.az + azimuthDeg, o.el + elevationDeg, o.dist);
       onChange();
+    },
+
+    spin(axis, direction = 1) {
+      const again = spin != null && spin.axis === axis && spin.direction === direction;
+      setSpin(axis == null || again ? null : { axis, direction });
+    },
+
+    spinning() {
+      return spin;
+    },
+
+    onSpinChange(handler) {
+      spinHandler = handler;
     },
 
     pause() {
@@ -1099,6 +1162,8 @@ export function createSceneRenderer(options: SceneRendererOptions = {}): SceneRe
       drawn.length = 0;
       pickHandler = null;
       lostHandler = null;
+      spinHandler = null;
+      spin = null;
       modelBox = null;
       if (gone.renderer != null) {
         const canvas = gone.renderer.domElement;

@@ -16,9 +16,11 @@ import { ORBIT } from './board3dTheme';
 import { currentQuality } from './quality';
 import { labelLines, type PartLabel } from './partLabel';
 import {
-  createSceneRenderer, type AnchorScreen, type HoverHit, type ObjectClass3D, type SceneRenderer, type ViewName,
+  createSceneRenderer, type AnchorScreen, type HoverHit, type ObjectClass3D, type SceneRenderer, type Spin, type ViewName,
 } from './sceneRenderer';
-import { BOARD_ACTION_LABEL, BOARD_KEYS, VIEW_MODE_KEYS, ariaKey, boardActionForKey, viewModeForKey } from './shortcuts';
+import {
+  BOARD_ACTION_LABEL, BOARD_KEYS, DEFAULT_SPIN_AXIS, SPIN_KEYS, VIEW_MODE_KEYS, ariaKey, boardActionForKey, spinAxisForKey, viewModeForKey,
+} from './shortcuts';
 import { useBoardScene } from './useBoardScene';
 import { VIEW_MODES, getViewMode, setViewMode, useViewMode } from './viewMode';
 import styles from './Board3DView.module.scss';
@@ -210,6 +212,8 @@ export default function Board3DView({
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SceneRenderer | null>(null);
   const [view, setView] = useState<'top' | 'bottom' | null>(null);
+  /** The renderer's spin as it last reported it — a drag stops it there, not here. */
+  const [spin, setSpin] = useState<Spin | null>(null);
   const viewMode = useViewMode();
   const viewLabelId = useId();
   const calloutRef = useRef<HTMLDivElement>(null);
@@ -327,6 +331,9 @@ export default function Board3DView({
     renderer.onContextLost?.(() => {
       if (!cancelled) setMountFailed('lost');
     });
+    renderer.onSpinChange?.((next) => {
+      if (!cancelled) setSpin(next);
+    });
     void renderer
       .mount(host, scene, tier)
       .then(() => {
@@ -371,6 +378,8 @@ export default function Board3DView({
       io?.disconnect();
       rendererRef.current = null;
       renderer.dispose();
+      // A fresh renderer (Try again) starts still; the button must too.
+      setSpin(null);
     };
   }, [supported, status, scene, tier, attempt, place, showTip]);
 
@@ -423,16 +432,20 @@ export default function Board3DView({
   // component exists only while the 3D tab is shown, so the listener is scoped
   // to it. A held key does not repeat — a held F would flip the board back and
   // forth. `go` reads only a ref and a state setter, so a stale copy is fine.
+  // A spin key alone admits Shift: shift+x is x the other way.
   useEffect(() => {
     if (!ready) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.repeat || !isPlainKey(e)) return;
+      if (e.repeat) return;
       const key = e.key.toLowerCase();
-      const action = boardActionForKey(key);
-      const mode = action == null ? viewModeForKey(key) : null;
-      if (action == null && mode == null) return;
+      const axis = spinAxisForKey(key);
+      if (!isPlainKey(e, { shift: axis != null })) return;
+      const action = axis == null ? boardActionForKey(key) : null;
+      const mode = axis == null && action == null ? viewModeForKey(key) : null;
+      if (axis == null && action == null && mode == null) return;
       e.preventDefault();
-      if (action === 'flip') rendererRef.current?.flip();
+      if (axis != null) rendererRef.current?.spin?.(axis, e.shiftKey ? -1 : 1);
+      else if (action === 'flip') rendererRef.current?.flip();
       else if (action != null) go(action);
       else if (mode != null) setViewMode(mode);
     };
@@ -469,6 +482,17 @@ export default function Board3DView({
             </button>
             <button type="button" className={styles.ctl} aria-keyshortcuts={ariaKey(BOARD_KEYS.reset)} onClick={() => go('reset')}>
               {BOARD_ACTION_LABEL.reset}
+            </button>
+            {/* The load orbit, restartable: pressed while ANY spin runs, and a
+                press then stops it; otherwise it starts the default turn. */}
+            <button
+              type="button"
+              className={styles.ctl}
+              aria-pressed={spin != null}
+              aria-keyshortcuts={ariaKey(SPIN_KEYS[DEFAULT_SPIN_AXIS])}
+              onClick={() => rendererRef.current?.spin?.(spin == null ? DEFAULT_SPIN_AXIS : null)}
+            >
+              Spin
             </button>
           </div>
           {/* Solid / See-through / X-ray. Named "View" and not "Bodies": on the

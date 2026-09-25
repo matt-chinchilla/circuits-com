@@ -283,3 +283,146 @@ describe('the label anchor', () => {
     expect(seen.length).toBeGreaterThan(n);
   });
 });
+
+describe('the spin (owner, 2026-09-24: restart the rotation, on every axis)', () => {
+  /** The model group: whatever the meshes are added to. */
+  function captureModel(): () => InstanceType<typeof THREE.Group> {
+    let model: InstanceType<typeof THREE.Group> | null = null;
+    const add = THREE.Group.prototype.add;
+    vi.spyOn(THREE.Group.prototype, 'add').mockImplementation(function (this: InstanceType<typeof THREE.Group>, ...objects) {
+      if (objects.some((o) => o instanceof THREE.Mesh)) model = this;
+      return add.apply(this, objects);
+    });
+    return () => model!;
+  }
+  /** One frame at the loop's 16 ms, in radians, at the load orbit's pace. */
+  const perFrame = (6 * Math.PI / 180) * 0.016;
+  /** The anchor's canvas position after each frame. */
+  function track(renderer: SceneRenderer): { x: number; y: number }[] {
+    const seen: { x: number; y: number }[] = [];
+    renderer.onAnchorMove?.((at) => { if (at != null) seen.push({ x: at.x, y: at.y }); });
+    return seen;
+  }
+
+  it('turns the model about the asked axis at the load orbit\'s pace, under reduced motion too, and keeps it inside one turn', async () => {
+    const model = captureModel();
+    r = createSceneRenderer({ reducedMotion: true });
+    await r.mount(host, board(), 'full');
+    for (let i = 0; i < 80; i++) frame();
+    expect(queue).toHaveLength(0);
+    r.spin?.('x');
+    frame(); // the first frame after a sleep has no elapsed time
+    frame();
+    expect(model().rotation.x).toBeCloseTo(perFrame, 9);
+    expect(model().rotation.y).toBe(0);
+    expect(model().rotation.z).toBe(0);
+    frame();
+    expect(model().rotation.x).toBeCloseTo(2 * perFrame, 9);
+    // The other way, and across zero: wrapped into [0, 2π), never negative.
+    r.spin?.('x', -1);
+    for (let i = 0; i < 5; i++) frame();
+    expect(model().rotation.x).toBeCloseTo(2 * Math.PI - 3 * perFrame, 9);
+    // …and up across a full turn.
+    r.spin?.('y');
+    model().rotation.y = 2 * Math.PI - perFrame / 2;
+    frame();
+    expect(model().rotation.y).toBeCloseTo(perFrame / 2, 9);
+    // It keeps the loop awake while it runs, and lets it sleep once stopped.
+    expect(queue).toHaveLength(1);
+    r.spin?.(null);
+    for (let i = 0; i < 80; i++) frame();
+    expect(queue).toHaveLength(0);
+  });
+
+  it('toggles on the same axis and direction, switches on another, and tells the host every change', async () => {
+    r = createSceneRenderer({ reducedMotion: true });
+    await r.mount(host, board(), 'full');
+    const told: unknown[] = [];
+    r.onSpinChange?.((s) => told.push(s));
+    r.spin?.('z');
+    expect(r.spinning?.()).toEqual({ axis: 'z', direction: 1 });
+    r.spin?.('z', -1);
+    r.spin?.('x', -1);
+    r.spin?.('x', -1);
+    expect(r.spinning?.()).toBeNull();
+    r.spin?.(null); // already still: nothing to tell
+    expect(told).toEqual([{ axis: 'z', direction: 1 }, { axis: 'z', direction: -1 }, { axis: 'x', direction: -1 }, null]);
+  });
+
+  it('a drag, a view, a flip and an orbit step each stop it — and say so', async () => {
+    r = createSceneRenderer({ reducedMotion: true });
+    await r.mount(host, board(), 'full');
+    const told: unknown[] = [];
+    r.onSpinChange?.((s) => told.push(s));
+    const stops: [string, () => void][] = [
+      ['drag', () => { pointer(canvas(), 'pointerdown', 100, 100); pointer(document, 'pointerup', 100, 100); }],
+      ['view', () => r.setView('top')],
+      ['reset', () => r.setView('reset')],
+      ['flip', () => r.flip()],
+      ['orbit', () => r.orbit?.(10, 0)],
+    ];
+    for (const [name, stop] of stops) {
+      r.spin?.('y');
+      frame();
+      stop();
+      expect([name, r.spinning?.()]).toEqual([name, null]);
+      expect(told.at(-1)).toBeNull();
+    }
+    expect(told).toHaveLength(stops.length * 2);
+  });
+
+  it('ends the load orbit: a spin about x leaves a point on the x axis where it was', async () => {
+    r = createSceneRenderer({ reducedMotion: false });
+    await r.mount(host, board(), 'full');
+    r.setAnchor?.({ x: 5, y: 0, z: 0, side: 'F', body: false });
+    const seen = track(r);
+    r.spin?.('x');
+    for (let i = 0; i < 20; i++) frame();
+    const first = seen[0], last = seen.at(-1)!;
+    expect(last.x).toBeCloseTo(first.x, 6);
+    expect(last.y).toBeCloseTo(first.y, 6);
+  });
+
+  it('z, +1, turns the board on screen exactly as the load orbit does — face up, and face down after a flip', async () => {
+    const model = captureModel();
+    r = createSceneRenderer({ reducedMotion: false });
+    await r.mount(host, board(), 'full');
+    // On the flip's axis (the board's long edge is x), so the flip leaves it
+    // where it was and the face-down half can be held to the same pixels.
+    r.setAnchor?.({ x: 5, y: 0, z: 0, side: 'F', body: false });
+    const seen = track(r);
+    // The load orbit, from the opening pose: the mount's first tick has no
+    // elapsed time, so it draws the pose itself.
+    frame();
+    const orbitFrom = seen.at(-1)!;
+    for (let i = 0; i < 30; i++) frame();
+    const orbitTo = seen.at(-1)!;
+    // The same pose again (Reset), then as many frames of the z spin.
+    r.setView('reset');
+    frame();
+    const spinFrom = seen.at(-1)!;
+    expect(spinFrom.x).toBeCloseTo(orbitFrom.x, 6);
+    r.spin?.('z');
+    for (let i = 0; i < 30; i++) frame();
+    const spinTo = seen.at(-1)!;
+    expect(model().rotation.z).toBeGreaterThan(0);
+    // Not merely the same sign: the same pixels, since turning the camera one
+    // way about z is turning the board the other.
+    expect(Math.hypot(orbitTo.x - orbitFrom.x, orbitTo.y - orbitFrom.y)).toBeGreaterThan(1);
+    expect(spinTo.x - spinFrom.x).toBeCloseTo(orbitTo.x - orbitFrom.x, 3);
+    expect(spinTo.y - spinFrom.y).toBeCloseTo(orbitTo.y - orbitFrom.y, 3);
+    // Face down, the normal points at -z: the same key must not turn it backwards.
+    r.setView('reset');
+    r.flip();
+    for (let i = 0; i < 80; i++) frame();
+    expect(queue).toHaveLength(0); // turned over, settled, asleep
+    r.spin?.('z');
+    frame(); // waking: no elapsed time yet
+    const flippedFrom = seen.at(-1)!;
+    for (let i = 0; i < 30; i++) frame();
+    const flippedTo = seen.at(-1)!;
+    expect(flippedFrom.x).toBeCloseTo(orbitFrom.x, 6);
+    expect(flippedTo.x - flippedFrom.x).toBeCloseTo(orbitTo.x - orbitFrom.x, 3);
+    expect(flippedTo.y - flippedFrom.y).toBeCloseTo(orbitTo.y - orbitFrom.y, 3);
+  });
+});

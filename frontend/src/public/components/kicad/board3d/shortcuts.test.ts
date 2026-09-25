@@ -2,7 +2,9 @@
 // and the page's tab keys (s/p/k/d/m) are never taken here.
 import { describe, expect, it } from 'vitest';
 import { VIEW_MODES } from './viewMode';
-import { BOARD_KEYS, VIEW_MODE_KEYS, ariaKey, boardActionForKey, viewModeForKey, type BoardAction } from './shortcuts';
+import {
+  BOARD_KEYS, SPIN_AXES, SPIN_KEYS, VIEW_MODE_KEYS, ariaKey, boardActionForKey, spinAxisForKey, viewModeForKey, type BoardAction,
+} from './shortcuts';
 
 const ACTIONS: BoardAction[] = ['top', 'bottom', 'flip', 'reset'];
 
@@ -15,13 +17,19 @@ describe('3D shortcuts', () => {
     for (const a of ACTIONS) expect(boardActionForKey(BOARD_KEYS[a])).toBe(a);
     for (const m of VIEW_MODES) expect(viewModeForKey(VIEW_MODE_KEYS[m.id])).toBe(m.id);
   });
+  it('spins on x/y/z, one key per board axis, round-tripping', () => {
+    expect(SPIN_KEYS).toEqual({ x: 'x', y: 'y', z: 'z' });
+    expect(SPIN_AXES).toEqual(['x', 'y', 'z']);
+    for (const a of SPIN_AXES) expect(spinAxisForKey(SPIN_KEYS[a])).toBe(a);
+    expect(spinAxisForKey('t')).toBeNull();
+  });
   it('never binds one key twice, and stays off the page\'s tab keys', () => {
-    const keys = [...Object.values(BOARD_KEYS), ...Object.values(VIEW_MODE_KEYS)];
+    const keys = [...Object.values(BOARD_KEYS), ...Object.values(VIEW_MODE_KEYS), ...Object.values(SPIN_KEYS)];
     expect(new Set(keys).size).toBe(keys.length);
     for (const k of 'spkdm') expect(keys).not.toContain(k);
   });
   it('an unknown key is null, and the lookup is exact: the caller lowercases', () => {
-    expect(boardActionForKey('x')).toBeNull();
+    expect(boardActionForKey('q')).toBeNull();
     expect(viewModeForKey('4')).toBeNull();
     expect(boardActionForKey('')).toBeNull();
     expect(boardActionForKey('T')).toBeNull();

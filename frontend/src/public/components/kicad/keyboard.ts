@@ -13,6 +13,8 @@ export function typingIn(target: EventTarget | null): boolean {
 
 type KeyLike = Pick<KeyboardEvent, 'defaultPrevented' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'target'>;
 
-export function isPlainKey(e: KeyLike): boolean {
-  return !e.defaultPrevented && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !typingIn(e.target);
+/** `shift: true` admits Shift for a key whose shifted press means something
+ *  of its own (the 3D spins: shift+x turns the other way). Every other rule stands. */
+export function isPlainKey(e: KeyLike, { shift = false }: { shift?: boolean } = {}): boolean {
+  return !e.defaultPrevented && !e.altKey && !e.ctrlKey && !e.metaKey && (shift || !e.shiftKey) && !typingIn(e.target);
 }

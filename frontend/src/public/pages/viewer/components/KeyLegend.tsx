@@ -9,7 +9,9 @@
 // because `?` toggles the card and Esc closes it from anywhere on the page.
 import type { MouseEvent, ReactNode, SyntheticEvent } from 'react';
 import Icon from '@shared/components/Icon';
-import { BOARD_ACTION_LABEL, BOARD_KEYS, VIEW_MODE_KEYS, type BoardAction } from '@public/components/kicad/board3d/shortcuts';
+import {
+  BOARD_ACTION_LABEL, BOARD_KEYS, SPIN_AXES, SPIN_KEYS, SPIN_LABEL, VIEW_MODE_KEYS, type BoardAction,
+} from '@public/components/kicad/board3d/shortcuts';
 import { VIEW_MODES } from '@public/components/kicad/board3d/viewMode';
 import { VIEW_KEY, type ViewId } from '../viewLabels';
 import styles from './KeyLegend.module.scss';
@@ -28,6 +30,10 @@ const DOWN = '\u2193';
 
 /** A key as its cap shows it: letters upper-case, as on the keyboard. */
 const cap = (key: string) => key.toUpperCase();
+
+/** "X, Y or Z", from the map: the spin keys the Shift note speaks of. */
+const SPIN_CAPS = SPIN_AXES.map((a) => cap(SPIN_KEYS[a]));
+const SPIN_KEY_LIST = `${SPIN_CAPS.slice(0, -1).join(', ')} or ${SPIN_CAPS[SPIN_CAPS.length - 1]}`;
 
 interface Props {
   /** The views this project offers, in tab order — the page's own `tabs`. */
@@ -127,6 +133,21 @@ export default function KeyLegend({ views, open, onToggle }: Props) {
                     </Row>
                   ))}
                 </dl>
+                <dl className={`${styles.list} ${styles.listNext}`}>
+                  {SPIN_AXES.map((a) => (
+                    <Row key={a} keys={[cap(SPIN_KEYS[a])]}>
+                      {SPIN_LABEL[a]}
+                    </Row>
+                  ))}
+                </dl>
+                <p className={styles.orbit}>
+                  <span className={styles.keys}>
+                    <Keys keys={['Shift']} />
+                  </span>
+                  <span className={styles.action}>
+                    With {SPIN_KEY_LIST}: the other way. The same press again stops the spin.
+                  </span>
+                </p>
                 <p className={styles.orbit}>
                   <span className={styles.keys}>
                     <Keys keys={[LEFT, UP, RIGHT, DOWN]} />

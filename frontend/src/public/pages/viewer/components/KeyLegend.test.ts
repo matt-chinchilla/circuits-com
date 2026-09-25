@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOARD_ACTION_LABEL, BOARD_KEYS, VIEW_MODE_KEYS } from '@public/components/kicad/board3d/shortcuts';
+import { BOARD_ACTION_LABEL, BOARD_KEYS, SPIN_AXES, SPIN_KEYS, SPIN_LABEL, VIEW_MODE_KEYS } from '@public/components/kicad/board3d/shortcuts';
 import { VIEW_MODES } from '@public/components/kicad/board3d/viewMode';
 import { VIEW_KEY, VIEW_LABEL, VIEW_ORDER, type ViewId } from '../viewLabels';
 import KeyLegend, { LEGEND_KEY } from './KeyLegend';
@@ -51,6 +51,7 @@ describe('the key legend', () => {
       ...VIEW_ORDER.map((id): [string, string] => [VIEW_KEY[id], VIEW_LABEL[id]]),
       ...(Object.keys(BOARD_KEYS) as (keyof typeof BOARD_KEYS)[]).map((a): [string, string] => [BOARD_KEYS[a], BOARD_ACTION_LABEL[a]]),
       ...VIEW_MODES.map((m): [string, string] => [VIEW_MODE_KEYS[m.id], m.label]),
+      ...SPIN_AXES.map((a): [string, string] => [SPIN_KEYS[a], SPIN_LABEL[a]]),
     ];
     for (const [key, name] of expected) {
       expect(shown.filter((k) => k === key.toUpperCase())).toHaveLength(1);
@@ -58,6 +59,9 @@ describe('the key legend', () => {
     }
     // The page's older keys, each once.
     for (const key of ['/', 'Esc', LEGEND_KEY]) expect(shown.filter((k) => k === key)).toHaveLength(1);
+    // Shift is a cap of its own, and its note names the spin keys from the map.
+    expect(shown.filter((k) => k === 'Shift')).toHaveLength(1);
+    expect(container.textContent).toContain('With X, Y or Z: the other way. The same press again stops the spin.');
   });
 
   it('lists only the views the project offers, and no 3D keys without a 3D tab', async () => {
@@ -66,7 +70,8 @@ describe('the key legend', () => {
     expect(shown).toContain(VIEW_KEY.schematic.toUpperCase());
     expect(shown).toContain(VIEW_KEY.bom.toUpperCase());
     for (const id of ['board', 'stackup', 'board3d'] as const) expect(shown).not.toContain(VIEW_KEY[id].toUpperCase());
-    for (const key of [...Object.values(BOARD_KEYS), ...Object.values(VIEW_MODE_KEYS)]) expect(shown).not.toContain(key.toUpperCase());
+    for (const key of [...Object.values(BOARD_KEYS), ...Object.values(VIEW_MODE_KEYS), ...Object.values(SPIN_KEYS)]) expect(shown).not.toContain(key.toUpperCase());
+    expect(shown).not.toContain('Shift');
     expect(container.textContent).not.toMatch(/On the 3D tab/);
   });
 

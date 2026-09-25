@@ -97,6 +97,14 @@
     border-radius: 10px;
     line-height: 1;
   }
+
+  // Five buttons since Spin: at 14px a side the track is 328px, past a 360px
+  // phone's toolbar (325px) and clipped at 320 (measured). Ten a side keeps
+  // every button 44px wide or more, and the 40px height stands.
+  @include responsive($bp-mobile) {
+    min-width: 44px;
+    padding: 0 10px;
+  }
 }
 
 .canvasHost {

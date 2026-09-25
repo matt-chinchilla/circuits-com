@@ -52,6 +52,19 @@ function fakeRenderer() {
     onPick: (h: ((ref: string | null) => void) | null) => { r.pick = h; },
     lost: null as (() => void) | null,
     onContextLost: (h: (() => void) | null) => { r.lost = h; },
+    // The real renderer's spin contract in miniature: the same axis and
+    // direction again stops, and it tells the host every change.
+    spins: [] as unknown[],
+    running: null as { axis: 'x' | 'y' | 'z'; direction: 1 | -1 } | null,
+    spinChange: null as ((s: { axis: 'x' | 'y' | 'z'; direction: 1 | -1 } | null) => void) | null,
+    spin: (axis: 'x' | 'y' | 'z' | null, direction: 1 | -1 = 1) => {
+      r.spins.push(axis == null ? null : [axis, direction]);
+      const again = r.running != null && r.running.axis === axis && r.running.direction === direction;
+      r.running = axis == null || again ? null : { axis, direction };
+      r.spinChange?.(r.running);
+    },
+    spinning: () => r.running,
+    onSpinChange: (h: typeof r.spinChange) => { r.spinChange = h; },
   };
   return r;
 }
@@ -417,20 +430,63 @@ describe('Board3DView — single-key controls (owner, 2026-09-24)', () => {
     const handled = new KeyboardEvent('keydown', { key: 'b', cancelable: true });
     handled.preventDefault();
     act(() => { window.dispatchEvent(handled); });
-    expect(press('x').defaultPrevented).toBe(false);
+    expect(press('q').defaultPrevented).toBe(false);
     expect(r.views).toEqual([]);
     expect(r.flips).toBe(0);
     expect(r.modes.length).toBe(before);
     input.remove();
   });
+  it('x/y/z spin about that axis, Shift turns the other way, and a held or modified key does nothing', async () => {
+    const r = fakeRenderer();
+    await mount(r);
+    expect(press('z').defaultPrevented).toBe(true);
+    press('X');
+    press('y', { shiftKey: true });
+    press('Z', { shiftKey: true }); // Shift+z arrives as "Z"
+    expect(r.spins).toEqual([['z', 1], ['x', 1], ['y', -1], ['z', -1]]);
+    expect(r.running).toEqual({ axis: 'z', direction: -1 });
+    press('z', { shiftKey: true }); // again: stops
+    expect(r.running).toBeNull();
+    press('x', { repeat: true });
+    press('x', { ctrlKey: true });
+    press('x', { altKey: true });
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    press('x', {}, input);
+    input.remove();
+    expect(r.spins).toHaveLength(5);
+  });
+  it('the Spin button starts the z turn, reads pressed while any spin runs, and lets go when the renderer stops it', async () => {
+    const r = fakeRenderer();
+    await mount(r);
+    const spinButton = byLabel('Spin');
+    expect(spinButton.getAttribute('aria-pressed')).toBe('false');
+    act(() => { spinButton.click(); });
+    expect(r.spins).toEqual([['z', 1]]);
+    expect(spinButton.getAttribute('aria-pressed')).toBe('true');
+    // Any spin reads as pressed; a click on it then stops that spin.
+    press('x');
+    expect(spinButton.getAttribute('aria-pressed')).toBe('true');
+    act(() => { spinButton.click(); });
+    expect(r.spins.at(-1)).toBeNull();
+    expect(spinButton.getAttribute('aria-pressed')).toBe('false');
+    // Stopped by the renderer itself (a drag on the canvas): the button follows.
+    press('y');
+    expect(spinButton.getAttribute('aria-pressed')).toBe('true');
+    act(() => { r.spinChange?.(null); });
+    expect(spinButton.getAttribute('aria-pressed')).toBe('false');
+    expect(spinButton.hasAttribute('title')).toBe(false);
+  });
   it('stops listening once unmounted, and names each key on its button', async () => {
     const r = fakeRenderer();
     await mount(r);
-    expect(['Top', 'Bottom', 'Flip', 'Reset', 'Solid', 'See-through', 'X-ray'].map((t) => byLabel(t).getAttribute('aria-keyshortcuts')))
-      .toEqual(['T', 'B', 'F', 'R', '1', '2', '3']);
+    expect(['Top', 'Bottom', 'Flip', 'Reset', 'Spin', 'Solid', 'See-through', 'X-ray'].map((t) => byLabel(t).getAttribute('aria-keyshortcuts')))
+      .toEqual(['T', 'B', 'F', 'R', 'Z', '1', '2', '3']);
     act(() => root.unmount());
     press('t');
+    press('z');
     expect(r.views).toEqual([]);
+    expect(r.spins).toEqual([]);
     root = createRoot(el);
   });
 });
@@ -568,5 +624,8 @@ describe('the stylesheet the frame depends on', () => {
     expect(scss).toMatch(/\.toolbar \{[^{}]*flex-wrap:\s*wrap/);
     expect(scss).toMatch(/\.toolbar \{[^{}]*justify-content:\s*space-between/);
     expect(scss).toMatch(/\.track \{[^{}]*border-radius:\s*13px/);
+  });
+  it('fits the five board-view buttons (Spin the fifth) on a 320px phone', () => {
+    expect(scss).toMatch(/\.ctl \{[\s\S]*?@include responsive\(\$bp-mobile\) \{[^{}]*min-width:\s*44px;[^{}]*padding:\s*0 10px/);
   });
 });
