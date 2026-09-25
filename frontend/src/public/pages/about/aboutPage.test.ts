@@ -4,6 +4,8 @@
  * docs/superpowers/specs/2026-09-25-about-page-design.md): the manifesto and
  * commitments rail, the Founder's Deal block with both animated badges and a
  * burning lip that ignites ONCE when the block is seen, and the new closing CTA.
+ * Revision 2: the section's ground is navy and a <SignalBand /> sits between the
+ * manifesto and the rail (the band's own behaviour is SignalBand.test.ts's).
  *
  * DOM tests are createRoot + act with no testing library. A CSS-module class
  * assertion proves nothing here (vitest's `css` is off, the import echoes the
@@ -73,7 +75,14 @@ const state = vi.hoisted(() => {
   const ctx = new Proxy(
     {},
     {
-      get: (_t, key) => (key === 'createRadialGradient' ? () => ({ addColorStop: noop }) : noop),
+      // The badges draw radial gradients and the signal band a linear fade
+      // plus measured labels; everything else is a no-op.
+      get: (_t, key) =>
+        key === 'createRadialGradient' || key === 'createLinearGradient'
+          ? () => ({ addColorStop: noop })
+          : key === 'measureText'
+            ? () => ({ width: 0 })
+            : noop,
       set: () => true,
     },
   );
@@ -209,6 +218,31 @@ describe('AboutPage', () => {
     );
     // the last commitment's contact link
     expect(host.querySelector('ul a[href="/contact"]')?.textContent).toBe('contact page');
+  });
+
+  it('draws one signal band, full width, between the manifesto and the rail', () => {
+    render();
+    const why = host.querySelector('section[aria-labelledby="about-why-title"]')!;
+    const bands = host.querySelectorAll('[data-signal]');
+    expect(bands).toHaveLength(1);
+    const band = bands[0];
+    expect(why.contains(band)).toBe(true);
+    expect(band.getAttribute('aria-hidden')).toBe('true');
+    const manifesto = [...why.querySelectorAll('p')].find(p =>
+      (p.textContent ?? '').startsWith('Circuit Center is new.'),
+    )!;
+    const rail = why.querySelector('ul')!;
+    expect(manifesto).toBeTruthy();
+    expect(rail.querySelector('h3')?.textContent).toBe('A way up for the businesses still growing');
+    expect(manifesto.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(band.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // A direct child of the section, not inside a text column: the band spans
+    // the section edge to edge while the copy keeps its 1100px column.
+    expect(band.parentElement).toBe(why);
+    expect(manifesto.parentElement).not.toBe(why);
+    expect(rail.parentElement).not.toBe(why);
+    // the retired WebGL field left nothing behind
+    expect(host.querySelector('[data-caustic]')).toBeNull();
   });
 
   it('renders the Founder block: both badges at 96px, the three Founder prices, and both links', () => {
@@ -363,13 +397,28 @@ describe('useFounderBlock without an IntersectionObserver', () => {
 });
 
 describe('AboutPage.module.scss', () => {
-  it('the Why section is the field’s positioned, clipping parent; the content sits above it', () => {
+  it('the Why section declares its navy ground as --why-bg and paints it (the rings’ fill too)', () => {
     const why = squash(block(SCSS, '.aboutWhy {'));
-    expect(why).toContain('position: relative;');
-    expect(why).toContain('overflow: hidden;');
+    expect(why).toContain('--why-bg: #0f1721;');
+    expect(why).toContain('background: var(--why-bg);');
+    expect(why).not.toContain('theme-nav-bg');
+    expect(squash(block(SCSS, '.whyPad {'))).toContain('background: var(--why-bg);');
+  });
+
+  it('the band spans the section: no side padding on it, the gutter on the columns, margins on the band', () => {
+    const why = squash(block(SCSS, '.aboutWhy {'));
+    expect(why).toContain('padding: 88px 0 96px;');
+    expect(why).toContain('padding: 64px 0 72px;');
     const inner = squash(block(SCSS, '.aboutWhyInner {'));
-    expect(inner).toContain('position: relative;');
-    expect(inner).toContain('z-index: 1;');
+    expect(inner).toContain('box-sizing: content-box;');
+    expect(inner).toContain('max-width: 1100px;');
+    expect(inner).toContain('padding: 0 20px;');
+    expect(squash(block(SCSS, '.aboutWhyBand {'))).toContain(
+      'margin: clamp(24px, 2.4vw, 40px) 0 clamp(24px, 2.6vw, 40px);',
+    );
+    // The manifesto's old 48px bottom margin would collapse with the band's
+    // top margin and win; the band owns that gap now.
+    expect(squash(block(SCSS, '.aboutWhyManifesto {'))).toContain('margin: 0;');
   });
 
   it('the Founder block never clips its badges’ fire or its lip', () => {
@@ -380,15 +429,6 @@ describe('AboutPage.module.scss', () => {
     expect(lip).toContain('position: absolute;');
     expect(lip).toContain('bottom: -2px;');
     expect(lip).toContain('height: 2px;');
-  });
-
-  it("the field's own stylesheet paints the static fallback under [data-caustic='static'] (the page has no copy)", () => {
-    expect(SCSS).not.toContain("data-caustic");
-    const fieldScss = readFileSync(join(__dirname, 'CausticField.module.scss'), 'utf8');
-    const fallback = squash(block(fieldScss, "&[data-caustic='static'] {"));
-    expect(fallback).toMatch(/radial-gradient\(.*var\(--theme-accent\) 14%/);
-    expect(fallback).toMatch(/radial-gradient\(.*var\(--theme-accent\) 10%/);
-    expect(fallback).toContain('var(--theme-nav-bg)');
   });
 
   it('every hover tint outside How It Works lives inside @media (hover: hover)', () => {
@@ -425,6 +465,9 @@ describe('AboutPage.module.scss', () => {
     const tsx = readFileSync(join(__dirname, 'index.tsx'), 'utf8');
     expect(tsx).not.toContain('ABOUT_WHY');
     expect(tsx).not.toContain('whyRef');
+    // the retired WebGL caustic field (Revision 2): no import, no rule
+    expect(tsx).not.toMatch(/caustic/i);
+    expect(SCSS).not.toMatch(/caustic|aboutWhyField/i);
   });
 
   it('uses no will-change or CSS filter (site perf rules)', () => {

@@ -11,7 +11,7 @@ import { BADGE_SCHEMES } from '@shared/types/badge'
 import { Fire } from '@public/pages/join/fireEdge/Fire'
 import { FOUNDER_DEAL_USD } from '@public/pages/join/founderDeal'
 import { NO_VALUE, STAT_TILES, compactCount } from './siteStats'
-import CausticField from './CausticField'
+import SignalBand from './SignalBand'
 import { useFounderBlock } from './useFounderBlock'
 import styles from './AboutPage.module.scss'
 
@@ -339,11 +339,12 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* (4) Why — full-bleed graphite over the caustic light field: the
-          manifesto, the commitments rail, then the Founder's Deal. No
-          entrance animation; the Founder block's ignition is the moment. */}
+      {/* (4) Why — full-bleed navy: the manifesto, the signal band across the
+          whole section, then the commitments rail and the Founder's Deal. Two
+          inner columns so the band spans the section edge to edge while the
+          text keeps its 1100px column. No entrance animation; the band's
+          acquisition and the Founder block's ignition are the moments. */}
       <section className={styles.aboutWhy} aria-labelledby="about-why-title">
-        <CausticField className={styles.aboutWhyField} />
         <div className={styles.aboutWhyInner}>
           <h2 id="about-why-title" className={styles.aboutWhyTitle}>
             Why Circuit Center?
@@ -356,6 +357,9 @@ export default function AboutPage() {
             aggregators going uncontested and growing comfortable. We don&rsquo;t sell parts. We make
             them findable, and we build the tools the incumbents never bothered to.
           </p>
+        </div>
+        <SignalBand className={styles.aboutWhyBand} />
+        <div className={styles.aboutWhyInner}>
           <ul className={styles.whyRail}>
             {WHY_RAIL.map((row) => (
               <li key={row.claim} className={styles.whyRow}>

@@ -8,9 +8,10 @@
 //     IntersectionObserver-driven .seen fade-in with staggered --i delay.
 // (3) .statsSection — full-bleed dark gradient strip, PCB silkscreen grid
 //     overlay, 4 stat tiles with rAF-tickered tabular numerals.
-// (4) .aboutWhy — full-bleed graphite over <CausticField/>: manifesto, the
-//     commitments rail, and the Founder's Deal block (the Join page's Founder
-//     material, ported — not imported). Spec 2026-09-25-about-page-design.md.
+// (4) .aboutWhy — full-bleed navy: manifesto, the <SignalBand/> logic-analyzer
+//     band across the whole section, the commitments rail, and the Founder's
+//     Deal block (the Join page's Founder material, ported — not imported).
+//     Spec 2026-09-25-about-page-design.md, "Revision 2".
 // (5) .aboutCta — title + sub + two buttons (primary + ghost).
 
 // ─── Page root ──────────────────────────────────────────────────────────────
@@ -266,31 +267,47 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
-// ─── (4) Why — graphite ground, caustic field, manifesto + rail + Founder ─
+// ─── (4) Why — navy ground, manifesto + signal band + rail + Founder ─────
 
-// Full-bleed. The field is absolutely positioned behind everything, so the
-// section is its containing block and clips it; the content sits in a
-// stacking layer above (.aboutWhyInner). Left-aligned on purpose — a manifesto
-// reads as a voice, not a poster.
+// Full-bleed navy. The ground is a LOCAL custom property, not a theme token:
+// the section reads the same in every theme, and the band's fade-out
+// (signalBand.ts NAVY, pinned to this value by its test) and the rail's
+// hollow rings both paint it. The section carries no horizontal padding so
+// the band spans it edge to edge; the gutter lives on the two text columns.
+// Left-aligned on purpose — a manifesto reads as a voice, not a poster.
 .aboutWhy {
-  position: relative;
-  overflow: hidden;
-  background: var(--theme-nav-bg);
+  --why-bg: #0f1721;
+
+  background: var(--why-bg);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 88px 20px 96px;
+  padding: 88px 0 96px;
   color: rgba(244, 245, 247, 0.78);
 
   @include responsive($bp-mobile) {
-    padding: 64px 16px 72px;
+    padding: 64px 0 72px;
   }
 }
 
+// Two of these: the head (title, display line, manifesto) above the band and
+// the rail + Founder block below it. content-box so the 1100px is the TEXT
+// column and the gutter sits outside it, exactly as when the section padded.
 .aboutWhyInner {
-  position: relative;
-  z-index: 1;
+  box-sizing: content-box;
   max-width: 1100px;
   margin: 0 auto;
+  padding: 0 20px;
   text-align: left;
+
+  @include responsive($bp-mobile) {
+    padding: 0 16px;
+  }
+}
+
+// The band between the two columns. Its margins own the rhythm on both sides
+// (the manifesto and the rail carry no margin toward it), so nothing collapses
+// into a bigger gap than these.
+.aboutWhyBand {
+  margin: clamp(24px, 2.4vw, 40px) 0 clamp(24px, 2.6vw, 40px);
 }
 
 .aboutWhyTitle {
@@ -318,7 +335,7 @@
   font-size: 1.08rem;
   line-height: 1.6;
   max-width: 64ch;
-  margin: 0 0 48px;
+  margin: 0;
 }
 
 // Commitments rail: [pad | claim | body]. A 1px accent trace runs down the
@@ -367,7 +384,7 @@
   margin-top: calc(var(--pad-top) - 22px);
   border: 1.5px solid var(--theme-accent);
   border-radius: 50%;
-  background: var(--theme-nav-bg);
+  background: var(--why-bg); // hollow: the ring's fill is the section's ground
   box-sizing: border-box;
   transition:
     background-color 0.2s ease,
