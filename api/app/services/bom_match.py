@@ -170,12 +170,18 @@ def _match_mpn(db: Session, wanted: str) -> LineMatch | None:
             .limit(25)
             .all()
         )
+        # The catalog SKUs that are a PREFIX of what was pasted, asked as an
+        # equality IN-list of the pasted code's own prefixes so it rides
+        # ix_parts_sku_upper. It used to be `:up LIKE upper(sku) || '%'`,
+        # which no index can serve: a 341 ms seq scan of 808k parts on EVERY
+        # MPN miss (measured 2026-09-26; the IN-list is 0.09 ms), and a
+        # catalog `_` or `%` became a wildcard, so `ABC_EF` "prefixed"
+        # `ABCXEF-99`. Exact already missed, so the full code is not asked.
+        prefixes = [up[:n] for n in range(MIN_APPROX_LEN, len(up))]
         reverse = (
-            db.query(*_MPN_COLS)
-            .filter(func.length(Part.sku) >= MIN_APPROX_LEN)
-            .filter(literal(up).like(func.upper(Part.sku).concat("%")))
-            .limit(25)
-            .all()
+            db.query(*_MPN_COLS).filter(func.upper(Part.sku).in_(prefixes)).limit(25).all()
+            if prefixes
+            else []
         )
         seen: dict = {}
         for row in [*forward, *reverse]:

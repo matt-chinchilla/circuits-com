@@ -102,6 +102,29 @@ class TestLadder:
         assert (m.status, m.part.id) == ("approx", p.id)
         assert m.approx_reason == "base part of the pasted ordering code"
 
+    def test_reverse_prefix_is_literal_a_catalog_underscore_is_no_wildcard(self, db):
+        # `ABCXEF-99 LIKE 'ABC_EF%'` is true in SQL; as a part number it is a
+        # different product.
+        _part(db, "ABC_EF")
+        m = match_line(db, "ABCXEF-99", None, None)
+        assert (m.status, m.part) == ("resolve", None)
+
+    def test_reverse_prefix_never_scans_the_table(self, db):
+        # The old `:mpn LIKE upper(sku) || '%'` could not use an index: one
+        # full scan of `parts` per MPN miss. The IN-list rides ix_parts_sku_upper.
+        seen: list[str] = []
+
+        def spy(_conn, _cursor, statement, *_args):
+            seen.append(statement)
+
+        engine = db.get_bind()
+        event.listen(engine, "before_cursor_execute", spy)
+        try:
+            match_line(db, "GRM188R71C104KA01D", None, None)
+        finally:
+            event.remove(engine, "before_cursor_execute", spy)
+        assert not any("upper(parts.sku) ||" in s for s in seen)
+
     def test_min_five_chars_gates_approx(self, db):
         _part(db, "1N4148WS")
         m = match_line(db, "1N41", None, None)
