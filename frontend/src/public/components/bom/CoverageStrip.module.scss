@@ -9,32 +9,17 @@
 // a word; the colour is the fourth cue, never the only one.
 
 .strip {
-  // The instrument bar — the page's ONE true floating surface. It sticks
-  // while the table scrolls beneath it, which is exactly the situation
-  // backdrop-filter exists for: the rows genuinely frost under the controls.
-  // Opaque sheet declared FIRST per the glass-pane contract (the fallback for
-  // no-filter browsers and <=768px, where the mixin drops the veil).
-  // Sticky above the mobile breakpoint ONLY: at 390px this bar stacks
-  // ~225px tall, and pinning a quarter of a phone screen would cost more
-  // reading room than the controls are worth. Same width the glass furls at.
-  @media (min-width: #{$bp-mobile + 1}) {
-    position: sticky;
-    // The navbar is ALSO sticky (top: 0, z 100) — a bare 8px offset slid this
-    // bar underneath it (review finding #2; the PartPage sticky uses the same
-    // nav-height arithmetic).
-    top: calc(#{$nav-height} + 8px);
-    z-index: 5;
-  }
+  // IN FLOW, the first thing above the table, on /bom and on /viewer alike.
+  // It was `position: sticky` above 768px (an "instrument bar" that frosted
+  // the rows scrolling beneath it) with `top: nav-height + 8px`, an offset
+  // computed for the site navbar. /viewer's BOM tab scrolls inside its own
+  // stage, where that offset pushed this 199px bar 13px down over the table
+  // header at rest and pinned it over the rows once the stage scrolled
+  // (owner, 2026-09-26: it "needs to appear at the top of the page and it
+  // currently overlaps with the headers below"). A static block cannot
+  // overlap anything, so the backdrop veil that only a floating surface earns
+  // is gone with it. CoverageStrip.test.ts pins both absences.
   @include bom-card;
-
-  // The one in-flow surface whose blur is EARNED: it sticks while rows
-  // scroll beneath it. The tinted ramp above is the opaque-enough fallback.
-  @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-    @media (min-width: #{$bp-mobile + 1}) {
-      -webkit-backdrop-filter: blur(18px) saturate(155%);
-      backdrop-filter: blur(18px) saturate(155%);
-    }
-  }
 
   display: flex;
   flex-direction: column;
