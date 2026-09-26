@@ -7,9 +7,13 @@
 //
 // No JSX (vitest only discovers *.test.ts here) — createElement + act, the
 // harness useBomWorkbench.test.ts established.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
+import * as sass from 'sass';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TableRow } from '@public/services/bom/types';
 import BomTable from './BomTable';
@@ -112,5 +116,89 @@ describe('BomTable designator chips', () => {
       (el as HTMLButtonElement).click();
     });
     expect(onRefClick).toHaveBeenCalledExactlyOnceWith('C7');
+  });
+});
+
+// The header row's geometry (owner report 2026-09-26: "the DESCRIPTION and qty
+// headers are overlapping"). vitest runs with `css: false`, so a class
+// assertion proves nothing; this COMPILES the module from disk and reads the
+// emitted CSS, because the rule that matters is Sass arithmetic: the width at
+// which Description hides is the pinned columns' sum plus its floor, and a
+// hand-typed threshold would drift the next time a column changes width.
+describe('BomTable header geometry', () => {
+  const src = join(__dirname, '..', '..', '..');
+  const aliases: Record<string, string> = {
+    '@shared/': join(src, 'shared') + '/',
+    '@public/': join(src, 'public') + '/',
+  };
+  const css = sass.compile(join(__dirname, 'BomTable.module.scss'), {
+    importers: [
+      {
+        // Rebuilt with the GLOBAL URL: this file runs under happy-dom, which
+        // replaces it, and Sass rejects node:url's instance as "not a URL".
+        findFileUrl(url: string) {
+          const hit = Object.keys(aliases).find((prefix) => url.startsWith(prefix));
+          return hit ? new URL(pathToFileURL(aliases[hit] + url.slice(hit.length)).href) : null;
+        },
+      },
+    ],
+    logger: sass.Logger.silent,
+  }).css;
+
+  const widths = new Map(
+    Array.from(css.matchAll(/\.table \.(th\w+) \{\s*width: (\d+)px;\s*\}/g), (m) => [
+      m[1],
+      Number(m[2]),
+    ]),
+  );
+  const pinnedSum = Array.from(widths.values()).reduce((a, b) => a + b, 0);
+
+  it('pins a width on every header column but Description, keyed by class', () => {
+    const tsx = readFileSync(join(__dirname, 'BomTable.tsx'), 'utf8');
+    const thead = tsx.slice(tsx.indexOf('<thead>'), tsx.indexOf('</thead>'));
+    // Modifiers and the a11y label are not columns; Description is the flexible one.
+    const notColumns = new Set(['thRight', 'thHidden', 'thDesc']);
+    const columns = new Set(
+      Array.from(thead.matchAll(/styles\.(th[A-Z]\w*)/g), (m) => m[1]).filter(
+        (name) => !notColumns.has(name),
+      ),
+    );
+
+    expect(columns.size).toBe(10);
+    expect(new Set(widths.keys())).toEqual(columns);
+  });
+
+  it('hides Description by the TABLE width, below the pinned sum plus a floor the header fits in', () => {
+    const rule = css.match(
+      /@media \(min-width: (\d+)px\) \{\s*@container \(width < (\d+)px\) \{\s*\.thDesc,\s*\.tdDesc \{\s*display: none;/,
+    );
+    expect(rule).not.toBeNull();
+    const [, cardsBelow, room] = rule!.map(Number);
+
+    // Scoped past the card breakpoint: a card still shows its description.
+    expect(cardsBelow).toBe(769);
+    // The floor is what is left when the table is exactly `room` wide. The
+    // header alone is 123px (95px of "DESCRIPTION" + 28px padding, measured).
+    expect(room - pinnedSum).toBeGreaterThanOrEqual(124);
+    // And the wrap is the container the query measures.
+    expect(css).toMatch(/\.tableWrap \{[^}]*container-type: inline-size;/);
+  });
+
+  it('clips a squeezed header at its own cell edge instead of painting over the next', () => {
+    const th = css.match(/\n\.th \{([^}]*)\}/);
+    expect(th).not.toBeNull();
+    expect(th![1]).toMatch(/white-space: nowrap;[^]*overflow: hidden;/);
+    // Not an ellipsis: that cuts at the content edge and would eat letters a
+    // label has padding for in a slightly wider font.
+    expect(th![1]).not.toMatch(/text-overflow/);
+  });
+
+  it('wraps a package warning inside the Description cell', () => {
+    // The warning quotes a KiCad footprint name, one token with no spaces;
+    // unwrapped it painted across QTY and out of the card.
+    const warn = css.match(/\n\.packageWarn \{([^}]*)\}/);
+    expect(warn).not.toBeNull();
+    expect(warn![1]).toMatch(/max-width: 100%;/);
+    expect(warn![1]).toMatch(/overflow-wrap: anywhere;/);
   });
 });

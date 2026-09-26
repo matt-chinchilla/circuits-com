@@ -15,14 +15,20 @@
   gap: 16px;
 }
 
-// >1024px: the full eight-column table. 769-1024: Description hides (the
-// PartsTable precedent) so part + price stay co-visible without a long swipe.
-// <=768px: rows reflow into CARDS (below) — spec §7.7's "prices are never
-// hidden" is a measured rule, and the 2026-08-21 mobile audit showed a
-// scroll-table puts the price 1.9 screen-widths away at 320px.
+// Wide enough: the full table. Too narrow for Description's floor: Description
+// hides (the PartsTable precedent) so part + price stay co-visible without a
+// long swipe. "Wide enough" is the TABLE's room, not the window's (see the
+// container rule after the column widths). <=768px: rows reflow into CARDS
+// (below) — spec §7.7's "prices are never hidden" is a measured rule, and the
+// 2026-08-21 mobile audit showed a scroll-table puts the price 1.9
+// screen-widths away at 320px.
 .tableWrap {
   @include bom-card;
 
+  // The query container for the Description rule. Safe as inline-size
+  // containment because neither host sizes this box from its content: it
+  // stretches to its column on /bom and beside the part rail on /viewer.
+  container-type: inline-size;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 12px;
@@ -56,6 +62,13 @@
   text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
+  // A header that runs out of room clips at its own cell's edge. With visible
+  // overflow a squeezed nowrap label painted straight across its neighbour:
+  // DESCRIPTION over QTY, 93px of it on /viewer (owner report 2026-09-26).
+  // The widths below keep every label whole; this is the backstop. No
+  // ellipsis on purpose: it cuts at the CONTENT edge, so a label a pixel or
+  // two wider in the reader's font would lose letters it has padding for.
+  overflow: hidden;
   color: #616a7a;
   @include bom-band;
   border-bottom: 1px solid rgba(143, 134, 172, 0.24);
@@ -114,10 +127,6 @@
 
 .thRight {
   text-align: right;
-}
-
-.thDesc {
-  min-width: 200px;
 }
 
 .thRefs {
@@ -326,6 +335,12 @@
 // without hovering — under the description, not inside a tooltip.
 .packageWarn {
   display: inline-block;
+  // A KiCad footprint name is one unbreakable token
+  // ("BGA-121_9.0x9.0mm_Layout11x11_P0.8mm_Ball0.4mm…"): unwrapped, the warning
+  // ran 147px out of the Description cell across QTY, and 107px out of the
+  // card at 390px (Glasgow example, measured 2026-09-26).
+  max-width: 100%;
+  overflow-wrap: anywhere;
   margin-top: 5px;
   padding: 4px 8px;
   border-radius: 6px;
@@ -638,18 +653,63 @@
 // inherited Unit/Ext's 104px and its tier ribbon overflowed into the next
 // column. Nothing failed — the table just quietly redrew wrong. Class-keyed
 // widths travel with their column, so the next insert cannot repeat it.
+//
+// One map, because the Description rule below needs their SUM. Every header
+// class in BomTable.tsx's <thead> except .thDesc must appear here
+// (BomTable.test.ts compiles this file and checks).
+$bom-pinned-cols: (
+  thNum: 40px,
+  thThumb: 64px, // 36px image + the .td's 14px side padding
+  // "SUBMITTED PART" is 122px of text; at 128px it ran 8px past the cell's
+  // edge into MATCHED PART (measured 2026-09-26).
+  thSub: 152px,
+  thPart: 148px,
+  thMatch: 112px,
+  thQty: 60px,
+  thRefs: 148px,
+  thRec: 248px,
+  thPrice: 104px,
+  // "ALTERNATES" is 90px of text; at 112px it ran 6px into its own right
+  // padding and sat off the right edge the price column keeps.
+  thAlt: 120px,
+);
+
 .table {
-  .thNum { width: 40px; }
-  .thThumb { width: 64px; } // 36px image + the .td's 14px side padding
-  .thSub { width: 128px; }
-  .thPart { width: 148px; }
-  .thMatch { width: 112px; }
+  @each $col, $width in $bom-pinned-cols {
+    .#{$col} {
+      width: $width;
+    }
+  }
   // .thDesc intentionally unset — it absorbs whatever the bench has spare.
-  .thQty { width: 60px; }
-  .thRefs { width: 148px; }
-  .thRec { width: 248px; }
-  .thPrice { width: 104px; }
-  .thAlt { width: 112px; }
+}
+
+// Description's floor. The header needs 123px (95px of "DESCRIPTION" + 28px
+// padding) and a two-line clamp needs a little more to say anything. A
+// `min-width` on the cell cannot hold it: fixed table layout ignores min-width
+// on cells, which is how the old `.thDesc { min-width: 200px }` let the column
+// reach 0px.
+$bom-desc-floor: 160px;
+
+$bom-pinned-sum: 0px;
+@each $col, $width in $bom-pinned-cols {
+  $bom-pinned-sum: $bom-pinned-sum + $width;
+}
+
+// Below this the table has no room for Description at its floor, so it hides.
+// Keyed to the TABLE's width, never the window's: /viewer puts this table
+// beside a 296px rail, so its box was 1155px at a 1600px window, under the
+// 1164px the other columns took, and Description rendered 0px wide with its
+// header painted across QTY at every desktop width (owner report 2026-09-26).
+// On /bom the same gap was 1200-1320px. Cards (<=768px) keep Description.
+$bom-table-room: $bom-pinned-sum + $bom-desc-floor;
+
+@media (min-width: #{$bp-mobile + 1}) {
+  @container (width < #{$bom-table-room}) {
+    .thDesc,
+    .tdDesc {
+      display: none;
+    }
+  }
 }
 
 .tdSub {
@@ -683,15 +743,10 @@
   white-space: nowrap;
 }
 
-// ── 769-1024px: hide Description (PartsTable precedent) and give Part real
-// room so MPNs stop wrapping mid-token. Also removes the 3px residual scroll
-// the audit measured at exactly 1024.
+// ── 769-1199px: give Part real room so MPNs stop wrapping mid-token.
+// Description is already hidden here: no table this narrow clears
+// $bom-table-room, and the container rule above hides it.
 @media (min-width: #{$bp-mobile + 1}) and (max-width: #{$bp-desktop}) {
-  .thDesc,
-  .tdDesc {
-    display: none;
-  }
-
   .tdPart {
     min-width: 150px;
   }
