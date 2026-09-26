@@ -10,7 +10,9 @@ Ladder per line, first rung wins:
           `R_0805_2012Metric`) matches catalog parts by description + package,
           best-stocked first, as APPROX with its runner-ups as the Similar menu
           (bom_value reads the line; `_value_candidates` is ONE scan per BOM);
-       c. otherwise → resolve query "{value} {footprint_token}"
+       c. otherwise → resolve query "{value} {package}", where the package is
+          the chip size when the footprint names one (`10k 0805`, spec §5),
+          else the footprint token (`BSS138 SOT-23`)
   4. MISS    → resolve by the MPN itself
 
 Rung 3 was "NO catalog guessing" until 2026-09-26, when a downloaded KiCad
@@ -52,10 +54,17 @@ def footprint_token(footprint: str | None) -> str | None:
 
 
 def build_resolve_query(value: str | None, footprint: str | None) -> str | None:
+    """The keyword a distributor is asked for an MPN-less line.
+
+    The CHIP SIZE, not KiCad's footprint name: a distributor indexes "0805",
+    never `R_0805_2012Metric_Pad1.20x1.40mm_HandSolder`, and asking for the
+    latter returned zero rows for every passive on the 2026-09-26 keyboard.
+    A footprint with no chip size keeps its token (`SOT-23` is already a
+    package term)."""
     val = (value or "").strip()
     if not val:
         return None
-    token = footprint_token(footprint)
+    token = line_package(footprint)
     return f"{val} {token}" if token else val
 
 

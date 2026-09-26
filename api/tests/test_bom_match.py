@@ -67,10 +67,13 @@ class TestFootprintToken:
 
 
 class TestResolveQuery:
-    def test_value_plus_footprint_token(self):
-        assert build_resolve_query("10k", "Resistor_SMD:R_0805_2012Metric") == (
-            "10k R_0805_2012Metric"
-        )
+    def test_value_plus_the_chip_size_never_the_footprint_name(self):
+        # spec §5: "{value} {package_token}", e.g. `10k 0805`.
+        assert build_resolve_query("10k", R_0805) == "10k 0805"
+        assert build_resolve_query("100n", "Capacitor_SMD:C_0603_1608Metric") == "100n 0603"
+
+    def test_a_footprint_with_no_chip_size_keeps_its_token(self):
+        assert build_resolve_query("BSS138", "Package_TO_SOT_SMD:SOT-23") == "BSS138 SOT-23"
 
     def test_value_alone(self):
         assert build_resolve_query("LM317T", None) == "LM317T"
@@ -118,7 +121,7 @@ class TestLadder:
         m = match_line(db, None, "10k", "Resistor_SMD:R_0805_2012Metric")
         assert m.status == "resolve"
         assert m.part is None
-        assert m.resolve_query == "10k R_0805_2012Metric"
+        assert m.resolve_query == "10k 0805"
 
     def test_nothing_at_all_is_none(self, db):
         m = match_line(db, None, None, None)
