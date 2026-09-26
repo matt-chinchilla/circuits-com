@@ -19,7 +19,7 @@ from app.db.session import get_db
 from app.models import BomShare
 from app.schemas.bom import BomMatchRequest, BomResolveRequest, BomShareCreate
 from app.services import bom_resolve
-from app.services.bom_match import build_row, footprint_token, match_line
+from app.services.bom_match import build_row, line_package, match_lines
 from app.services.bom_resolve import bom_event, pick_feed_source
 from app.services.part_feed.importer import resolve_single
 from app.services.part_feed.mouser import FeedFatalError
@@ -67,9 +67,11 @@ def match_bom(body: BomMatchRequest, request: Request, db: Session = Depends(get
     # 2,000. `build_row` takes it as a required argument so the hoist cannot be
     # lost silently — see registry.live_feed_slugs.
     live_slugs = live_feed_slugs(db)
+    # The WHOLE BOM at once: rung 3b (MPN-less passives) is one catalog scan
+    # per request, not one per line — see bom_match._value_candidates.
+    matches = match_lines(db, [(line.mpn, line.value, line.footprint) for line in body.lines])
     rows = []
-    for line in body.lines:
-        m = match_line(db, line.mpn, line.value, line.footprint)
+    for line, m in zip(body.lines, matches, strict=True):
         rows.append(
             build_row(
                 db,
@@ -78,7 +80,7 @@ def match_bom(body: BomMatchRequest, request: Request, db: Session = Depends(get
                 m.part,
                 m.approx_reason,
                 m.resolve_query,
-                footprint_token(line.footprint),
+                line_package(line.footprint),
                 live_slugs,
                 similar_parts=list(m.candidates),
             )

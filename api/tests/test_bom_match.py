@@ -1,14 +1,22 @@
 """BOM matcher — schema facts, normalization, and the match ladder."""
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from app.models import Part
+from app.services import bom_match
 from app.services.bom_match import (
+    VALUE_AS_MPN_REASON,
+    VALUE_MATCH_REASON,
     build_resolve_query,
     footprint_token,
+    line_package,
     match_line,
+    match_lines,
     package_warning,
 )
+
+R_0805 = "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+LED_0805 = "LED_SMD:LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder"
 
 
 class TestPartFactColumns:
@@ -103,7 +111,9 @@ class TestLadder:
         assert m.part.id == near.id
         assert far.id != near.id
 
-    def test_no_mpn_never_guesses(self, db):
+    def test_no_mpn_never_guesses_from_the_sku(self, db):
+        # A SKU that merely LOOKS like the value is not evidence: rung 3 reads
+        # descriptions and packages, never the SKU column.
         _part(db, "10K-0805")
         m = match_line(db, None, "10k", "Resistor_SMD:R_0805_2012Metric")
         assert m.status == "resolve"
@@ -128,6 +138,134 @@ class TestPackageWarning:
         assert package_warning("0805", None) is None
         assert package_warning("0805", "0805") is None
         assert package_warning("r_0805_2012metric", "R_0805_2012Metric") is None
+
+    def test_chip_sizes_compare_by_code_not_spelling(self):
+        # A KiCad footprint never spells its package the way a feed does.
+        assert package_warning(line_package(R_0805), "0805 (2012 Metric)") is None
+        assert package_warning(R_0805, "0805 (2012 Metric)") is None
+        assert package_warning(line_package(R_0805), "0603 (1608 Metric)") == (
+            "package differs: 0805 → 0603 (1608 Metric)"
+        )
+
+    def test_line_package_is_the_chip_code_else_the_footprint_token(self):
+        assert line_package(R_0805) == "0805"
+        assert line_package("Package_TO_SOT_SMD:SOT-23") == "SOT-23"
+        assert line_package(None) is None
+
+
+def _resistor_catalog(db):
+    """Both feed dialects plus every near miss the rung must refuse."""
+    best = _part(
+        db,
+        "RC0805FR-0710KL",
+        package="0805 (2012 Metric)",
+        description="RES 10K OHM 1% 1/8W 0805",
+        total_stock=5_000_000,
+    )
+    mouser = _part(  # Mouser: no package column, the size lives in the text
+        db,
+        "CRCW080510K0FKEA",
+        description="Thick Film Resistors - SMD 0805 10K Ohms 1% 0.125W",
+        total_stock=90_000,
+    )
+    near_misses = [
+        ("RC0805FR-07110KL", "0805 (2012 Metric)", "RES 110K OHM 1% 1/8W 0805"),  # 110K
+        ("RC0603FR-0710KL", "0603 (1608 Metric)", "RES 10K OHM 1% 1/10W 0603"),  # 0603
+        ("NCP21XH103J03RA", "0805 (2012 Metric)", "THERM NTC 10KOHM 3380K 0805"),  # thermistor
+        ("EXB-28V103JX", "0805 (2012 Metric)", "RES ARRAY 4 RES 10K OHM 0805"),  # network
+    ]
+    for sku, package, description in near_misses:
+        _part(db, sku, package=package, description=description, total_stock=9_000_000)
+    return best, mouser
+
+
+class TestValueRung:
+    """Rung 3 — an MPN-less line matched on what the design DOES say."""
+
+    def test_a_passive_matches_its_value_and_chip_size_in_both_dialects(self, db):
+        best, mouser = _resistor_catalog(db)
+        m = match_line(db, None, "10k", R_0805)
+        assert (m.status, m.part.id) == ("approx", best.id)
+        assert m.approx_reason == VALUE_MATCH_REASON
+        assert [c.id for c in m.candidates] == [mouser.id]  # nothing else qualifies
+
+    def test_active_outranks_obsolete_whatever_the_stock(self, db):
+        best, mouser = _resistor_catalog(db)
+        best.lifecycle_status = "obsolete"
+        db.commit()
+        m = match_line(db, None, "10k", R_0805)
+        assert m.part.id == mouser.id
+
+    def test_an_led_with_no_colour_takes_any_colour_a_named_colour_is_required(self, db):
+        red = _part(
+            db,
+            "LS R976",
+            package="0805 (2012 Metric)",
+            description="LED RED DIFFUSED 0805 SMD",
+            total_stock=10,
+        )
+        green = _part(
+            db,
+            "LG R971",
+            package="0805 (2012 Metric)",
+            description="LED GREEN DIFFUSED 0805 SMD",
+            total_stock=20,
+        )
+        _part(db, "SFH 4056", package="0805 (2012 Metric)", description="EMITTER IR INFRARED 0805")
+        assert match_line(db, None, "LED", LED_0805).part.id == green.id
+        assert match_line(db, None, "LED_Red", LED_0805).part.id == red.id
+
+    def test_a_value_that_is_a_part_number_takes_the_mpn_ladder(self, db):
+        family = _part(db, "BSS138-G", total_stock=1_000)
+        m = match_line(db, None, "BSS138", "Package_TO_SOT_SMD:SOT-23")
+        assert (m.status, m.part.id) == ("approx", family.id)
+        assert m.approx_reason == f"{VALUE_AS_MPN_REASON}; ordering-code suffix differs"
+
+    def test_an_exact_value_part_number_is_still_approx(self, db):
+        # The design never SAID it was a part number, so it is never EXACT.
+        p = _part(db, "NE555")
+        m = match_line(db, None, "NE555", None)
+        assert (m.status, m.part.id, m.approx_reason) == ("approx", p.id, VALUE_AS_MPN_REASON)
+
+    def test_a_part_number_the_catalog_lacks_is_never_swapped_for_a_lookalike(self, db):
+        # An LED named by part number must go to the provider by that number,
+        # not become "any 0805 LED".
+        _part(db, "LS R976", package="0805 (2012 Metric)", description="LED RED DIFFUSED 0805 SMD")
+        m = match_line(db, None, "APT2012SURCK", LED_0805)
+        assert (m.status, m.part) == ("resolve", None)
+
+    def test_nothing_in_the_catalog_falls_through_to_resolve(self, db):
+        m = match_line(db, None, "4k99", R_0805)
+        assert (m.status, m.part) == ("resolve", None)
+        assert m.resolve_query is not None
+
+    def test_the_whole_bom_is_one_catalog_scan(self, db):
+        best, _ = _resistor_catalog(db)
+        led = _part(db, "LS R976", package="0805 (2012 Metric)", description="LED RED 0805 SMD")
+        scans: list[str] = []
+
+        def spy(_conn, _cursor, statement, *_args):
+            if "bom_value_pool" in statement:
+                scans.append(statement)
+
+        engine = db.get_bind()
+        event.listen(engine, "before_cursor_execute", spy)
+        try:
+            out = match_lines(
+                db, [(None, "10k", R_0805), (None, "LED", LED_0805), (None, "10K", R_0805)]
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", spy)
+        assert len(scans) == 1
+        # The two lines that say the same thing share one answer.
+        assert [m.part.id for m in out] == [best.id, led.id, best.id]
+
+    def test_batches_split_without_changing_the_answer(self, db, monkeypatch):
+        best, _ = _resistor_catalog(db)
+        led = _part(db, "LS R976", package="0805 (2012 Metric)", description="LED RED 0805 SMD")
+        monkeypatch.setattr(bom_match, "VALUE_BATCH", 1)
+        out = match_lines(db, [(None, "10k", R_0805), (None, "LED", LED_0805)])
+        assert [m.part.id for m in out] == [best.id, led.id]
 
 
 class TestMatchRoute:
@@ -192,7 +330,10 @@ class TestSimilarOptions:
         skus = [s["sku"] for s in row["similar"]]
         assert row["part"]["sku"] not in skus
         assert skus, "runner-ups must be offered as comparable options"
-        assert all(s["sku"].upper().startswith("1N4148") or "1N4148W".startswith(s["sku"].upper()) for s in row["similar"])
+        assert all(
+            s["sku"].upper().startswith("1N4148") or "1N4148W".startswith(s["sku"].upper())
+            for s in row["similar"]
+        )
 
     def test_similar_stub_shape_is_identity_only(self, client, db):
         _part(db, "GRM188R71C104KA01")
@@ -202,8 +343,13 @@ class TestSimilarOptions:
         assert row["similar"], "second family member should be a comparable option"
         stub = row["similar"][0]
         assert set(stub) == {
-            "id", "sku", "manufacturer_name", "description",
-            "package", "lifecycle_status", "lifecycle_verified",
+            "id",
+            "sku",
+            "manufacturer_name",
+            "description",
+            "package",
+            "lifecycle_status",
+            "lifecycle_verified",
         }
 
     def test_exact_match_offers_no_menu(self, client, db):
